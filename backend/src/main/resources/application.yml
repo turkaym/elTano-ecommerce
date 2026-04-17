@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: elTano-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/eltano_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+
+server:
+  port: 8080
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET:change-me-in-env}
+  catalog:
+    seed-on-empty: ${CATALOG_SEED_ON_EMPTY:true}
+  mercadopago:
+    enabled: ${MP_ENABLED:false}
+    api-base-url: ${MP_API_BASE_URL:https://api.mercadopago.com}
+    access-token: ${MP_ACCESS_TOKEN:change-me-in-env}
+    webhook-secret: ${MP_WEBHOOK_SECRET:change-me-webhook-secret}
+    webhook-signature-required: ${MP_WEBHOOK_SIGNATURE_REQUIRED:true}
+    webhook-signature-tolerance-seconds: ${MP_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS:300}
+    notification-url: ${MP_NOTIFICATION_URL:}
+    checkout-success-url: ${MP_CHECKOUT_SUCCESS_URL:http://localhost:5173/checkout/return?result=success}
+    checkout-failure-url: ${MP_CHECKOUT_FAILURE_URL:http://localhost:5173/checkout/return?result=failure}
+    checkout-pending-url: ${MP_CHECKOUT_PENDING_URL:http://localhost:5173/checkout/return?result=pending}

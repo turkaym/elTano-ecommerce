@@ -1,0 +1,295 @@
+import { useEffect, useState } from 'react'
+import { PaymentReturnStatus } from '../features/checkout/components/PaymentReturnStatus'
+import { CartPanel } from '../features/cart/components/CartPanel'
+import { useCartStore } from '../features/cart/state/cartStore'
+import { FeaturedProductsSection } from '../features/catalog/components/FeaturedProductsSection'
+import { getFeaturedProducts } from '../features/catalog/services/catalogService'
+import { CheckoutForm, type CheckoutFormValues } from '../features/checkout/components/CheckoutForm'
+import { createOrderDraft, startDraftPayment } from '../features/checkout/services/checkoutService'
+import { SearchBar } from '../features/search/components/SearchBar'
+import { ApiClientError } from '../shared/api/httpClient'
+import { checkoutMvpEnabled, checkoutPaymentEnabled } from '../shared/config/flags'
+import type { FeaturedProduct } from '../shared/types/catalog'
+import type { CreateOrderDraftRequest } from '../shared/types/checkout'
+
+const whatsappPhone = '5491123456789'
+const paymentDraftMessageStorageKey = 'checkout-payment-draft-messages'
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const categories = ['Frutos secos', 'Semillas', 'Harinas', 'Aceites', 'Snacks']
+
+const benefits = [
+  {
+    title: 'Envio local rapido',
+    description: 'Coordinamos entregas en el dia dentro de la zona para que recibas todo fresco.',
+  },
+  {
+    title: 'Retiro por el local',
+    description: 'Hace tu pedido y pasa a buscarlo sin espera en el horario que te quede comodo.',
+  },
+  {
+    title: 'Productos saludables',
+    description: 'Seleccion de frutos secos, semillas y harinas para sumar nutricion a tu rutina.',
+  },
+]
+
+function createWhatsappLink(message: string) {
+  const encodedMessage = encodeURIComponent(message)
+  return `https://wa.me/${whatsappPhone}?text=${encodedMessage}`
+}
+
+function isUuid(value: string) {
+  return uuidRegex.test(value)
+}
+
+export function App() {
+  const [showBrandLogo, setShowBrandLogo] = useState(true)
+  const [products, setProducts] = useState<FeaturedProduct[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [source, setSource] = useState<'api' | 'mock'>('mock')
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const cart = useCartStore()
+  const hasInvalidVariantIds = cart.items.some((item) => !isUuid(item.variantId))
+  const usingMockCatalog = source === 'mock'
+  const checkoutBlockedMessage = usingMockCatalog
+    ? 'No podemos finalizar el pedido con productos de muestra. Espera a que cargue el catalogo real del backend.'
+    : hasInvalidVariantIds
+      ? 'Tu carrito contiene productos incompatibles con el backend. Vacialo y vuelve a agregar productos del catalogo real.'
+      : null
+
+  const isReturnPage = window.location.pathname.startsWith('/checkout/return')
+  const returnParams = new URLSearchParams(window.location.search)
+  const returnDraftId = returnParams.get('draftId')
+  const providerStatusHint = returnParams.get('status') ?? returnParams.get('result')
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadFeaturedProducts() {
+      try {
+        const result = await getFeaturedProducts(6)
+        if (!isMounted) {
+          return
+        }
+
+        setProducts(result.products)
+        setSource(result.source)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadFeaturedProducts()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  function handleAddToCart(product: FeaturedProduct) {
+    cart.addItem({
+      variantId: product.variantId,
+      productName: product.name,
+      unitLabel: product.unitLabel,
+      price: product.price,
+      stockAvailable: product.stockAvailable,
+    })
+  }
+
+  async function handleSubmitDraft(values: CheckoutFormValues) {
+    if (checkoutBlockedMessage) {
+      setSubmitError(checkoutBlockedMessage)
+      return
+    }
+
+    const payload: CreateOrderDraftRequest = {
+      customerName: values.customerName,
+      phone: values.phone,
+      note: values.note.trim() ? values.note : undefined,
+      items: cart.items.map((item) => ({
+        variantId: item.variantId,
+        quantity: item.quantity,
+      })),
+    }
+
+    try {
+      const response = await createOrderDraft(payload)
+      setSubmitError(null)
+      if (checkoutPaymentEnabled) {
+        const payment = await startDraftPayment(response.draftId)
+        const existing = window.sessionStorage.getItem(paymentDraftMessageStorageKey)
+        const draftMessages: Record<string, string> = existing ? JSON.parse(existing) : {}
+        draftMessages[response.draftId] = response.whatsappMessage
+        window.sessionStorage.setItem(paymentDraftMessageStorageKey, JSON.stringify(draftMessages))
+        const popup = window.open(payment.initPoint, '_self')
+        if (!popup) {
+          setSubmitError('No pudimos redirigirte al pago online. Intenta nuevamente.')
+        }
+        return
+      }
+
+      cart.clear()
+      const popup = window.open(createWhatsappLink(response.whatsappMessage), '_blank', 'noopener,noreferrer')
+      if (!popup) {
+        setSubmitError('No pudimos abrir WhatsApp automaticamente. Habilita popups e intenta de nuevo.')
+      }
+    } catch (error) {
+      if (error instanceof ApiClientError) {
+        if (error.status === 409) {
+          setSubmitError('No hay stock suficiente para uno o mas productos del carrito.')
+          return
+        }
+
+        setSubmitError(error.message)
+        return
+      }
+
+      setSubmitError('No pudimos crear tu pedido. Intenta nuevamente en unos minutos.')
+    }
+  }
+
+  function continuePaidFlow(draftId: string) {
+    const existing = window.sessionStorage.getItem(paymentDraftMessageStorageKey)
+    const draftMessages: Record<string, string> = existing ? JSON.parse(existing) : {}
+    const message = draftMessages[draftId] ?? `Hola, confirmo el pedido ${draftId}.`
+    const popup = window.open(createWhatsappLink(message), '_blank', 'noopener,noreferrer')
+    if (!popup) {
+      setSubmitError('No pudimos abrir WhatsApp automaticamente. Habilita popups e intenta de nuevo.')
+    }
+  }
+
+  async function retryPayment(draftId: string) {
+    try {
+      const payment = await startDraftPayment(draftId)
+      const popup = window.open(payment.initPoint, '_self')
+      if (!popup) {
+        setSubmitError('No pudimos redirigirte al pago online. Intenta nuevamente.')
+      }
+    } catch {
+      setSubmitError('No pudimos reiniciar el pago en este momento.')
+    }
+  }
+
+  return (
+    <div className="app-shell">
+      <header className="top-shell">
+        <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
+          {showBrandLogo ? (
+            <img
+              className="brand-logo"
+              src="/logo-el-tano.png"
+              alt="El Tano Frutos Secos"
+              onError={() => setShowBrandLogo(false)}
+            />
+          ) : (
+            <p className="hero-kicker">El Tano Frutos Secos</p>
+          )}
+        </div>
+        <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
+          <span aria-hidden="true">👤</span>
+          <span aria-hidden="true">🛒</span>
+        </div>
+      </header>
+
+      <nav className="category-nav" aria-label="Categorias">
+        {categories.map((category) => (
+          <button key={category} type="button" className="category-pill">
+            {category}
+          </button>
+        ))}
+      </nav>
+
+      <SearchBar />
+
+      <header className="hero">
+        <img className="hero-image" src="/heroimage.png" alt="Productos naturales El Tano" />
+        <div className="hero-content">
+          <div className="hero-actions">
+            <a className="btn btn-primary" href="#productos-destacados-title">
+              Comprar ahora
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main className="main-content">
+        <section className="section" aria-labelledby="beneficios-title">
+          <div className="section-header">
+            <h2 id="beneficios-title">Por que nos eligen</h2>
+            <p>Compra simple, entrega comoda y productos pensados para alimentarte mejor.</p>
+          </div>
+          <div className="benefits-grid">
+            {benefits.map((benefit) => (
+              <article key={benefit.title} className="benefit-card">
+                <h3>{benefit.title}</h3>
+                <p>{benefit.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        {!isReturnPage ? (
+          <FeaturedProductsSection
+            products={products}
+            isLoading={isLoading}
+            source={source}
+            onAddToCart={handleAddToCart}
+          />
+        ) : null}
+
+        {checkoutPaymentEnabled && isReturnPage ? (
+          returnDraftId ? (
+            <PaymentReturnStatus
+              draftId={returnDraftId}
+              providerStatusHint={providerStatusHint}
+              onPaidContinue={() => continuePaidFlow(returnDraftId)}
+              onRetry={() => retryPayment(returnDraftId)}
+            />
+          ) : (
+            <section className="section" aria-labelledby="return-error-title">
+              <h2 id="return-error-title">No encontramos el borrador de pago</h2>
+              <p>Volve al checkout y genera un nuevo intento de pago.</p>
+            </section>
+          )
+        ) : null}
+
+        {checkoutMvpEnabled && !isReturnPage ? (
+          <div className="checkout-grid">
+            <CartPanel
+              items={cart.items}
+              totals={cart.totals}
+              warning={cart.warning}
+              onDismissWarning={cart.dismissWarning}
+              onSetQty={cart.setQty}
+              onRemove={cart.removeItem}
+              onClear={cart.clear}
+            />
+            <CheckoutForm
+              isCartEmpty={!cart.items.length}
+              isSubmitBlocked={Boolean(checkoutBlockedMessage)}
+              blockedSubmitMessage={checkoutBlockedMessage ?? undefined}
+              submitError={submitError}
+              submitLabel={checkoutPaymentEnabled ? 'Iniciar pago online' : undefined}
+              onSubmitDraft={handleSubmitDraft}
+            />
+          </div>
+        ) : (
+          <section className="section checkout-notice" aria-labelledby="compra-title">
+            <h2 id="compra-title">Confirma tu compra por WhatsApp</h2>
+            <p>Checkout MVP deshabilitado temporalmente. Contactanos por WhatsApp para confirmar.</p>
+            <a
+              className="btn btn-primary"
+              href={createWhatsappLink('Hola! Quiero confirmar una compra en El Tano Frutos Secos.')}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Confirmar compra por WhatsApp
+            </a>
+          </section>
+        )}
+      </main>
+    </div>
+  )
+}

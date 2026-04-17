@@ -1,0 +1,182 @@
+# Verification Report
+
+**Change**: checkout-payment-mercadopago  
+**Version**: N/A  
+**Mode**: Strict TDD
+
+---
+
+### Completeness
+| Metric | Value |
+|--------|-------|
+| Tasks total | 19 |
+| Tasks complete | 17 |
+| Tasks incomplete | 2 |
+
+Incomplete tasks:
+- [ ] 3.2 GREEN+REFACTOR backend integration tests for duplicate webhook deliveries and terminal-state immutability.
+- [ ] 3.5 Manual sandbox checklist (redirect, valid webhook paid path, invalid signature rejection, duplicate replay, expired payment stock release, rollback behavior).
+
+Assessment:
+- 3.2 is still pending verification depth at integration level (WARNING).
+- 3.5 manual sandbox validation is pending (WARNING).
+
+---
+
+### Build & Tests Execution
+
+**Build**: ✅ Passed
+
+```text
+backend: ./mvnw -q -DskipTests package  -> success (exit 0)
+frontend: npm run build                 -> success (tsc -b && vite build)
+```
+
+**Tests**: ✅ 39 passed / ❌ 0 failed / ⚠️ 0 skipped
+
+```text
+backend: ./mvnw -q test
+  - com.eltano.ecommerce.orders.service.OrderDraftServiceTest: tests=9 failures=0 errors=0 skipped=0
+  - com.eltano.ecommerce.orders.repository.PaymentWebhookEventRepositoryTest: tests=3 failures=0 errors=0 skipped=0
+  - com.eltano.ecommerce.orders.api.OrderDraftControllerTest: tests=7 failures=0 errors=0 skipped=0
+  - com.eltano.ecommerce.orders.api.MercadoPagoWebhookControllerTest: tests=3 failures=0 errors=0 skipped=0
+  - com.eltano.ecommerce.BackendApplicationTests: tests=1 failures=0 errors=0 skipped=0
+
+frontend: npm run test -- --run
+  - Test Files: 6 passed
+  - Tests: 16 passed, 0 failed, 0 skipped
+```
+
+**Coverage**: ➖ Not available
+
+No coverage plugin/tool detected in backend (`jacoco` absent in `pom.xml`) or frontend (`@vitest/coverage-*` absent in `package.json`).
+
+---
+
+### TDD Compliance
+| Check | Result | Details |
+|-------|--------|---------|
+| TDD Evidence reported | ❌ | `apply-progress` has no "TDD Cycle Evidence" table |
+| All tasks have tests | ⚠️ | Tests exist for many scenarios, but not all spec scenarios |
+| RED confirmed (tests exist) | ✅ | Relevant changed test files exist (`OrderDraftServiceTest`, webhook/controller/repository tests, `PaymentReturnStatus.test.tsx`, `App.payment.test.tsx`) |
+| GREEN confirmed (tests pass) | ✅ | 39/39 tests passing in executed suites |
+| Triangulation adequate | ⚠️ | Several scenarios only partially covered or untested |
+| Safety Net for modified files | ➖ | Not verifiable from artifacts (no cycle table / no explicit safety-net matrix) |
+
+**TDD Compliance**: 2/6 checks passed
+
+---
+
+### Test Layer Distribution
+| Layer | Tests | Files | Tools |
+|-------|-------|-------|-------|
+| Unit | 9 | 1 | JUnit + Mockito |
+| Integration | 30 | 10 | Spring WebMvc/DataJpa + Vitest/RTL |
+| E2E | 0 | 0 | not installed |
+| **Total** | **39** | **11** | |
+
+---
+
+### Changed File Coverage
+Coverage analysis skipped — no coverage tool detected.
+
+---
+
+### Assertion Quality
+**Assertion quality**: ✅ All reviewed assertions verify behavior (no tautologies, ghost loops, or assertion-free tests detected in change-related test files).
+
+---
+
+### Quality Metrics
+**Linter**: ✅ No errors (`npm run lint`)  
+**Type Checker**: ✅ No errors (`npm run build` runs `tsc -b`)
+
+---
+
+### Spec Compliance Matrix
+
+| Requirement | Scenario | Test | Result |
+|-------------|----------|------|--------|
+| Checkout Pro Preference from Existing Draft | Create preference for valid draft | `OrderDraftServiceTest > startPaymentAllowsDraftAndMarksPending` + `OrderDraftControllerTest > startPaymentPreferenceReturnsInitPointAndPreferenceId` | ✅ COMPLIANT |
+| Checkout Pro Preference from Existing Draft | Reject invalid draft for payment start | `OrderDraftServiceTest > startPaymentRejectsTerminalStates` | ✅ COMPLIANT |
+| Redirect and Return Flow Uses Canonical Backend Status | Return page reconciliation | `PaymentReturnStatus.test.tsx > polls backend and ignores provider query params as source of truth` | ⚠️ PARTIAL (does not prove multi-poll reconciliation path) |
+| Webhook-Authoritative Payment Confirmation | Webhook confirms paid order | (none found proving webhook->provider verification->PAID transition end-to-end) | ❌ UNTESTED |
+| Idempotency, Replay, and Out-of-Order Protection | Duplicate or replayed webhook | `MercadoPagoWebhookControllerTest > acknowledgesDuplicateEventAsNoOp`; `PaymentWebhookEventRepositoryTest > providerEventIdMustBeUnique` | ⚠️ PARTIAL (controller test mocks service; no full service integration path) |
+| Idempotency, Replay, and Out-of-Order Protection | Out-of-order failure after paid | `OrderDraftServiceTest > applyPaymentTransitionIgnoresRegressiveUpdateAfterPaid` + `MercadoPagoWebhookControllerTest > ignoresRegressiveEventAfterPaidState` | ✅ COMPLIANT |
+| Failure/Cancel/Expire Transitions Release Stock | Payment expires | `OrderDraftServiceTest > applyPaymentTransitionReleasesReservedStockOnceForFailure` | ⚠️ PARTIAL (covers FAILED, not EXPIRED explicitly) |
+| Webhook Security and Trust Boundaries | Invalid webhook authentication | `MercadoPagoWebhookControllerTest > returns403WhenSignatureHeaderMissing` | ✅ COMPLIANT |
+| Canonical Payment Status Endpoint | Pending-to-terminal polling | `OrderDraftControllerTest > getDraftPaymentStatusReturnsCanonicalStatus`; `PaymentReturnStatus.test.tsx` | ⚠️ PARTIAL (no test proving pending->PAID transition across polls) |
+| Draft Order Creation and Post-Payment WhatsApp Redirect | Successful draft and paid status then WhatsApp | (none found proving paid-return continuation opens WhatsApp only after canonical PAID) | ❌ UNTESTED |
+| Draft Order Creation and Post-Payment WhatsApp Redirect | Draft API failure | `App.test.tsx > does not redirect to WhatsApp when draft API fails` | ✅ COMPLIANT |
+| Scope Boundaries for This Change | Account features remain out of scope | `OrderDraftControllerTest > adminEndpointsRemainProtectedInMvpScope` | ✅ COMPLIANT |
+
+**Compliance summary**: 7/12 scenarios compliant (counting PARTIAL as non-compliant for strict behavioral proof)
+
+---
+
+### Correctness (Static — Structural Evidence)
+| Requirement | Status | Notes |
+|------------|--------|-------|
+| Checkout Pro preference from existing draft | ✅ Implemented | `OrderDraftController.startPaymentPreference` + `OrderDraftService.startPaymentPreference/startPayment` enforce allowed states and set `PAYMENT_PENDING`. |
+| Redirect/return uses backend canonical status | ✅ Implemented | `PaymentReturnStatus` always calls `getDraftPaymentStatus`; provider params shown as informational text only. |
+| Webhook-authoritative confirmation | ⚠️ Partial | Webhook path exists (`MercadoPagoWebhookController` + service), but provider verification is via `MercadoPagoStubClient` (always approved), not real MP API. |
+| Idempotency/replay/out-of-order protection | ✅ Implemented | Unique `provider_event_id`, existence check, transition guards, regression ignored from terminal states. |
+| Failure/cancel/expire release stock once | ⚠️ Partial | Stock release-once guard exists (`stockReleasedAt`), but no sweeper implementation and no EXPIRED-focused automated test. |
+| Webhook security/trust boundaries | ⚠️ Partial | Signature check exists but is plain secret equality; no provider-signature algorithm/freshness validation. |
+| Canonical payment status endpoint | ✅ Implemented | `GET /api/orders/drafts/{id}/payment-status` returns `draftId/reference/status/updatedAt/canRetry` only. |
+| Post-payment WhatsApp gating | ⚠️ Partial | UI gates WhatsApp action in return view (`status===PAID`), but no automated test for full paid-return continuation path. |
+| Scope boundaries (no full account rollout) | ✅ Implemented | Security rules keep admin/auth flows protected and payment flow remains checkout-scoped. |
+
+---
+
+### Coherence (Design)
+| Decision | Followed? | Notes |
+|----------|-----------|-------|
+| Checkout Pro redirect for MVP | ✅ Yes | Frontend redirects with `window.open(initPoint, '_self')`. |
+| Dedicated payment services + adapter | ✅ Yes | `orders/service/payment/MercadoPagoWebhookService` and `MercadoPagoClient` abstraction present. |
+| Canonical source is webhook+backend status | ✅ Yes | Return flow polls backend; status endpoint used as source of truth. |
+| Real MP HTTP adapter (`MercadoPagoHttpClient`) | ⚠️ Deviated | Only `MercadoPagoStubClient` is implemented; no real API client. |
+| Immediate + scheduled reconciler | ⚠️ Deviated | Immediate release logic exists; scheduled reconciliation service not found. |
+| File Changes table parity | ⚠️ Deviated | Several key files match, but planned `PaymentStatusQueryService`/scheduler and HTTP adapter are absent. |
+
+---
+
+### Stub Client Assessment (Archive-Readiness)
+
+**MercadoPagoStubClient is NOT acceptable for archive-readiness** for this change.
+
+Reasoning:
+1. The change intent/spec requires real Mercado Pago checkout behavior and backend provider-status verification.
+2. Stub client returns synthetic preference and always-approved payment, so webhook/provider verification behavior is not validated against real provider responses.
+3. Manual sandbox task 3.5 is still pending, so production-like verification is incomplete.
+
+Conclusion: keep stub for local/dev scaffolding only; archive should require a real MP client path (or clearly documented gated non-prod milestone, which this change does not declare as final archive criteria).
+
+---
+
+### Issues Found
+
+**CRITICAL** (must fix before archive):
+1. Missing strict-TDD evidence table in `apply-progress` (protocol breach under Strict TDD).
+2. Spec scenarios untested:
+   - Webhook confirms paid order (authoritative verified PAID path).
+   - Successful paid return -> WhatsApp continuation path.
+3. Real Mercado Pago integration missing (`MercadoPagoStubClient` only), making archive-readiness fail for this change intent.
+
+**WARNING** (should fix):
+1. Task 3.2 integration tests remain incomplete.
+2. Task 3.5 manual sandbox checklist remains incomplete.
+3. Multiple spec scenarios only PARTIAL (return reconciliation multi-poll, duplicate replay through full service path, explicit EXPIRED release, pending->terminal polling transition).
+4. Webhook authentication is simplified secret equality; design called for stronger signature/freshness handling.
+5. Scheduled reconciliation/sweeper described in design not implemented.
+
+**SUGGESTION** (nice to have):
+1. Add explicit end-to-end-ish contract tests for `PAYMENT_PENDING -> PAID` and `PAYMENT_PENDING -> EXPIRED` via webhook service with provider responses.
+2. Add coverage tooling (JaCoCo and/or Vitest coverage) to make changed-file coverage measurable in verify phase.
+
+---
+
+### Verdict
+**FAIL**
+
+Implementation is substantial and many automated tests pass, but archive-readiness is blocked by critical gaps: missing strict-TDD evidence, untested key scenarios, and stub-only Mercado Pago integration.
