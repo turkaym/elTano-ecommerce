@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeaturedProduct } from '../shared/types/catalog'
 import { App } from './App'
@@ -37,6 +38,15 @@ const featuredProduct: FeaturedProduct = {
   stockAvailable: 10,
 }
 
+function renderAppAt(pathname = '/') {
+  window.history.replaceState({}, '', pathname)
+  return render(
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>,
+  )
+}
+
 describe('App Mercado Pago flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -69,7 +79,7 @@ describe('App Mercado Pago flow', () => {
 
   it('creates draft and redirects to Mercado Pago initPoint', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    renderAppAt()
 
     await screen.findByText('Almendra natural premium')
     await user.click(screen.getByRole('button', { name: 'Agregar' }))
@@ -94,7 +104,7 @@ describe('App Mercado Pago flow', () => {
     )
     window.history.replaceState({}, '', '/checkout/return?draftId=draft-1&status=rejected')
 
-    render(<App />)
+    renderAppAt('/checkout/return?draftId=draft-1&status=rejected')
 
     expect(await screen.findByText('Pago aprobado')).toBeInTheDocument()
     expect(startDraftPayment).not.toHaveBeenCalled()

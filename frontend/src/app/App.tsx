@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
+import { AppRoutes } from './routes/AppRoutes'
 import { PaymentReturnStatus } from '../features/checkout/components/PaymentReturnStatus'
 import { CartPanel } from '../features/cart/components/CartPanel'
 import { useCartStore } from '../features/cart/state/cartStore'
@@ -6,6 +8,7 @@ import { FeaturedProductsSection } from '../features/catalog/components/Featured
 import { getFeaturedProducts } from '../features/catalog/services/catalogService'
 import { CheckoutForm, type CheckoutFormValues } from '../features/checkout/components/CheckoutForm'
 import { createOrderDraft, startDraftPayment } from '../features/checkout/services/checkoutService'
+import { StorefrontNav } from '../features/navigation/components/StorefrontNav'
 import { SearchBar } from '../features/search/components/SearchBar'
 import { ApiClientError } from '../shared/api/httpClient'
 import { checkoutMvpEnabled, checkoutPaymentEnabled } from '../shared/config/flags'
@@ -15,8 +18,6 @@ import type { CreateOrderDraftRequest } from '../shared/types/checkout'
 const whatsappPhone = '5491123456789'
 const paymentDraftMessageStorageKey = 'checkout-payment-draft-messages'
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
-const categories = ['Frutos secos', 'Semillas', 'Harinas', 'Aceites', 'Snacks']
 
 const benefits = [
   {
@@ -43,6 +44,7 @@ function isUuid(value: string) {
 }
 
 export function App() {
+  const location = useLocation()
   const [showBrandLogo, setShowBrandLogo] = useState(true)
   const [products, setProducts] = useState<FeaturedProduct[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -57,8 +59,7 @@ export function App() {
       ? 'Tu carrito contiene productos incompatibles con el backend. Vacialo y vuelve a agregar productos del catalogo real.'
       : null
 
-  const isReturnPage = window.location.pathname.startsWith('/checkout/return')
-  const returnParams = new URLSearchParams(window.location.search)
+  const returnParams = new URLSearchParams(location.search)
   const returnDraftId = returnParams.get('draftId')
   const providerStatusHint = returnParams.get('status') ?? returnParams.get('result')
 
@@ -172,37 +173,8 @@ export function App() {
     }
   }
 
-  return (
-    <div className="app-shell">
-      <header className="top-shell">
-        <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
-          {showBrandLogo ? (
-            <img
-              className="brand-logo"
-              src="/logo-el-tano.png"
-              alt="El Tano Frutos Secos"
-              onError={() => setShowBrandLogo(false)}
-            />
-          ) : (
-            <p className="hero-kicker">El Tano Frutos Secos</p>
-          )}
-        </div>
-        <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
-          <span aria-hidden="true">👤</span>
-          <span aria-hidden="true">🛒</span>
-        </div>
-      </header>
-
-      <nav className="category-nav" aria-label="Categorias">
-        {categories.map((category) => (
-          <button key={category} type="button" className="category-pill">
-            {category}
-          </button>
-        ))}
-      </nav>
-
-      <SearchBar />
-
+  const homeContent = (
+    <>
       <header className="hero">
         <img className="hero-image" src="/heroimage.png" alt="Productos naturales El Tano" />
         <div className="hero-content">
@@ -230,32 +202,14 @@ export function App() {
           </div>
         </section>
 
-        {!isReturnPage ? (
-          <FeaturedProductsSection
-            products={products}
-            isLoading={isLoading}
-            source={source}
-            onAddToCart={handleAddToCart}
-          />
-        ) : null}
+        <FeaturedProductsSection
+          products={products}
+          isLoading={isLoading}
+          source={source}
+          onAddToCart={handleAddToCart}
+        />
 
-        {checkoutPaymentEnabled && isReturnPage ? (
-          returnDraftId ? (
-            <PaymentReturnStatus
-              draftId={returnDraftId}
-              providerStatusHint={providerStatusHint}
-              onPaidContinue={() => continuePaidFlow(returnDraftId)}
-              onRetry={() => retryPayment(returnDraftId)}
-            />
-          ) : (
-            <section className="section" aria-labelledby="return-error-title">
-              <h2 id="return-error-title">No encontramos el borrador de pago</h2>
-              <p>Volve al checkout y genera un nuevo intento de pago.</p>
-            </section>
-          )
-        ) : null}
-
-        {checkoutMvpEnabled && !isReturnPage ? (
+        {checkoutMvpEnabled ? (
           <div className="checkout-grid">
             <CartPanel
               items={cart.items}
@@ -290,6 +244,62 @@ export function App() {
           </section>
         )}
       </main>
+    </>
+  )
+
+  const checkoutReturnContent = checkoutPaymentEnabled ? (
+    returnDraftId ? (
+      <main className="main-content">
+        <PaymentReturnStatus
+          draftId={returnDraftId}
+          providerStatusHint={providerStatusHint}
+          onPaidContinue={() => continuePaidFlow(returnDraftId)}
+          onRetry={() => retryPayment(returnDraftId)}
+        />
+      </main>
+    ) : (
+      <main className="main-content">
+        <section className="section" aria-labelledby="return-error-title">
+          <h2 id="return-error-title">No encontramos el borrador de pago</h2>
+          <p>Volve al checkout y genera un nuevo intento de pago.</p>
+        </section>
+      </main>
+    )
+  ) : (
+    <main className="main-content">
+      <section className="section" aria-labelledby="payment-disabled-title">
+        <h2 id="payment-disabled-title">Pago online no disponible</h2>
+        <p>Volvé al inicio para continuar tu compra por WhatsApp.</p>
+      </section>
+    </main>
+  )
+
+  return (
+    <div className="app-shell">
+      <header className="top-shell">
+        <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
+          {showBrandLogo ? (
+            <img
+              className="brand-logo"
+              src="/logo-el-tano.png"
+              alt="El Tano Frutos Secos"
+              onError={() => setShowBrandLogo(false)}
+            />
+          ) : (
+            <p className="hero-kicker">El Tano Frutos Secos</p>
+          )}
+        </div>
+        <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
+          <span aria-hidden="true">👤</span>
+          <span aria-hidden="true">🛒</span>
+        </div>
+      </header>
+
+      <StorefrontNav />
+
+      <SearchBar />
+
+      <AppRoutes homeContent={homeContent} checkoutReturnContent={checkoutReturnContent} />
     </div>
   )
 }
