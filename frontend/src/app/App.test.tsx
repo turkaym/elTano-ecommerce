@@ -247,6 +247,10 @@ describe('App checkout MVP flow', () => {
     const view = renderAppAt('/categorias')
 
     expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Frutos secos/i })).toHaveAttribute(
+      'href',
+      '/categorias/frutos-secos',
+    )
 
     await user.click(screen.getByRole('link', { name: 'Productos' }))
     expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
@@ -259,6 +263,17 @@ describe('App checkout MVP flow', () => {
 
     view.unmount()
     renderAppAt('/categorias/frutos-secos')
-    expect(screen.getByRole('heading', { name: 'Categoria: frutos-secos' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Categoria: Frutos secos' })).toBeInTheDocument()
+    expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
+  })
+
+  it('shows deterministic empty state for invalid category slug route', async () => {
+    renderAppAt('/categorias/categoria-invalida')
+
+    expect(await screen.findByRole('heading', { name: 'Categoria no encontrada' })).toBeInTheDocument()
+    expect(
+      screen.getByText('No encontramos una categoria para el slug "categoria-invalida".'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Almendra natural premium')).not.toBeInTheDocument()
   })
 })

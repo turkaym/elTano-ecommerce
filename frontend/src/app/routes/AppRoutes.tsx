@@ -1,41 +1,12 @@
 import type { ReactNode } from 'react'
-import { Route, Routes, useParams } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
+import { CategoriesPage } from '../../features/catalog/pages/CategoriesPage'
+import { CategoryDetailPage } from '../../features/catalog/pages/CategoryDetailPage'
+import { ProductsPage } from '../../features/catalog/pages/ProductsPage'
 
 interface AppRoutesProps {
   homeContent: ReactNode
   checkoutReturnContent: ReactNode
-}
-
-function CategoriesPage() {
-  return (
-    <main className="main-content">
-      <section className="section" aria-labelledby="categorias-title">
-        <h2 id="categorias-title">Categorias</h2>
-      </section>
-    </main>
-  )
-}
-
-function CategoryDetailPage() {
-  const { slug = '' } = useParams()
-
-  return (
-    <main className="main-content">
-      <section className="section" aria-labelledby="categoria-detalle-title">
-        <h2 id="categoria-detalle-title">Categoria: {slug}</h2>
-      </section>
-    </main>
-  )
-}
-
-function ProductsPage() {
-  return (
-    <main className="main-content">
-      <section className="section" aria-labelledby="productos-title">
-        <h2 id="productos-title">Productos</h2>
-      </section>
-    </main>
-  )
 }
 
 export function AppRoutes({ homeContent, checkoutReturnContent }: AppRoutesProps) {
