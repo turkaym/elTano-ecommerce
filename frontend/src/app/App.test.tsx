@@ -318,4 +318,19 @@ describe('App checkout MVP flow', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText('Almendra natural premium')).not.toBeInTheDocument()
   })
+
+  it('keeps catalog navigation working after checkout return route render', async () => {
+    const user = userEvent.setup()
+
+    renderAppAt('/checkout/return')
+
+    expect(screen.getByRole('heading', { name: 'Pago online no disponible' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('link', { name: 'Productos' }))
+    expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
+    expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('link', { name: 'Categorias' }))
+    expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
+  })
 })

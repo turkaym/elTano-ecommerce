@@ -13,10 +13,10 @@ export function AppRoutes({ homeContent, checkoutReturnContent }: AppRoutesProps
   return (
     <Routes>
       <Route path="/" element={homeContent} />
+      <Route path="/checkout/return" element={checkoutReturnContent} />
       <Route path="/categorias" element={<CategoriesPage />} />
       <Route path="/categorias/:slug" element={<CategoryDetailPage />} />
       <Route path="/productos" element={<ProductsPage />} />
-      <Route path="/checkout/return" element={checkoutReturnContent} />
     </Routes>
   )
 }

@@ -118,4 +118,29 @@ describe('App Mercado Pago flow', () => {
       'noopener,noreferrer',
     )
   })
+
+  it('keeps retry path active for non-paid checkout return direct URL entries', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getDraftPaymentStatus).mockResolvedValueOnce({
+      draftId: 'draft-1',
+      reference: 'ET-2026-0001',
+      status: 'FAILED',
+      updatedAt: '2026-04-15T00:00:05Z',
+      canRetry: true,
+    })
+
+    renderAppAt('/checkout/return?draftId=draft-1&status=approved')
+
+    expect(await screen.findByText('Pago rechazado')).toBeInTheDocument()
+    expect(screen.getByText(/Estado informado por Mercado Pago: approved/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Confirmar por WhatsApp' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar pago' }))
+
+    await waitFor(() => {
+      expect(startDraftPayment).toHaveBeenCalledWith('draft-1')
+    })
+
+    expect(window.open).toHaveBeenCalledWith('https://mp.test/checkout?pref_id=pref-1', '_self')
+  })
 })
