@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { AppRoutes } from './routes/AppRoutes'
 import { PaymentReturnStatus } from '../features/checkout/components/PaymentReturnStatus'
 import { CartPanel } from '../features/cart/components/CartPanel'
@@ -45,6 +45,7 @@ function isUuid(value: string) {
 
 export function App() {
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [showBrandLogo, setShowBrandLogo] = useState(true)
   const [products, setProducts] = useState<FeaturedProduct[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -62,6 +63,18 @@ export function App() {
   const returnParams = new URLSearchParams(location.search)
   const returnDraftId = returnParams.get('draftId')
   const providerStatusHint = returnParams.get('status') ?? returnParams.get('result')
+  const searchValue = searchParams.get('q') ?? ''
+
+  function handleSearchChange(nextValue: string) {
+    const nextParams = new URLSearchParams(searchParams)
+    if (nextValue.trim()) {
+      nextParams.set('q', nextValue)
+    } else {
+      nextParams.delete('q')
+    }
+
+    setSearchParams(nextParams)
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -297,7 +310,7 @@ export function App() {
 
       <StorefrontNav />
 
-      <SearchBar />
+      <SearchBar value={searchValue} onChange={handleSearchChange} />
 
       <AppRoutes homeContent={homeContent} checkoutReturnContent={checkoutReturnContent} />
     </div>

@@ -13,7 +13,12 @@ vi.mock('../features/checkout/services/checkoutService', () => ({
   createOrderDraft: vi.fn(),
 }))
 
+vi.mock('../features/catalog/services/catalogQueryService', () => ({
+  getCatalogListItems: vi.fn(),
+}))
+
 import { getFeaturedProducts } from '../features/catalog/services/catalogService'
+import { getCatalogListItems } from '../features/catalog/services/catalogQueryService'
 import { createOrderDraft } from '../features/checkout/services/checkoutService'
 
 const featuredProduct: FeaturedProduct = {
@@ -53,6 +58,34 @@ describe('App checkout MVP flow', () => {
       subtotal: 6400,
       total: 6400,
       whatsappMessage: 'Hola, confirmo pedido ET-2026-0001',
+    })
+
+    vi.mocked(getCatalogListItems).mockResolvedValue({
+      source: 'api',
+      items: [
+        {
+          id: 'prod-1',
+          variantId: 'var-1',
+          name: 'Almendra natural premium',
+          description: 'Ideal para snack.',
+          categoryName: 'Frutos secos',
+          categorySlug: 'frutos-secos',
+          unitLabel: 'bolsa 500 g',
+          price: 6400,
+          stockAvailable: 10,
+        },
+        {
+          id: 'prod-2',
+          variantId: 'var-2',
+          name: 'Harina de coco organica',
+          description: 'Alternativa baja en carbohidratos.',
+          categoryName: 'Harinas',
+          categorySlug: 'harinas',
+          unitLabel: 'bolsa 500 g',
+          price: 5300,
+          stockAvailable: 8,
+        },
+      ],
     })
 
     vi.spyOn(window, 'open').mockImplementation(() => ({ closed: false }) as Window)
@@ -133,20 +166,29 @@ describe('App checkout MVP flow', () => {
     )
   })
 
-  it('keeps search visual-only without side effects or catalog refresh', async () => {
+  it('persists search query in URL and restores it when revisiting productos', async () => {
     const user = userEvent.setup()
 
-    renderAppAt()
+    const view = renderAppAt('/productos')
 
     await screen.findByText('Almendra natural premium')
-    expect(vi.mocked(getFeaturedProducts)).toHaveBeenCalledTimes(1)
 
     const searchInput = screen.getByLabelText('Buscar productos')
-    await user.type(searchInput, 'harina{enter}')
+    await user.type(searchInput, 'harina')
 
-    expect(vi.mocked(getFeaturedProducts)).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(createOrderDraft)).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(window.location.search).toContain('q=harina')
+    })
+
+    expect(await screen.findByText('Harina de coco organica')).toBeInTheDocument()
+    expect(screen.queryByText('Almendra natural premium')).not.toBeInTheDocument()
+
+    view.unmount()
+    renderAppAt('/productos?q=frutos%20secos')
+
+    expect(await screen.findByDisplayValue('frutos secos')).toBeInTheDocument()
     expect(screen.getByText('Almendra natural premium')).toBeInTheDocument()
+    expect(screen.queryByText('Harina de coco organica')).not.toBeInTheDocument()
   })
 
   it('does not redirect to WhatsApp when draft API fails', async () => {
