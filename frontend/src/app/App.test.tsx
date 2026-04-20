@@ -94,7 +94,7 @@ describe('App checkout MVP flow', () => {
   it('renders key mock-aligned shell sections', async () => {
     renderAppAt()
 
-    expect(screen.getByRole('navigation', { name: 'Categorias' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Categorías' })).toBeInTheDocument()
     expect(screen.getByRole('search')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Productos naturales El Tano' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Comprar ahora' })).toHaveAttribute(
@@ -273,13 +273,13 @@ describe('App checkout MVP flow', () => {
     )
   })
 
-  it('exposes navbar links Inicio, Categorias and Productos', async () => {
+  it('exposes navbar links Inicio, Categorías and Productos', async () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
 
     expect(screen.getByRole('link', { name: 'Inicio' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Categorias' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Categorías' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Productos' })).toBeInTheDocument()
   })
 
@@ -297,7 +297,7 @@ describe('App checkout MVP flow', () => {
     await user.click(screen.getByRole('link', { name: 'Productos' }))
     expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('link', { name: 'Categorias' }))
+    await user.click(screen.getByRole('link', { name: 'Categorías' }))
     expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('link', { name: 'Inicio' }))
@@ -330,7 +330,7 @@ describe('App checkout MVP flow', () => {
     expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
     expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('link', { name: 'Categorias' }))
+    await user.click(screen.getByRole('link', { name: 'Categorías' }))
     expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
   })
 })

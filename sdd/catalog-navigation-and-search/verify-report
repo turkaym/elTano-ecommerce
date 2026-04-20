@@ -1,0 +1,152 @@
+## Verification Report
+
+**Change**: catalog-navigation-and-search  
+**Mode**: Strict TDD  
+**Project**: elTano_ecommerce
+
+---
+
+### Completeness
+| Metric | Value |
+|---|---:|
+| Tasks total | 19 |
+| Tasks complete `[x]` | 19 |
+| Tasks incomplete `[ ]` | 0 |
+
+All tasks in `sdd/catalog-navigation-and-search/tasks` are marked complete.
+
+---
+
+### Build & Tests Execution (real runs)
+
+**Tests** (`npm --prefix frontend run test -- --reporter=verbose`)  
+✅ 12 files passed, 43 passed, 0 failed, 0 skipped.
+
+**Coverage** (`npm --prefix frontend run test -- --coverage`)  
+✅ Command passed.
+
+- Statements: 85.22%
+- Branches: 77.99%
+- Functions: 92.85%
+- Lines: 84.65%
+
+**Build** (`npm --prefix frontend run build`)  
+✅ Passed.
+
+**Lint** (`npm --prefix frontend run lint`)  
+✅ Passed.
+
+---
+
+### TDD Compliance
+| Check | Result | Details |
+|---|---|---|
+| TDD Evidence reported | ❌ | Current `sdd/catalog-navigation-and-search/apply-progress` artifact does not contain a `TDD Cycle Evidence` table. |
+| All tasks have tests | ⚠️ | Scenario/task-related tests exist and pass, but per-task TDD traceability is not auditable without the table. |
+| RED confirmed (tests exist) | ⚠️ | Test files exist, but strict RED evidence per task is missing from apply-progress. |
+| GREEN confirmed (tests pass) | ✅ | Runtime test execution is fully green (43/43). |
+| Triangulation adequate | ✅ | Spec scenarios are covered with multiple focused tests across app/catalog/payment files. |
+| Safety Net for modified files | ⚠️ | Not auditable from apply-progress due missing strict TDD rows. |
+
+**TDD Compliance**: **2/6 checks passed**
+
+---
+
+### Test Layer Distribution (change-related)
+| Layer | Tests | Files | Tools |
+|---|---:|---:|---|
+| Unit | 6 | 1 | Vitest |
+| Integration | 26 | 6 | Vitest + React Testing Library |
+| E2E | 0 | 0 | Not installed |
+| **Total** | **32** | **7** | |
+
+---
+
+### Changed File Coverage
+| File | Line % | Branch % | Uncovered Lines | Rating |
+|---|---:|---:|---|---|
+| `frontend/src/features/navigation/components/StorefrontNav.tsx` | 100% | 100% | — | ✅ Excellent |
+| `frontend/src/features/catalog/pages/ProductsPage.tsx` | 93.75% | 80% | 66, 80 | ⚠️ Acceptable |
+| `frontend/src/app/App.test.tsx` | n/a | n/a | n/a (test file) | ➖ n/a |
+| `frontend/src/features/catalog/pages/ProductsPage.test.tsx` | n/a | n/a | n/a (test file) | ➖ n/a |
+| `frontend/vite.config.ts` | n/a | n/a | n/a (config file) | ➖ n/a |
+| `frontend/package.json` | n/a | n/a | n/a (manifest) | ➖ n/a |
+| `frontend/package-lock.json` | n/a | n/a | n/a (lockfile) | ➖ n/a |
+
+**Average changed runtime file coverage**: **96.88%**
+
+---
+
+### Assertion Quality
+**Assertion quality**: ✅ All reviewed assertions verify behavior (no tautologies, ghost loops, or smoke-only blockers found in change-related test files).
+
+---
+
+### Spec Compliance Matrix
+| Requirement | Scenario | Test | Result |
+|---|---|---|---|
+| Navbar Route Navigation | Navbar links navigate to expected pages | `src/app/App.test.tsx > exposes navbar links Inicio, Categorías and Productos` + `... > navigates through required public routes...` | ✅ COMPLIANT |
+| Public Route Availability and Checkout Return Non-Regression | Required routes are reachable | `src/app/App.test.tsx > navigates through required public routes via navbar and direct URL entry` | ✅ COMPLIANT |
+| Public Route Availability and Checkout Return Non-Regression | Checkout return flow remains functional | `src/app/App.payment.test.tsx` + `src/app/App.test.tsx > keeps catalog navigation working after checkout return route render` | ✅ COMPLIANT |
+| Categories Index and Click-Through | Categories page lists available categories | `src/features/catalog/pages/CategoriesPage.test.tsx > lists all available categories...` | ✅ COMPLIANT |
+| Categories Index and Click-Through | Category click opens category route | `src/features/catalog/pages/CategoriesPage.test.tsx > ...allows click-through...` | ✅ COMPLIANT |
+| Category Slug Resolution and Invalid Slug Handling | Valid slug filters to category products | `src/features/catalog/pages/CategoryDetailPage.test.tsx > renders only products for the selected valid category slug` | ✅ COMPLIANT |
+| Category Slug Resolution and Invalid Slug Handling | Invalid slug returns deterministic empty state | `src/features/catalog/pages/CategoryDetailPage.test.tsx > renders deterministic empty state for invalid category slug` | ✅ COMPLIANT |
+| Search Across Name/Description/Category + URL persistence | Search matches by category text | `src/features/catalog/utils/catalogQuery.test.ts > matches search by name, description and category...` | ✅ COMPLIANT |
+| Search Across Name/Description/Category + URL persistence | Query persists in URL and survives navigation state changes | `src/app/App.test.tsx` + `src/features/catalog/pages/ProductsPage.test.tsx` | ✅ COMPLIANT |
+| Products Page Defaults and Filters | Products page default ordering | `src/features/catalog/pages/ProductsPage.test.tsx > shows all products sorted A-Z by default` | ✅ COMPLIANT |
+| Products Page Defaults and Filters | Combined filters and sort apply correctly | `src/features/catalog/pages/ProductsPage.test.tsx > applies category, stock and sort controls...` | ✅ COMPLIANT |
+| Empty Results and Mock Fallback Reuse | Backend unavailable triggers fallback | `src/features/catalog/hooks/useCatalogQuery.test.ts > falls back to mock...` | ✅ COMPLIANT |
+| Empty Results and Mock Fallback Reuse | No matches shows empty results | `src/features/catalog/pages/ProductsPage.test.tsx > reads query params from URL as source of truth for search and empty state` | ✅ COMPLIANT |
+
+**Compliance summary**: **13/13 scenarios compliant**
+
+---
+
+### Correctness (Static — Structural Evidence)
+| Requirement | Status | Notes |
+|---|---|---|
+| Navbar links + canonical routes | ✅ Implemented | `StorefrontNav.tsx` labels are `Inicio`, `Categorías`, `Productos`; `AppRoutes.tsx` route paths are present. |
+| Public routes + checkout return non-regression | ✅ Implemented | `/`, `/categorias`, `/categorias/:slug`, `/productos`, `/checkout/return` and tested return flow. |
+| Category browsing + invalid slug handling | ✅ Implemented | `CategoriesPage.tsx`, `CategoryDetailPage.tsx`, `catalogQuery.ts`. |
+| Search/filter/sort + URL persistence | ✅ Implemented | `ProductsPage.tsx` + app query param wiring and tests. |
+| Fallback reuse and empty state | ✅ Implemented | `useCatalogQuery.ts` and related tests. |
+
+---
+
+### Coherence (Design)
+| Decision | Followed? | Notes |
+|---|---|---|
+| BrowserRouter + declarative routes | ✅ Yes | `main.tsx` + `AppRoutes.tsx`. |
+| Shared catalog query layer + pure filtering utility | ✅ Yes | `useCatalogQuery.ts` + `catalogQuery.ts`. |
+| URL params as query state source | ✅ Yes | `App.tsx` and `ProductsPage.tsx`. |
+| Dedicated checkout return route | ✅ Yes | `/checkout/return` kept explicit and behavior validated. |
+
+---
+
+### Issues Found
+
+**CRITICAL**
+1. Strict TDD traceability artifact is currently missing: `sdd/catalog-navigation-and-search/apply-progress` no longer contains the required `TDD Cycle Evidence` table, so strict TDD compliance cannot be fully verified.
+
+**WARNING**
+None.
+
+**SUGGESTION**
+None.
+
+---
+
+### Prior Blockers Re-check
+| Previous blocker | Status |
+|---|---|
+| Navbar label mismatch (`Categorias` vs `Categorías`) | ✅ Cleared |
+| Coverage command execution | ✅ Cleared |
+| ProductsPage act warning | ✅ Cleared |
+| Strict TDD evidence present in apply-progress | ❌ Regressed (currently missing table) |
+
+---
+
+### Verdict
+## ❌ FAIL
+Behavioral/spec compliance is now complete and the navbar accent blocker is fixed, but archive is still blocked by strict-TDD process evidence regression in `apply-progress`.

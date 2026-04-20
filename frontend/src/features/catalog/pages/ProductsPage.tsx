@@ -96,7 +96,7 @@ export function ProductsPage() {
 
         <div className="products-controls" aria-label="Filtros de productos">
           <label>
-            Categoria
+            Categorías
             <select
               value={selectedCategory}
               onChange={(event) => updateQueryParams({ category: event.target.value })}

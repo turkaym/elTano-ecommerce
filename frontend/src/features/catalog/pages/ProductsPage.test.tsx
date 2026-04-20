@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -84,7 +84,7 @@ describe('ProductsPage', () => {
     renderProductsAt('/productos')
     await screen.findByText('Almendra tostada')
 
-    await user.selectOptions(screen.getByLabelText('Categoria'), 'frutos-secos')
+    await user.selectOptions(screen.getByLabelText('Categorías'), 'frutos-secos')
     await user.selectOptions(screen.getByLabelText('Stock'), 'in-stock')
     await user.selectOptions(screen.getByLabelText('Ordenar'), 'price-desc')
 
@@ -130,8 +130,10 @@ describe('ProductsPage', () => {
     })
     expect(await screen.findByText('Harina de coco')).toBeInTheDocument()
 
-    window.history.back()
-    window.dispatchEvent(new PopStateEvent('popstate'))
+    await act(async () => {
+      window.history.back()
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
 
     await waitFor(() => {
       expect(screen.getByLabelText('Stock')).toHaveValue('in-stock')
