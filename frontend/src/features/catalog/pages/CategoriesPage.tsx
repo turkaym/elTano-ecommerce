@@ -20,9 +20,10 @@ export function CategoriesPage() {
         </div>
 
         {isLoading ? (
-          <p className="products-loading" role="status">
-            Cargando categorias...
-          </p>
+          <div className="catalog-empty catalog-empty-loading" role="status">
+            <p className="catalog-empty-title">Cargando categorías...</p>
+            <p>Estamos preparando el listado por rubros.</p>
+          </div>
         ) : categories.length ? (
           <ul className="category-list" aria-label="Listado de categorias">
             {categories.map((category) => (
@@ -35,9 +36,10 @@ export function CategoriesPage() {
             ))}
           </ul>
         ) : (
-          <p className="products-hint" role="status">
-            No hay categorias disponibles en este momento.
-          </p>
+          <div className="catalog-empty" role="status">
+            <h3 className="catalog-empty-title">Sin categorías</h3>
+            <p>No hay categorias disponibles en este momento.</p>
+          </div>
         )}
       </section>
     </main>

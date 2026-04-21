@@ -95,8 +95,11 @@ export function ProductsPage() {
         </div>
 
         <div className="products-controls" aria-label="Filtros de productos">
-          <label>
-            Categorías
+          <p className="products-controls-title">Filtrar y ordenar</p>
+
+          <div className="products-controls-grid">
+            <label className="products-control-field">
+              <span className="products-control-label">Categorías</span>
             <select
               value={selectedCategory}
               onChange={(event) => updateQueryParams({ category: event.target.value })}
@@ -108,10 +111,10 @@ export function ProductsPage() {
                 </option>
               ))}
             </select>
-          </label>
+            </label>
 
-          <label>
-            Stock
+            <label className="products-control-field">
+              <span className="products-control-label">Stock</span>
             <select
               value={selectedStock}
               onChange={(event) =>
@@ -121,10 +124,10 @@ export function ProductsPage() {
               <option value="all">Todos</option>
               <option value="in-stock">Solo con stock</option>
             </select>
-          </label>
+            </label>
 
-          <label>
-            Ordenar
+            <label className="products-control-field">
+              <span className="products-control-label">Ordenar</span>
             <select
               value={selectedSort}
               onChange={(event) =>
@@ -137,7 +140,8 @@ export function ProductsPage() {
                 </option>
               ))}
             </select>
-          </label>
+            </label>
+          </div>
         </div>
 
         <CatalogProductGrid

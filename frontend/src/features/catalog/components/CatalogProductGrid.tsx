@@ -21,7 +21,7 @@ const currencyFormatter = new Intl.NumberFormat('es-AR', {
 export function CatalogEmptyState({ title, description }: CatalogEmptyStateProps) {
   return (
     <div className="catalog-empty" role="status">
-      <h3>{title}</h3>
+      <h3 className="catalog-empty-title">{title}</h3>
       <p>{description}</p>
     </div>
   )
@@ -35,9 +35,10 @@ export function CatalogProductGrid({
 }: CatalogProductGridProps) {
   if (isLoading) {
     return (
-      <p className="products-loading" role="status">
-        Cargando catalogo...
-      </p>
+      <div className="catalog-empty catalog-empty-loading" role="status">
+        <p className="catalog-empty-title">Cargando catálogo...</p>
+        <p>Estamos preparando los productos para vos.</p>
+      </div>
     )
   }
 
@@ -50,12 +51,12 @@ export function CatalogProductGrid({
       {items.map((product) => (
         <article className="product-card" key={product.id}>
           <p className="product-category">{product.categoryName}</p>
-          <h3>{product.name}</h3>
+          <h3 className="product-name">{product.name}</h3>
           <p className="product-description">{product.description}</p>
           <p className="product-unit">{product.unitLabel}</p>
           <div className="product-footer">
-            <strong>{currencyFormatter.format(product.price)}</strong>
-            <span>Stock {product.stockAvailable}</span>
+            <strong className="product-price">{currencyFormatter.format(product.price)}</strong>
+            <span className="product-stock">Stock {product.stockAvailable}</span>
           </div>
         </article>
       ))}
