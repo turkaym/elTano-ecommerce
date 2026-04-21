@@ -10,7 +10,14 @@ export function StorefrontNav() {
   return (
     <nav className="category-nav" aria-label="Categorías">
       {links.map((link) => (
-        <NavLink key={link.to} to={link.to} className="category-pill">
+        <NavLink
+          key={link.to}
+          to={link.to}
+          end={link.to === '/'}
+          className={({ isActive }) =>
+            isActive ? 'category-pill category-pill-active' : 'category-pill'
+          }
+        >
           {link.label}
         </NavLink>
       ))}

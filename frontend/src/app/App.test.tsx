@@ -283,6 +283,26 @@ describe('App checkout MVP flow', () => {
     expect(screen.getByRole('link', { name: 'Productos' })).toBeInTheDocument()
   })
 
+  it('marks only the current route link as active in navbar', async () => {
+    const user = userEvent.setup()
+
+    renderAppAt('/productos')
+
+    const inicioLink = screen.getByRole('link', { name: 'Inicio' })
+    const categoriasLink = screen.getByRole('link', { name: 'Categorías' })
+    const productosLink = screen.getByRole('link', { name: 'Productos' })
+
+    expect(productosLink).toHaveAttribute('aria-current', 'page')
+    expect(inicioLink).not.toHaveAttribute('aria-current')
+    expect(categoriasLink).not.toHaveAttribute('aria-current')
+
+    await user.click(categoriasLink)
+
+    expect(categoriasLink).toHaveAttribute('aria-current', 'page')
+    expect(inicioLink).not.toHaveAttribute('aria-current')
+    expect(productosLink).not.toHaveAttribute('aria-current')
+  })
+
   it('navigates through required public routes via navbar and direct URL entry', async () => {
     const user = userEvent.setup()
 

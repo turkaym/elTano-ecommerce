@@ -289,28 +289,30 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <header className="top-shell">
-        <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
-          {showBrandLogo ? (
-            <img
-              className="brand-logo"
-              src="/logo-el-tano.png"
-              alt="El Tano Frutos Secos"
-              onError={() => setShowBrandLogo(false)}
-            />
-          ) : (
-            <p className="hero-kicker">El Tano Frutos Secos</p>
-          )}
-        </div>
-        <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
-          <span aria-hidden="true">👤</span>
-          <span aria-hidden="true">🛒</span>
-        </div>
-      </header>
+      <div className="app-chrome">
+        <header className="top-shell">
+          <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
+            {showBrandLogo ? (
+              <img
+                className="brand-logo"
+                src="/logo-el-tano.png"
+                alt="El Tano Frutos Secos"
+                onError={() => setShowBrandLogo(false)}
+              />
+            ) : (
+              <p className="hero-kicker">El Tano Frutos Secos</p>
+            )}
+          </div>
+          <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
+            <span aria-hidden="true">👤</span>
+            <span aria-hidden="true">🛒</span>
+          </div>
+        </header>
 
-      <StorefrontNav />
+        <StorefrontNav />
 
-      <SearchBar value={searchValue} onChange={handleSearchChange} />
+        <SearchBar value={searchValue} onChange={handleSearchChange} />
+      </div>
 
       <AppRoutes homeContent={homeContent} checkoutReturnContent={checkoutReturnContent} />
     </div>
