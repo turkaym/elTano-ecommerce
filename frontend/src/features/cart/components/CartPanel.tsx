@@ -29,7 +29,7 @@ export function CartPanel({
     <section className="section" aria-labelledby="carrito-title">
       <div className="section-header section-header-inline">
         <h2 id="carrito-title">Carrito</h2>
-        <span>{totals.itemCount} item(s)</span>
+        <span className="cart-count">{totals.itemCount} item(s)</span>
       </div>
 
       {warning ? (
@@ -48,14 +48,15 @@ export function CartPanel({
           <ul className="cart-list">
             {items.map((item) => (
               <li key={item.variantId} className="cart-item">
-                <div>
+                <div className="cart-item-header">
                   <h3>{item.productName}</h3>
                   <p>{item.unitLabel}</p>
                 </div>
                 <div className="cart-item-controls">
-                  <label>
+                  <label className="cart-item-qty">
                     Cant.
                     <input
+                      className="cart-item-qty-input"
                       type="number"
                       min={1}
                       max={item.stockAvailable}
@@ -63,7 +64,7 @@ export function CartPanel({
                       onChange={(event) => onSetQty(item.variantId, Number(event.target.value))}
                     />
                   </label>
-                  <strong>{currencyFormatter.format(item.price * item.quantity)}</strong>
+                  <strong className="cart-item-line-total">{currencyFormatter.format(item.price * item.quantity)}</strong>
                   <button type="button" className="link-btn" onClick={() => onRemove(item.variantId)}>
                     Quitar
                   </button>
@@ -73,11 +74,11 @@ export function CartPanel({
           </ul>
 
           <div className="cart-summary">
-            <p>
+            <p className="cart-summary-row">
               <span>Subtotal</span>
               <strong>{currencyFormatter.format(totals.subtotal)}</strong>
             </p>
-            <p>
+            <p className="cart-summary-row cart-summary-total">
               <span>Total</span>
               <strong>{currencyFormatter.format(totals.total)}</strong>
             </p>

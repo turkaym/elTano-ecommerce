@@ -75,46 +75,56 @@ export function CheckoutForm({
   return (
     <section className="section" aria-labelledby="checkout-title">
       <h2 id="checkout-title">Finalizar pedido</h2>
-      <p>Completamos tu borrador y continuas con el siguiente paso de confirmacion.</p>
+      <p className="checkout-lead">Completamos tu borrador y continuas con el siguiente paso de confirmacion.</p>
 
       <form className="checkout-form" onSubmit={handleSubmit} noValidate>
-        <label>
-          Nombre y apellido *
+        <div className="checkout-field">
+          <label className="checkout-field-label" htmlFor="checkout-customer-name">Nombre y apellido *</label>
           <input
+            id="checkout-customer-name"
             type="text"
             value={values.customerName}
             onChange={(event) => setValues((prev) => ({ ...prev, customerName: event.target.value }))}
           />
-          {errors.customerName ? <span role="alert">{errors.customerName}</span> : null}
-        </label>
+          <small className="checkout-field-helper">Ej: Maria Perez</small>
+          {errors.customerName ? <span className="checkout-field-error" role="alert">{errors.customerName}</span> : null}
+        </div>
 
-        <label>
-          Telefono *
+        <div className="checkout-field">
+          <label className="checkout-field-label" htmlFor="checkout-phone">Telefono *</label>
           <input
+            id="checkout-phone"
             type="tel"
             value={values.phone}
             onChange={(event) => setValues((prev) => ({ ...prev, phone: event.target.value }))}
           />
-          {errors.phone ? <span role="alert">{errors.phone}</span> : null}
-        </label>
+          <small className="checkout-field-helper">Con codigo de area para poder contactarte.</small>
+          {errors.phone ? <span className="checkout-field-error" role="alert">{errors.phone}</span> : null}
+        </div>
 
-        <label>
-          Nota (opcional)
+        <div className="checkout-field">
+          <label className="checkout-field-label" htmlFor="checkout-note">Nota (opcional)</label>
           <textarea
+            id="checkout-note"
             value={values.note}
             rows={3}
             onChange={(event) => setValues((prev) => ({ ...prev, note: event.target.value }))}
           />
-        </label>
+          <small className="checkout-field-helper">Aclaraciones para preparar tu pedido.</small>
+        </div>
 
-        {errors.cart ? <p className="form-error" role="alert">{errors.cart}</p> : null}
-        {isSubmitBlocked && blockedSubmitMessage ? <p className="form-error" role="alert">{blockedSubmitMessage}</p> : null}
-        {errors.checkout && !isSubmitBlocked ? <p className="form-error" role="alert">{errors.checkout}</p> : null}
-        {submitError ? <p className="form-error" role="alert">{submitError}</p> : null}
+        <div className="checkout-feedback-stack" aria-live="polite">
+          {errors.cart ? <p className="form-error" role="alert">{errors.cart}</p> : null}
+          {isSubmitBlocked && blockedSubmitMessage ? <p className="form-error" role="alert">{blockedSubmitMessage}</p> : null}
+          {errors.checkout && !isSubmitBlocked ? <p className="form-error" role="alert">{errors.checkout}</p> : null}
+          {submitError ? <p className="form-error" role="alert">{submitError}</p> : null}
+        </div>
 
-        <button type="submit" className="btn btn-primary" disabled={isSubmitting || isCartEmpty || isSubmitBlocked}>
-          {isSubmitting ? 'Creando borrador...' : submitLabel}
-        </button>
+        <div className="checkout-actions">
+          <button type="submit" className="btn btn-primary" disabled={isSubmitting || isCartEmpty || isSubmitBlocked}>
+            {isSubmitting ? 'Creando borrador...' : submitLabel}
+          </button>
+        </div>
       </form>
     </section>
   )

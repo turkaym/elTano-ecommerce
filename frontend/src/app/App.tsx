@@ -303,13 +303,16 @@ export function App() {
               <p className="hero-kicker">El Tano Frutos Secos</p>
             )}
           </div>
-          <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
-            <span aria-hidden="true">👤</span>
-            <span aria-hidden="true">🛒</span>
+
+          <div className="top-shell-right">
+            <StorefrontNav />
+
+            <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
+              <span aria-hidden="true">👤</span>
+              <span aria-hidden="true">🛒</span>
+            </div>
           </div>
         </header>
-
-        <StorefrontNav />
 
         <SearchBar value={searchValue} onChange={handleSearchChange} />
       </div>

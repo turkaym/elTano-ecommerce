@@ -18,7 +18,9 @@ import com.eltano.ecommerce.catalog.api.dto.AdminProductUpsertRequest;
 import com.eltano.ecommerce.catalog.api.dto.AdminProductVariantResponse;
 import com.eltano.ecommerce.catalog.api.dto.AdminProductVariantUpsertRequest;
 import com.eltano.ecommerce.catalog.domain.Category;
+import com.eltano.ecommerce.catalog.domain.InventoryPolicy;
 import com.eltano.ecommerce.catalog.domain.Product;
+import com.eltano.ecommerce.catalog.domain.ProductType;
 import com.eltano.ecommerce.catalog.domain.ProductVariant;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
 import com.eltano.ecommerce.catalog.repository.ProductRepository;
@@ -88,11 +90,58 @@ public class AdminProductService {
     }
 
     private void applyProductData(Product product, AdminProductUpsertRequest request, Category category) {
+        ProductType resolvedProductType = resolveProductType(request.productType(), product.getProductType());
+        InventoryPolicy resolvedInventoryPolicy = resolveInventoryPolicy(
+                request.inventoryPolicy(),
+                resolvedProductType,
+                product.getInventoryPolicy());
+
         product.setName(request.name().trim());
         product.setSlug(request.slug().trim());
         product.setDescription(request.description().trim());
         product.setActive(request.active());
         product.setCategory(category);
+        product.setProductType(resolvedProductType);
+        product.setInventoryPolicy(resolvedInventoryPolicy);
+        if (request.stockBaseGrams() != null || product.getStockBaseGrams() == null) {
+            product.setStockBaseGrams(request.stockBaseGrams());
+        }
+    }
+
+    private ProductType resolveProductType(ProductType requestedType, ProductType existingType) {
+        if (requestedType != null) {
+            return requestedType;
+        }
+        if (existingType != null) {
+            return existingType;
+        }
+        return ProductType.ENVASADO;
+    }
+
+    private InventoryPolicy resolveInventoryPolicy(
+            InventoryPolicy requestedPolicy,
+            ProductType productType,
+            InventoryPolicy existingPolicy) {
+        InventoryPolicy resolvedPolicy = requestedPolicy != null
+                ? requestedPolicy
+                : (existingPolicy != null ? existingPolicy : defaultPolicyFor(productType));
+
+        validatePolicyCombination(productType, resolvedPolicy);
+        return resolvedPolicy;
+    }
+
+    private InventoryPolicy defaultPolicyFor(ProductType productType) {
+        return productType == ProductType.GRANEL ? InventoryPolicy.BULK_WEIGHT : InventoryPolicy.PER_VARIANT;
+    }
+
+    private void validatePolicyCombination(ProductType productType, InventoryPolicy inventoryPolicy) {
+        if (productType == ProductType.GRANEL && inventoryPolicy != InventoryPolicy.BULK_WEIGHT) {
+            throw new ConflictException("GRANEL products require BULK_WEIGHT policy");
+        }
+        if ((productType == ProductType.ENVASADO || productType == ProductType.UNIDAD)
+                && inventoryPolicy != InventoryPolicy.PER_VARIANT) {
+            throw new ConflictException("ENVASADO/UNIDAD products require PER_VARIANT policy");
+        }
     }
 
     private List<ProductVariant> buildVariants(
@@ -184,6 +233,9 @@ public class AdminProductService {
                 product.getCategory().getId(),
                 product.getCategory().getName(),
                 product.getCategory().getSlug(),
+                product.getProductType(),
+                product.getInventoryPolicy(),
+                product.getStockBaseGrams(),
                 variants,
                 product.getCreatedAt(),
                 product.getUpdatedAt());

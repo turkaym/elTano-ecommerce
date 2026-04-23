@@ -70,6 +70,9 @@ public class CatalogQueryService {
                 product.getDescription(),
                 product.getCategory().getName(),
                 product.getCategory().getSlug(),
+                product.getProductType(),
+                product.getInventoryPolicy(),
+                product.getStockBaseGrams(),
                 variants);
     }
 }

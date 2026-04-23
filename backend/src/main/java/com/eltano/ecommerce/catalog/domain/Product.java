@@ -11,6 +11,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -42,6 +44,17 @@ public class Product {
 
     @Column(nullable = false)
     private boolean active;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ProductType productType = ProductType.ENVASADO;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private InventoryPolicy inventoryPolicy = InventoryPolicy.PER_VARIANT;
+
+    @Column
+    private Integer stockBaseGrams;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
@@ -92,6 +105,30 @@ public class Product {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public ProductType getProductType() {
+        return productType == null ? ProductType.ENVASADO : productType;
+    }
+
+    public void setProductType(ProductType productType) {
+        this.productType = productType;
+    }
+
+    public InventoryPolicy getInventoryPolicy() {
+        return inventoryPolicy == null ? InventoryPolicy.PER_VARIANT : inventoryPolicy;
+    }
+
+    public void setInventoryPolicy(InventoryPolicy inventoryPolicy) {
+        this.inventoryPolicy = inventoryPolicy;
+    }
+
+    public Integer getStockBaseGrams() {
+        return stockBaseGrams;
+    }
+
+    public void setStockBaseGrams(Integer stockBaseGrams) {
+        this.stockBaseGrams = stockBaseGrams;
     }
 
     public Category getCategory() {

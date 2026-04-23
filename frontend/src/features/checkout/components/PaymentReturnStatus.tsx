@@ -78,30 +78,55 @@ export function PaymentReturnStatus({
     }
   }, [statusPayload])
 
+  const statusTone = useMemo<'success' | 'pending' | 'failure'>(() => {
+    if (!statusPayload || statusPayload.status === 'PAYMENT_PENDING') {
+      return 'pending'
+    }
+
+    if (statusPayload.status === 'PAID') {
+      return 'success'
+    }
+
+    return 'failure'
+  }, [statusPayload])
+
   return (
     <section className="section" aria-labelledby="payment-return-title">
       <h2 id="payment-return-title">{headline}</h2>
-      <p>
+      <p className="payment-provider-hint">
         Estado informado por Mercado Pago: {providerStatusHint || 'sin dato'}. Validamos siempre el estado canonico
         en backend.
       </p>
 
-      {error ? <p role="alert">{error}</p> : null}
-      {statusPayload?.status === 'PAYMENT_PENDING' || !statusPayload ? (
-        <p>Estamos confirmando tu pago...</p>
-      ) : null}
+      {error ? <p className="payment-status-error" role="alert">{error}</p> : null}
 
-      {statusPayload?.status === 'PAID' ? (
-        <button className="btn btn-primary" type="button" onClick={onPaidContinue}>
-          Confirmar por WhatsApp
-        </button>
-      ) : null}
+      <div className={`payment-status-block payment-status-block-${statusTone}`}>
+        {statusPayload?.status === 'PAYMENT_PENDING' || !statusPayload ? (
+          <p className="payment-status-detail">Estamos confirmando tu pago...</p>
+        ) : null}
 
-      {statusPayload && statusPayload.status !== 'PAID' && statusPayload.canRetry ? (
-        <button className="btn" type="button" onClick={onRetry}>
-          Reintentar pago
-        </button>
-      ) : null}
+        {statusPayload?.status === 'PAID' ? (
+          <p className="payment-status-detail">Tu pedido ya puede continuar al paso final de confirmacion.</p>
+        ) : null}
+
+        {statusPayload && statusPayload.status !== 'PAID' && statusPayload.status !== 'PAYMENT_PENDING' ? (
+          <p className="payment-status-detail">Revisa los datos de pago e intenta nuevamente para completar el pedido.</p>
+        ) : null}
+      </div>
+
+      <div className="payment-status-actions">
+        {statusPayload?.status === 'PAID' ? (
+          <button className="btn btn-primary" type="button" onClick={onPaidContinue}>
+            Confirmar por WhatsApp
+          </button>
+        ) : null}
+
+        {statusPayload && statusPayload.status !== 'PAID' && statusPayload.canRetry ? (
+          <button className="btn btn-secondary" type="button" onClick={onRetry}>
+            Reintentar pago
+          </button>
+        ) : null}
+      </div>
     </section>
   )
 }
