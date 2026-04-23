@@ -122,6 +122,44 @@ class OrderDraftControllerTest {
     }
 
     @Test
+    void createDraftReturns400WhenVariantSelectionIsMissing() throws Exception {
+        when(orderDraftService.createDraft(any())).thenThrow(new IllegalArgumentException("Variant selection required"));
+
+        mockMvc.perform(post("/api/orders/drafts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "customerName": "Juan Perez",
+                          "phone": "+5491112345678",
+                          "items": [
+                            {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 1}
+                          ]
+                        }
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Variant selection required"));
+    }
+
+    @Test
+    void createDraftReturns400WhenVariantPolicyIsIncompatible() throws Exception {
+        when(orderDraftService.createDraft(any())).thenThrow(new IllegalArgumentException("Variant incompatible with product policy"));
+
+        mockMvc.perform(post("/api/orders/drafts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "customerName": "Juan Perez",
+                          "phone": "+5491112345678",
+                          "items": [
+                            {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 1}
+                          ]
+                        }
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Variant incompatible with product policy"));
+    }
+
+    @Test
     void adminEndpointsRemainProtectedInMvpScope() throws Exception {
         mockMvc.perform(post("/api/admin/products")
                 .contentType(MediaType.APPLICATION_JSON)

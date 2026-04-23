@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.eltano.ecommerce.catalog.domain.ProductVariant;
 import com.eltano.ecommerce.catalog.repository.ProductVariantRepository;
-import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.common.api.ResourceNotFoundException;
 import com.eltano.ecommerce.orders.domain.OrderDraft;
 import com.eltano.ecommerce.orders.domain.OrderDraftLine;
@@ -39,14 +38,17 @@ public class OrderDraftService {
     private final ProductVariantRepository productVariantRepository;
     private final OrderDraftRepository orderDraftRepository;
     private final MercadoPagoClient mercadoPagoClient;
+    private final InventoryPolicyService inventoryPolicyService;
 
     public OrderDraftService(
             ProductVariantRepository productVariantRepository,
             OrderDraftRepository orderDraftRepository,
-            MercadoPagoClient mercadoPagoClient) {
+            MercadoPagoClient mercadoPagoClient,
+            InventoryPolicyService inventoryPolicyService) {
         this.productVariantRepository = productVariantRepository;
         this.orderDraftRepository = orderDraftRepository;
         this.mercadoPagoClient = mercadoPagoClient;
+        this.inventoryPolicyService = inventoryPolicyService;
     }
 
     @Transactional
@@ -71,6 +73,10 @@ public class OrderDraftService {
 
         BigDecimal subtotal = BigDecimal.ZERO;
         for (CommandItem commandItem : command.items()) {
+            if (commandItem.variantId() == null) {
+                throw new IllegalArgumentException("Variant selection required");
+            }
+
             ProductVariant variant = variantsById.get(commandItem.variantId());
             if (variant == null) {
                 throw new IllegalArgumentException("Variant not found");
@@ -78,12 +84,8 @@ public class OrderDraftService {
             if (!variant.isActive()) {
                 throw new IllegalArgumentException("Variant is inactive");
             }
-            if (variant.getStockAvailable() < commandItem.quantity()) {
-                throw new ConflictException("Insufficient stock for variant " + variant.getId());
-            }
 
-            variant.setStockAvailable(variant.getStockAvailable() - commandItem.quantity());
-            variant.setStockReserved(variant.getStockReserved() + commandItem.quantity());
+            inventoryPolicyService.reserve(variant, commandItem.quantity());
 
             BigDecimal lineTotal = variant.getPrice().multiply(BigDecimal.valueOf(commandItem.quantity()));
             subtotal = subtotal.add(lineTotal);
@@ -237,8 +239,7 @@ public class OrderDraftService {
         for (OrderDraftLine line : draft.getLines()) {
             ProductVariant variant = line.getVariant();
             int quantity = line.getQuantity();
-            variant.setStockReserved(Math.max(0, variant.getStockReserved() - quantity));
-            variant.setStockAvailable(variant.getStockAvailable() + quantity);
+            inventoryPolicyService.release(variant, quantity);
         }
     }
 

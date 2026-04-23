@@ -1,25 +1,35 @@
-# Apply Progress — storefront-variant-inventory (Batch 1)
+# Apply Progress — storefront-variant-inventory (Batches 1-2)
 
 ## Mode
-Standard (non-strict TDD)
+Strict TDD
 
 ## Completed (Batch 1)
 - [x] **1.1** Add `product_type`, `inventory_policy`, `stock_base_grams` migration defaults/checks/indexes.
 - [x] **1.2** Add domain enums/fields and legacy fallback mapping (`null -> PER_VARIANT/ENVASADO`).
 - [x] **1.3** Update backend contracts for public/admin metadata while preserving existing checkout payload shape.
 
+## Completed (Batch 2)
+- [x] **2.1** Implemented `InventoryPolicyService` for `BULK_WEIGHT` and `PER_VARIANT` reserve/release behavior.
+- [x] **2.2** Refactored `OrderDraftService` to route stock reserve/release through `InventoryPolicyService` while preserving checkout/payment flow.
+- [x] **2.3** Added/covered API error semantics for stock + policy failures (`400` for variant/policy input issues, `409` for insufficient stock).
+
 ## Notes
-- `ProductRepository` query structure was already compatible (entity-loading of `Product` includes new product-level fields), so no query shape change was needed for Batch 1.
-- Batch 1 intentionally does **not** rewrite stock decrement behavior (deferred to Batch 2).
+- `OrderDraftService` no longer applies stock math directly; it delegates to policy service.
+- `BULK_WEIGHT` reserves by decrementing `product.stockBaseGrams` and releases grams on payment failure/cancel/expiry.
+- `PER_VARIANT` retains legacy reservation semantics (`stock_available` down, `stock_reserved` up; release reverses).
 
 ## Validation
-- Backend compile: `./mvnw -q -DskipTests compile` ✅
-- Backend targeted tests: `./mvnw -q -Dtest=OrderDraftServiceTest test` ✅, `./mvnw -q -Dtest=OrderDraftControllerTest test` ✅
-- Backend full tests: `./mvnw -q test` ✅
-- Frontend tests: `npm test` ✅
-- Frontend build: `npm run build` ✅
+- Safety net before edits: `./mvnw.cmd -q "-Dtest=OrderDraftServiceTest,OrderDraftControllerTest" test` ✅ (10 + 13 passing baseline)
+- RED (task 2.1): `./mvnw.cmd -q "-Dtest=InventoryPolicyServiceTest" test` ❌ expected compile failure (`InventoryPolicyService` missing)
+- GREEN (task 2.1): `./mvnw.cmd -q "-Dtest=InventoryPolicyServiceTest" test` ✅ (5/5)
+- RED (task 2.2): `./mvnw.cmd -q "-Dtest=OrderDraftServiceTest" test` ❌ expected compile/test failure (constructor mismatch + new behavior)
+- GREEN (task 2.2/2.3):
+  - `./mvnw.cmd -q "-Dtest=OrderDraftServiceTest" test` ✅ (12/12)
+  - `./mvnw.cmd -q "-Dtest=OrderDraftControllerTest" test` ✅ (15/15)
+  - `./mvnw.cmd -q "-Dtest=InventoryPolicyServiceTest,OrderDraftServiceTest,OrderDraftControllerTest" test` ✅
+- Backend full suite: `./mvnw.cmd -q test` ✅
+- Frontend unaffected checks: `npm test` ✅ (12 files, 44 tests), `npm run build` ✅
 
 ## Remaining
-- Batch 2 tasks (2.1, 2.2, 2.3)
 - Batch 3 tasks (3.1, 3.2, 3.3, 3.4)
 - Batch 4 tasks (4.1, 4.2, 4.3)

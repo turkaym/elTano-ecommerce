@@ -5,7 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -45,11 +48,18 @@ class OrderDraftServiceTest {
     @Mock
     private MercadoPagoClient mercadoPagoClient;
 
+    @Mock
+    private InventoryPolicyService inventoryPolicyService;
+
     private OrderDraftService orderDraftService;
 
     @BeforeEach
     void setUp() {
-        orderDraftService = new OrderDraftService(productVariantRepository, orderDraftRepository, mercadoPagoClient);
+        orderDraftService = new OrderDraftService(
+                productVariantRepository,
+                orderDraftRepository,
+                mercadoPagoClient,
+                inventoryPolicyService);
     }
 
     @Test
@@ -69,8 +79,7 @@ class OrderDraftServiceTest {
         assertEquals(new BigDecimal("12000.00"), result.total());
         assertTrue(result.whatsappMessage().contains(result.reference()));
         assertTrue(result.whatsappMessage().contains("Almendra"));
-        assertEquals(8, variant.getStockAvailable());
-        assertEquals(2, variant.getStockReserved());
+        verify(inventoryPolicyService).reserve(variant, 2);
 
         ArgumentCaptor<OrderDraft> captor = ArgumentCaptor.forClass(OrderDraft.class);
         verify(orderDraftRepository).save(captor.capture());
@@ -82,6 +91,9 @@ class OrderDraftServiceTest {
     void createDraftThrowsConflictWhenInsufficientStock() {
         ProductVariant variant = variantWith("Almendra", 4000, 1, 0);
         when(productVariantRepository.findAllByIdInForUpdate(anyList())).thenReturn(List.of(variant));
+        doThrow(new ConflictException("Insufficient stock"))
+                .when(inventoryPolicyService)
+                .reserve(variant, 3);
 
         assertThrows(ConflictException.class, () -> orderDraftService.createDraft(new OrderDraftService.Command(
                 "Juan Perez",
@@ -119,6 +131,49 @@ class OrderDraftServiceTest {
 
         assertEquals(new BigDecimal("11000.00"), result.total());
         assertTrue(result.whatsappMessage().contains("Nuez"));
+        verify(inventoryPolicyService).reserve(variantOne, 1);
+        verify(inventoryPolicyService).reserve(variantTwo, 2);
+    }
+
+    @Test
+    void createDraftRejectsMissingVariantSelection() {
+        when(productVariantRepository.findAllByIdInForUpdate(anyList())).thenReturn(List.of());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> orderDraftService.createDraft(
+                new OrderDraftService.Command(
+                        "Juan Perez",
+                        "+5491112345678",
+                        null,
+                        List.of(new OrderDraftService.CommandItem(null, 1)))));
+
+        assertEquals("Variant selection required", ex.getMessage());
+    }
+
+    @Test
+    void applyPaymentTransitionReleasesBulkWeightStockOnFailure() {
+        UUID draftId = UUID.randomUUID();
+        ProductVariant variant = bulkVariantWith(500, 3000);
+
+        OrderDraftLine line = new OrderDraftLine();
+        line.setVariant(variant);
+        line.setQuantity(2);
+        line.setUnitPrice(new BigDecimal("4000.00"));
+        line.setLineTotal(new BigDecimal("8000.00"));
+        line.setProductName("Almendra");
+        line.setUnitLabel("bolsa 500 g");
+
+        OrderDraft draft = new OrderDraft();
+        ReflectionTestUtils.setField(draft, "id", draftId);
+        draft.setStatus(OrderDraftStatus.PAYMENT_PENDING);
+        draft.addLine(line);
+
+        when(orderDraftRepository.findByIdForUpdate(draftId)).thenReturn(Optional.of(draft));
+        when(orderDraftRepository.save(any(OrderDraft.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        orderDraftService.applyPaymentTransition(
+                new OrderDraftService.PaymentTransitionCommand(draftId, "pay-1", OrderDraftStatus.FAILED, "rejected"));
+
+        verify(inventoryPolicyService).release(variant, 2);
     }
 
     @Test
@@ -201,8 +256,7 @@ class OrderDraftServiceTest {
 
         assertEquals("FAILED_APPLIED", result.outcome());
         assertEquals(OrderDraftStatus.FAILED, draft.getStatus());
-        assertEquals(5, variant.getStockAvailable());
-        assertEquals(0, variant.getStockReserved());
+        verify(inventoryPolicyService).release(variant, 2);
         Instant releasedAt = draft.getStockReleasedAt();
 
         orderDraftService.applyPaymentTransition(
@@ -215,6 +269,7 @@ class OrderDraftServiceTest {
         for (OrderDraftStatus terminal : List.of(OrderDraftStatus.CANCELLED, OrderDraftStatus.EXPIRED)) {
             UUID draftId = UUID.randomUUID();
             ProductVariant variant = variantWith("Almendra", 4000, 3, 2);
+            reset(inventoryPolicyService);
 
             OrderDraftLine line = new OrderDraftLine();
             line.setVariant(variant);
@@ -236,8 +291,7 @@ class OrderDraftServiceTest {
                     new OrderDraftService.PaymentTransitionCommand(draftId, "pay-" + terminal, terminal, terminal.name()));
 
             assertEquals(terminal.name() + "_APPLIED", result.outcome());
-            assertEquals(5, variant.getStockAvailable());
-            assertEquals(0, variant.getStockReserved());
+            verify(inventoryPolicyService, times(1)).release(variant, 2);
 
             Instant releasedAt = draft.getStockReleasedAt();
             orderDraftService.applyPaymentTransition(
@@ -279,6 +333,19 @@ class OrderDraftServiceTest {
         variant.setStockReserved(stockReserved);
         variant.setActive(true);
         variant.setSku("SKU-" + UUID.randomUUID());
+        return variant;
+    }
+
+    private ProductVariant bulkVariantWith(int weightGrams, int stockBaseGrams) {
+        Product product = new Product();
+        product.setName("Almendra");
+        product.setInventoryPolicy(com.eltano.ecommerce.catalog.domain.InventoryPolicy.BULK_WEIGHT);
+        product.setProductType(com.eltano.ecommerce.catalog.domain.ProductType.GRANEL);
+        product.setStockBaseGrams(stockBaseGrams);
+
+        ProductVariant variant = variantWith("Almendra", 4000, 10, 0);
+        variant.setProduct(product);
+        variant.setWeightGrams(weightGrams);
         return variant;
     }
 
