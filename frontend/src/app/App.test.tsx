@@ -23,13 +23,25 @@ import { createOrderDraft } from '../features/checkout/services/checkoutService'
 
 const featuredProduct: FeaturedProduct = {
   id: 'prod-1',
-  variantId: '11111111-1111-4111-8111-111111111111',
   name: 'Almendra natural premium',
   description: 'Ideal para snack.',
   categoryName: 'Frutos secos',
+  productType: 'ENVASADO',
+  inventoryPolicy: 'PER_VARIANT',
+  variants: [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      unitLabel: 'bolsa 500 g',
+      price: 6400,
+      stockAvailable: 10,
+    },
+  ],
+  isMultiVariant: false,
+  minPrice: 6400,
+  stockAvailable: 10,
+  variantId: '11111111-1111-4111-8111-111111111111',
   unitLabel: 'bolsa 500 g',
   price: 6400,
-  stockAvailable: 10,
 }
 
 function renderAppAt(pathname = '/') {
@@ -65,22 +77,36 @@ describe('App checkout MVP flow', () => {
       items: [
         {
           id: 'prod-1',
-          variantId: 'var-1',
           name: 'Almendra natural premium',
           description: 'Ideal para snack.',
           categoryName: 'Frutos secos',
           categorySlug: 'frutos-secos',
+          productType: 'ENVASADO',
+          inventoryPolicy: 'PER_VARIANT',
+          variants: [
+            { id: 'var-1', unitLabel: 'bolsa 500 g', price: 6400, stockAvailable: 10 },
+          ],
+          isMultiVariant: false,
+          minPrice: 6400,
+          variantId: 'var-1',
           unitLabel: 'bolsa 500 g',
           price: 6400,
           stockAvailable: 10,
         },
         {
           id: 'prod-2',
-          variantId: 'var-2',
           name: 'Harina de coco organica',
           description: 'Alternativa baja en carbohidratos.',
           categoryName: 'Harinas',
           categorySlug: 'harinas',
+          productType: 'ENVASADO',
+          inventoryPolicy: 'PER_VARIANT',
+          variants: [
+            { id: 'var-2', unitLabel: 'bolsa 500 g', price: 5300, stockAvailable: 8 },
+          ],
+          isMultiVariant: false,
+          minPrice: 5300,
+          variantId: 'var-2',
           unitLabel: 'bolsa 500 g',
           price: 5300,
           stockAvailable: 8,
@@ -189,6 +215,67 @@ describe('App checkout MVP flow', () => {
     expect(await screen.findByDisplayValue('frutos secos')).toBeInTheDocument()
     expect(screen.getByText('Almendra natural premium')).toBeInTheDocument()
     expect(screen.queryByText('Harina de coco organica')).not.toBeInTheDocument()
+  })
+
+  it('requires variant selection and sends selected variant + quantity to checkout draft', async () => {
+    const user = userEvent.setup()
+
+    vi.mocked(getFeaturedProducts).mockResolvedValueOnce({
+      source: 'api',
+      products: [
+        {
+          ...featuredProduct,
+          variantId: null,
+          unitLabel: 'Seleccionar presentación',
+          isMultiVariant: true,
+          minPrice: 6400,
+          price: 6400,
+          variants: [
+            {
+              id: '11111111-1111-4111-8111-111111111111',
+              unitLabel: 'bolsa 500 g',
+              price: 6400,
+              stockAvailable: 10,
+            },
+            {
+              id: '22222222-2222-4222-8222-222222222222',
+              unitLabel: 'bolsa 1 kg',
+              price: 11800,
+              stockAvailable: 7,
+            },
+          ],
+          stockAvailable: 17,
+        },
+      ],
+    })
+
+    renderAppAt()
+
+    expect(await screen.findByText(/Desde\s*\$\s*6.400/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    expect(screen.getByText('Selecciona una variante para continuar.')).toBeInTheDocument()
+
+    await user.selectOptions(
+      screen.getByLabelText('Presentacion para Almendra natural premium'),
+      '22222222-2222-4222-8222-222222222222',
+    )
+    fireEvent.change(screen.getByLabelText('Cantidad para Almendra natural premium'), {
+      target: { value: '3' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
+    await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
+
+    await waitFor(() => {
+      expect(vi.mocked(createOrderDraft)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ variantId: '22222222-2222-4222-8222-222222222222', quantity: 3 }],
+        }),
+      )
+    })
   })
 
   it('does not redirect to WhatsApp when draft API fails', async () => {

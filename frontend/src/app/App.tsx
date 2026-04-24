@@ -4,14 +4,20 @@ import { AppRoutes } from './routes/AppRoutes'
 import { PaymentReturnStatus } from '../features/checkout/components/PaymentReturnStatus'
 import { CartPanel } from '../features/cart/components/CartPanel'
 import { useCartStore } from '../features/cart/state/cartStore'
-import { FeaturedProductsSection } from '../features/catalog/components/FeaturedProductsSection'
+import {
+  FeaturedProductsSection,
+  type FeaturedAddToCartPayload,
+} from '../features/catalog/components/FeaturedProductsSection'
 import { getFeaturedProducts } from '../features/catalog/services/catalogService'
 import { CheckoutForm, type CheckoutFormValues } from '../features/checkout/components/CheckoutForm'
 import { createOrderDraft, startDraftPayment } from '../features/checkout/services/checkoutService'
 import { StorefrontNav } from '../features/navigation/components/StorefrontNav'
 import { SearchBar } from '../features/search/components/SearchBar'
 import { ApiClientError } from '../shared/api/httpClient'
-import { checkoutMvpEnabled, checkoutPaymentEnabled } from '../shared/config/flags'
+import {
+  checkoutMvpEnabled,
+  checkoutPaymentEnabled,
+} from '../shared/config/flags'
 import type { FeaturedProduct } from '../shared/types/catalog'
 import type { CreateOrderDraftRequest } from '../shared/types/checkout'
 
@@ -102,13 +108,20 @@ export function App() {
     }
   }, [])
 
-  function handleAddToCart(product: FeaturedProduct) {
+  function handleAddToCart(payload: FeaturedAddToCartPayload) {
+    const selectedProduct = products.find((product) => product.id === payload.productId)
+    const selectedVariant = selectedProduct?.variants.find((variant) => variant.id === payload.variantId)
+    if (!selectedProduct || !selectedVariant) {
+      return
+    }
+
     cart.addItem({
-      variantId: product.variantId,
-      productName: product.name,
-      unitLabel: product.unitLabel,
-      price: product.price,
-      stockAvailable: product.stockAvailable,
+      variantId: selectedVariant.id,
+      productName: selectedProduct.name,
+      unitLabel: selectedVariant.unitLabel,
+      price: selectedVariant.price,
+      stockAvailable: selectedVariant.stockAvailable,
+      quantity: payload.quantity,
     })
   }
 

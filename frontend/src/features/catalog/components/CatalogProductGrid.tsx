@@ -55,8 +55,11 @@ export function CatalogProductGrid({
           <p className="product-description">{product.description}</p>
           <p className="product-unit">{product.unitLabel}</p>
           <div className="product-footer">
-            <strong className="product-price">{currencyFormatter.format(product.price)}</strong>
-            <span className="product-stock">Stock {product.stockAvailable}</span>
+            <strong className="product-price">
+              {product.isMultiVariant
+                ? `Desde ${currencyFormatter.format(product.minPrice)}`
+                : currencyFormatter.format(product.price)}
+            </strong>
           </div>
         </article>
       ))}

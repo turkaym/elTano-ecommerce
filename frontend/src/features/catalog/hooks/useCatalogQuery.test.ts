@@ -17,6 +17,9 @@ const apiProducts: CatalogProduct[] = [
     description: 'Ideal para snack',
     categoryName: 'Frutos secos',
     categorySlug: 'frutos-secos',
+    productType: 'ENVASADO',
+    inventoryPolicy: 'PER_VARIANT',
+    stockBaseGrams: null,
     variants: [
       {
         id: 'var-1',

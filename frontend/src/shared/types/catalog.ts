@@ -10,6 +10,16 @@ export interface CatalogVariant {
   attributesJson: string | null
 }
 
+export type ProductType = 'GRANEL' | 'ENVASADO' | 'UNIDAD'
+export type InventoryPolicy = 'BULK_WEIGHT' | 'PER_VARIANT'
+
+export interface CatalogCardVariantOption {
+  id: string
+  unitLabel: string
+  price: number
+  stockAvailable: number
+}
+
 export interface CatalogProduct {
   id: string
   name: string
@@ -17,18 +27,26 @@ export interface CatalogProduct {
   description: string
   categoryName: string
   categorySlug: string
+  productType: ProductType
+  inventoryPolicy: InventoryPolicy
+  stockBaseGrams: number | null
   variants: CatalogVariant[]
 }
 
 export interface FeaturedProduct {
   id: string
-  variantId: string
   name: string
   description: string
   categoryName: string
+  productType: ProductType
+  inventoryPolicy: InventoryPolicy
+  variants: CatalogCardVariantOption[]
+  isMultiVariant: boolean
+  minPrice: number
+  stockAvailable: number
+  variantId: string | null
   unitLabel: string
   price: number
-  stockAvailable: number
 }
 
 export type CatalogSort = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc'

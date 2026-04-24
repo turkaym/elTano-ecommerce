@@ -21,11 +21,16 @@ describe('CategoryDetailPage', () => {
       items: [
         {
           id: '1',
-          variantId: 'v1',
           name: 'Almendra tostada',
           description: 'Snack natural',
           categoryName: 'Frutos secos',
           categorySlug: 'frutos-secos',
+          productType: 'ENVASADO',
+          inventoryPolicy: 'PER_VARIANT',
+          variants: [{ id: 'v1', unitLabel: 'bolsa 500 g', price: 5200, stockAvailable: 10 }],
+          isMultiVariant: false,
+          minPrice: 5200,
+          variantId: 'v1',
           unitLabel: 'bolsa 500 g',
           price: 5200,
           stockAvailable: 10,

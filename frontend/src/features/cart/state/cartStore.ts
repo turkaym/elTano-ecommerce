@@ -8,7 +8,7 @@ interface CartState {
 }
 
 type CartAction =
-  | { type: 'addItem'; payload: Omit<CartItem, 'quantity'> }
+  | { type: 'addItem'; payload: CartItem }
   | { type: 'setQty'; payload: { variantId: string; quantity: number } }
   | { type: 'removeItem'; payload: { variantId: string } }
   | { type: 'clear' }
@@ -30,7 +30,13 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     if (!existing) {
       return {
         ...state,
-        items: [...state.items, { ...action.payload, quantity: 1 }],
+        items: [
+          ...state.items,
+          {
+            ...action.payload,
+            quantity: Math.min(Math.max(1, action.payload.quantity), action.payload.stockAvailable),
+          },
+        ],
       }
     }
 
@@ -43,7 +49,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
 
         return {
           ...item,
-          quantity: Math.min(item.quantity + 1, item.stockAvailable),
+          quantity: Math.min(item.quantity + action.payload.quantity, item.stockAvailable),
         }
       }),
     }
@@ -118,7 +124,7 @@ export function useCartStore() {
     items: state.items,
     warning: state.warning,
     totals,
-    addItem: (item: Omit<CartItem, 'quantity'>) => dispatch({ type: 'addItem', payload: item }),
+    addItem: (item: CartItem) => dispatch({ type: 'addItem', payload: item }),
     setQty: (variantId: string, quantity: number) =>
       dispatch({ type: 'setQty', payload: { variantId, quantity } }),
     removeItem: (variantId: string) => dispatch({ type: 'removeItem', payload: { variantId } }),

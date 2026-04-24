@@ -8,6 +8,7 @@ const baseItem = {
   productName: 'Nuez mariposa',
   unitLabel: 'bolsa 500 g',
   price: 7600,
+  quantity: 1,
   stockAvailable: 2,
 }
 

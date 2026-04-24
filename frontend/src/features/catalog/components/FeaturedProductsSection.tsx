@@ -1,10 +1,17 @@
+import { useState } from 'react'
 import type { FeaturedProduct } from '../../../shared/types/catalog'
+
+export interface FeaturedAddToCartPayload {
+  productId: string
+  variantId: string
+  quantity: number
+}
 
 interface FeaturedProductsSectionProps {
   products: FeaturedProduct[]
   isLoading: boolean
   source: 'api' | 'mock'
-  onAddToCart: (product: FeaturedProduct) => void
+  onAddToCart: (payload: FeaturedAddToCartPayload) => void
 }
 
 const currencyFormatter = new Intl.NumberFormat('es-AR', {
@@ -40,27 +47,84 @@ export function FeaturedProductsSection({
       ) : (
         <div className="products-grid">
           {products.map((product) => (
-            <article className="product-card" key={product.id}>
-              <p className="product-category">{product.categoryName}</p>
-              <h3 className="product-name">{product.name}</h3>
-              <p className="product-description">{product.description}</p>
-              <p className="product-unit">{product.unitLabel}</p>
-              <div className="product-footer">
-                <strong className="product-price">{currencyFormatter.format(product.price)}</strong>
-                <span className="product-stock">Stock {product.stockAvailable}</span>
-              </div>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={product.stockAvailable <= 0}
-                onClick={() => onAddToCart(product)}
-              >
-                {product.stockAvailable <= 0 ? 'Sin stock' : 'Agregar'}
-              </button>
-            </article>
+            <FeaturedProductCard key={product.id} product={product} onAddToCart={onAddToCart} />
           ))}
         </div>
       )}
     </section>
+  )
+}
+
+interface FeaturedProductCardProps {
+  product: FeaturedProduct
+  onAddToCart: (payload: FeaturedAddToCartPayload) => void
+}
+
+function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCardProps) {
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(product.variantId ?? '')
+  const [quantity, setQuantity] = useState(1)
+  const [error, setError] = useState<string | null>(null)
+  const selectedVariant = product.variants.find((variant) => variant.id === selectedVariantId) ?? null
+
+  function handleAdd() {
+    if (!selectedVariantId) {
+      setError('Selecciona una variante para continuar.')
+      return
+    }
+
+    setError(null)
+    onAddToCart({
+      productId: product.id,
+      variantId: selectedVariantId,
+      quantity,
+    })
+  }
+
+  return (
+    <article className="product-card">
+      <p className="product-category">{product.categoryName}</p>
+      <h3 className="product-name">{product.name}</h3>
+      <p className="product-description">{product.description}</p>
+      <div className="product-footer">
+        <strong className="product-price">
+          {product.isMultiVariant ? `Desde ${currencyFormatter.format(product.minPrice)}` : currencyFormatter.format(product.price)}
+        </strong>
+      </div>
+      <label className="product-field">
+        <span>Presentacion</span>
+        <select
+          aria-label={`Presentacion para ${product.name}`}
+          value={selectedVariantId}
+          onChange={(event) => setSelectedVariantId(event.target.value)}
+        >
+          <option value="">Seleccionar</option>
+          {product.variants.map((variant) => (
+            <option key={variant.id} value={variant.id}>
+              {variant.unitLabel}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="product-field">
+        <span>Cantidad</span>
+        <input
+          aria-label={`Cantidad para ${product.name}`}
+          type="number"
+          min={1}
+          value={quantity}
+          onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
+        />
+      </label>
+      <p className="product-unit">{selectedVariant?.unitLabel ?? product.unitLabel}</p>
+      {error ? <p className="product-validation-error">{error}</p> : null}
+      <button
+        type="button"
+        className="btn btn-secondary"
+        disabled={product.stockAvailable <= 0}
+        onClick={handleAdd}
+      >
+        {product.stockAvailable <= 0 ? 'Sin stock' : 'Agregar'}
+      </button>
+    </article>
   )
 }

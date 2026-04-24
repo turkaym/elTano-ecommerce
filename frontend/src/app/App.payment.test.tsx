@@ -33,6 +33,18 @@ const featuredProduct: FeaturedProduct = {
   name: 'Almendra natural premium',
   description: 'Ideal para snack.',
   categoryName: 'Frutos secos',
+  productType: 'ENVASADO',
+  inventoryPolicy: 'PER_VARIANT',
+  variants: [
+    {
+      id: '11111111-1111-4111-8111-111111111111',
+      unitLabel: 'bolsa 500 g',
+      price: 6400,
+      stockAvailable: 10,
+    },
+  ],
+  isMultiVariant: false,
+  minPrice: 6400,
   unitLabel: 'bolsa 500 g',
   price: 6400,
   stockAvailable: 10,

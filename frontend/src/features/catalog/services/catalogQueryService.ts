@@ -9,21 +9,37 @@ export interface CatalogItemsResponse {
 }
 
 function toCatalogListItem(product: CatalogProduct): CatalogListItem | null {
-  const firstVariant = product.variants[0]
-  if (!firstVariant) {
+  const variants = product.variants.map((variant) => ({
+    id: variant.id,
+    unitLabel: variant.unitLabel,
+    price: Number(variant.price),
+    stockAvailable: variant.stockAvailable,
+  }))
+
+  if (!variants.length) {
     return null
   }
 
+  const minPrice = variants.reduce((lowest, variant) => Math.min(lowest, variant.price), variants[0].price)
+  const defaultVariant = variants.find((variant) => variant.stockAvailable > 0) ?? variants[0]
+  const stockAvailable = variants.reduce((total, variant) => total + variant.stockAvailable, 0)
+  const isMultiVariant = variants.length > 1
+
   return {
     id: product.id,
-    variantId: firstVariant.id,
     name: product.name,
     description: product.description,
     categoryName: product.categoryName,
     categorySlug: product.categorySlug,
-    unitLabel: firstVariant.unitLabel,
-    price: Number(firstVariant.price),
-    stockAvailable: firstVariant.stockAvailable,
+    productType: product.productType,
+    inventoryPolicy: product.inventoryPolicy,
+    variants,
+    isMultiVariant,
+    minPrice,
+    stockAvailable,
+    variantId: isMultiVariant ? null : defaultVariant.id,
+    unitLabel: isMultiVariant ? 'Seleccionar presentación' : defaultVariant.unitLabel,
+    price: isMultiVariant ? minPrice : defaultVariant.price,
   }
 }
 
