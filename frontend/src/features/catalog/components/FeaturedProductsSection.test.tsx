@@ -91,4 +91,27 @@ describe('FeaturedProductsSection', () => {
       quantity: 3,
     })
   })
+
+  it('defaults variant-first add-to-cart quantity to 1 when input is untouched', async () => {
+    const user = userEvent.setup()
+    const onAddToCart = vi.fn()
+
+    render(
+      <FeaturedProductsSection
+        products={[multiVariantProduct]}
+        isLoading={false}
+        source="api"
+        onAddToCart={onAddToCart}
+      />,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Almendra premium'), 'var-250')
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    expect(onAddToCart).toHaveBeenCalledWith({
+      productId: 'prod-1',
+      variantId: 'var-250',
+      quantity: 1,
+    })
+  })
 })

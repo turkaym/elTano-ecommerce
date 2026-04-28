@@ -18,10 +18,20 @@ server:
   port: 8080
 
 app:
+  admin:
+    enabled: ${ADMIN_ENABLED:true}
   security:
     jwt-secret: ${JWT_SECRET:change-me-in-env}
   catalog:
     seed-on-empty: ${CATALOG_SEED_ON_EMPTY:true}
+    jobs:
+      worker:
+        enabled: ${CATALOG_JOBS_WORKER_ENABLED:false}
+        poll-interval: ${CATALOG_JOBS_WORKER_POLL_INTERVAL:1000ms}
+        batch-size: ${CATALOG_JOBS_WORKER_BATCH_SIZE:1}
+        max-attempts: ${CATALOG_JOBS_WORKER_MAX_ATTEMPTS:3}
+        lease-seconds: ${CATALOG_JOBS_WORKER_LEASE_SECONDS:30}
+        concurrency: ${CATALOG_JOBS_WORKER_CONCURRENCY:1}
   mercadopago:
     enabled: ${MP_ENABLED:false}
     api-base-url: ${MP_API_BASE_URL:https://api.mercadopago.com}

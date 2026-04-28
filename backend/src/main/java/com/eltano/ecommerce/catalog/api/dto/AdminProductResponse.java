@@ -20,6 +20,8 @@ public record AdminProductResponse(
         InventoryPolicy inventoryPolicy,
         Integer stockBaseGrams,
         List<AdminProductVariantResponse> variants,
+        List<AdminProductImageResponse> images,
+        Instant deletedAt,
         Instant createdAt,
         Instant updatedAt) {
 }

@@ -8,11 +8,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.eltano.ecommerce.catalog.api.dto.AdminProductImageResponse;
+import com.eltano.ecommerce.catalog.api.dto.AdminProductImageUpsertRequest;
 import com.eltano.ecommerce.catalog.api.dto.AdminProductResponse;
 import com.eltano.ecommerce.catalog.api.dto.AdminProductUpsertRequest;
 import com.eltano.ecommerce.catalog.api.dto.AdminProductVariantResponse;
@@ -20,6 +23,7 @@ import com.eltano.ecommerce.catalog.api.dto.AdminProductVariantUpsertRequest;
 import com.eltano.ecommerce.catalog.domain.Category;
 import com.eltano.ecommerce.catalog.domain.InventoryPolicy;
 import com.eltano.ecommerce.catalog.domain.Product;
+import com.eltano.ecommerce.catalog.domain.ProductImage;
 import com.eltano.ecommerce.catalog.domain.ProductType;
 import com.eltano.ecommerce.catalog.domain.ProductVariant;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
@@ -27,9 +31,12 @@ import com.eltano.ecommerce.catalog.repository.ProductRepository;
 import com.eltano.ecommerce.catalog.repository.ProductVariantRepository;
 import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.common.api.ResourceNotFoundException;
+import com.eltano.ecommerce.common.api.UnprocessableEntityException;
 
 @Service
 public class AdminProductService {
+
+    private static final Pattern HTTP_URL_PATTERN = Pattern.compile("^https?://.+", Pattern.CASE_INSENSITIVE);
 
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
@@ -49,12 +56,14 @@ public class AdminProductService {
         ensureProductSlugUnique(request.slug(), null);
         ensureVariantSkusUniqueInPayload(request.variants());
         ensureVariantSkusUniqueInDb(request.variants());
+        ensureImagesValid(request.images());
 
         Category category = findCategory(request.categoryId());
 
         Product product = new Product();
         applyProductData(product, request, category);
         product.replaceVariants(buildVariants(product, List.of(), request.variants()));
+        product.replaceImages(buildImages(product, List.of(), request.images()));
 
         Product saved = productRepository.save(product);
         Product loaded = productRepository.findByIdWithRelations(saved.getId())
@@ -69,12 +78,15 @@ public class AdminProductService {
 
         ensureProductSlugUnique(request.slug(), id);
         ensureVariantSkusUniqueInPayload(request.variants());
+        ensureImagesValid(request.images());
 
         Category category = findCategory(request.categoryId());
         applyProductData(product, request, category);
 
         List<ProductVariant> updatedVariants = buildVariants(product, product.getVariants(), request.variants());
         product.replaceVariants(updatedVariants);
+        List<ProductImage> updatedImages = buildImages(product, product.getImages(), request.images());
+        product.replaceImages(updatedImages);
 
         Product saved = productRepository.save(product);
         Product loaded = productRepository.findByIdWithRelations(saved.getId())
@@ -87,6 +99,32 @@ public class AdminProductService {
         return productRepository.findAllWithRelations().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public void softDelete(UUID id, String deletedBy, String reason) {
+        Product product = productRepository.findByIdWithRelations(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        product.setDeletedAt(java.time.Instant.now());
+        product.setDeletedBy(deletedBy == null ? null : deletedBy.trim());
+        product.setDeleteReason(reason == null ? null : reason.trim());
+        product.setActive(false);
+
+        productRepository.save(product);
+    }
+
+    @Transactional
+    public void restore(UUID id) {
+        Product product = productRepository.findByIdWithRelations(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        product.setDeletedAt(null);
+        product.setDeletedBy(null);
+        product.setDeleteReason(null);
+        product.setActive(true);
+
+        productRepository.save(product);
     }
 
     private void applyProductData(Product product, AdminProductUpsertRequest request, Category category) {
@@ -186,6 +224,37 @@ public class AdminProductService {
         return output;
     }
 
+    private List<ProductImage> buildImages(
+            Product product,
+            List<ProductImage> existingImages,
+            List<AdminProductImageUpsertRequest> imageRequests) {
+        Map<UUID, ProductImage> existingById = existingImages.stream()
+                .collect(Collectors.toMap(ProductImage::getId, Function.identity()));
+
+        List<ProductImage> output = new ArrayList<>();
+        for (AdminProductImageUpsertRequest requestImage : imageRequests) {
+            ProductImage image;
+            if (requestImage.id() != null) {
+                image = existingById.get(requestImage.id());
+                if (image == null) {
+                    throw new ResourceNotFoundException("Image not found in product");
+                }
+            } else {
+                image = new ProductImage();
+            }
+
+            image.setProduct(product);
+            image.setUrl(requestImage.url().trim());
+            image.setAltText(requestImage.altText() == null ? null : requestImage.altText().trim());
+            image.setSortOrder(requestImage.sortOrder());
+            image.setPrimary(requestImage.primary());
+
+            output.add(image);
+        }
+
+        return output;
+    }
+
     private void ensureProductSlugUnique(String slug, UUID productId) {
         String normalizedSlug = slug.trim();
         boolean exists = productId == null
@@ -219,9 +288,56 @@ public class AdminProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
     }
 
+    private void ensureImagesValid(List<AdminProductImageUpsertRequest> images) {
+        if (images == null || images.isEmpty()) {
+            throw new UnprocessableEntityException(
+                    "At least one product image is required",
+                    List.of(new UnprocessableEntityException.FieldError("images", "At least one product image is required")));
+        }
+
+        Set<Integer> sortOrders = new HashSet<>();
+        int primaryCount = 0;
+        List<UnprocessableEntityException.FieldError> fieldErrors = new ArrayList<>();
+
+        for (int index = 0; index < images.size(); index++) {
+            AdminProductImageUpsertRequest image = images.get(index);
+            String url = image.url() == null ? "" : image.url().trim();
+            if (!HTTP_URL_PATTERN.matcher(url).matches()) {
+                fieldErrors.add(new UnprocessableEntityException.FieldError(
+                        "images[" + index + "].url",
+                        "Image URL must be a valid http/https URL"));
+            }
+
+            if (!sortOrders.add(image.sortOrder())) {
+                fieldErrors.add(new UnprocessableEntityException.FieldError(
+                        "images[" + index + "].sortOrder",
+                        "Image sortOrder values must be unique per product"));
+            }
+
+            if (Boolean.TRUE.equals(image.primary())) {
+                primaryCount++;
+            }
+        }
+
+        if (primaryCount != 1) {
+            fieldErrors.add(new UnprocessableEntityException.FieldError(
+                    "images",
+                    "Exactly one product image must be marked as primary"));
+        }
+
+        if (!fieldErrors.isEmpty()) {
+            throw new UnprocessableEntityException("Product images validation failed", fieldErrors);
+        }
+    }
+
     private AdminProductResponse toResponse(Product product) {
         List<AdminProductVariantResponse> variants = product.getVariants().stream()
                 .map(this::toVariantResponse)
+                .toList();
+
+        List<AdminProductImageResponse> images = product.getImages().stream()
+                .sorted(java.util.Comparator.comparingInt(ProductImage::getSortOrder))
+                .map(this::toImageResponse)
                 .toList();
 
         return new AdminProductResponse(
@@ -237,6 +353,8 @@ public class AdminProductService {
                 product.getInventoryPolicy(),
                 product.getStockBaseGrams(),
                 variants,
+                images,
+                product.getDeletedAt(),
                 product.getCreatedAt(),
                 product.getUpdatedAt());
     }
@@ -255,5 +373,16 @@ public class AdminProductService {
                 variant.getAttributesJson(),
                 variant.getCreatedAt(),
                 variant.getUpdatedAt());
+    }
+
+    private AdminProductImageResponse toImageResponse(ProductImage image) {
+        return new AdminProductImageResponse(
+                image.getId(),
+                image.getUrl(),
+                image.getAltText(),
+                image.getSortOrder(),
+                image.isPrimary(),
+                image.getCreatedAt(),
+                image.getUpdatedAt());
     }
 }

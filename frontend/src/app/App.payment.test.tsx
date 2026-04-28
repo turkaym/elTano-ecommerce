@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -104,6 +104,59 @@ describe('App Mercado Pago flow', () => {
     })
 
     expect(window.open).toHaveBeenCalledWith('https://mp.test/checkout?pref_id=pref-1', '_self')
+  })
+
+  it('keeps checkout compatibility with variant-first cart lines', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getFeaturedProducts).mockResolvedValueOnce({
+      source: 'api',
+      products: [
+        {
+          ...featuredProduct,
+          variantId: null,
+          unitLabel: 'Seleccionar presentación',
+          isMultiVariant: true,
+          variants: [
+            {
+              id: '11111111-1111-4111-8111-111111111111',
+              unitLabel: 'bolsa 500 g',
+              price: 6400,
+              stockAvailable: 10,
+            },
+            {
+              id: '22222222-2222-4222-8222-222222222222',
+              unitLabel: 'bolsa 1 kg',
+              price: 11800,
+              stockAvailable: 7,
+            },
+          ],
+        },
+      ],
+    })
+
+    renderAppAt()
+
+    await screen.findByText('Almendra natural premium')
+    await user.selectOptions(
+      screen.getByLabelText('Presentacion para Almendra natural premium'),
+      '22222222-2222-4222-8222-222222222222',
+    )
+    fireEvent.change(screen.getByLabelText('Cantidad para Almendra natural premium'), {
+      target: { value: '2' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.type(screen.getByLabelText('Nombre y apellido *'), 'Ana Lopez')
+    await user.type(screen.getByLabelText('Telefono *'), '+5491198765432')
+    await user.click(screen.getByRole('button', { name: 'Iniciar pago online' }))
+
+    await waitFor(() => {
+      expect(createOrderDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ variantId: '22222222-2222-4222-8222-222222222222', quantity: 2 }],
+        }),
+      )
+    })
+    expect(startDraftPayment).toHaveBeenCalledWith('draft-1')
   })
 
   it('opens WhatsApp continuation only after canonical PAID status on return flow', async () => {

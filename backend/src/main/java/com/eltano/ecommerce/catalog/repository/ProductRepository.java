@@ -16,12 +16,17 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     boolean existsBySlugIgnoreCaseAndIdNot(String slug, UUID id);
 
+    long countByCategoryId(UUID categoryId);
+
+    List<Product> findAllByCategoryId(UUID categoryId);
+
     @Query("""
             select distinct p
             from Product p
             join fetch p.category c
             left join fetch p.variants v
             where p.active = true
+              and p.deletedAt is null
               and c.active = true
               and (v is null or v.active = true)
               and (:categorySlug is null or lower(c.slug) = :categorySlug)

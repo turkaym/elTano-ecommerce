@@ -18,7 +18,16 @@ public record PublicCatalogProductResponse(
         ProductType productType,
         InventoryPolicy inventoryPolicy,
         Integer stockBaseGrams,
+        List<PublicCatalogImageResponse> images,
         List<PublicCatalogVariantResponse> variants) {
+
+    public record PublicCatalogImageResponse(
+            UUID id,
+            String url,
+            String altText,
+            int sortOrder,
+            boolean primary) {
+    }
 
     public record PublicCatalogVariantResponse(
             UUID id,

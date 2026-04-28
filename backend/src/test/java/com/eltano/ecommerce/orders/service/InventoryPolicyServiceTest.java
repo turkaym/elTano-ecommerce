@@ -1,6 +1,7 @@
 package com.eltano.ecommerce.orders.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
@@ -42,6 +43,22 @@ class InventoryPolicyServiceTest {
     }
 
     @Test
+    void reserveBulkWeightAllowsExactBoundaryWithoutGoingNegative() {
+        ProductVariant variant = bulkVariant(500, 1000);
+
+        inventoryPolicyService.reserve(variant, 2);
+
+        assertEquals(0, variant.getProduct().getStockBaseGrams());
+    }
+
+    @Test
+    void reserveBulkWeightRejectsWhenRequiredGramsExceedByOne() {
+        ProductVariant variant = bulkVariant(500, 999);
+
+        assertThrows(ConflictException.class, () -> inventoryPolicyService.reserve(variant, 2));
+    }
+
+    @Test
     void reserveAndReleasePerVariantMovesUnitsBetweenAvailableAndReserved() {
         ProductVariant variant = perVariant(10, 1);
 
@@ -52,6 +69,24 @@ class InventoryPolicyServiceTest {
         inventoryPolicyService.release(variant, 2);
         assertEquals(9, variant.getStockAvailable());
         assertEquals(2, variant.getStockReserved());
+    }
+
+    @Test
+    void reservePerVariantThrowsConflictWhenUnitsAreInsufficient() {
+        ProductVariant variant = perVariant(1, 0);
+
+        ConflictException ex = assertThrows(ConflictException.class, () -> inventoryPolicyService.reserve(variant, 2));
+
+        assertEquals("Insufficient stock", ex.getMessage());
+    }
+
+    @Test
+    void reserveAcceptsValidEnvasadoPerVariantTypePolicyCombination() {
+        ProductVariant variant = perVariant(5, 0);
+
+        assertDoesNotThrow(() -> inventoryPolicyService.reserve(variant, 1));
+        assertEquals(4, variant.getStockAvailable());
+        assertEquals(1, variant.getStockReserved());
     }
 
     @Test
@@ -85,6 +120,29 @@ class InventoryPolicyServiceTest {
                 IllegalArgumentException.class,
                 () -> inventoryPolicyService.reserve(variant, 1));
         assertEquals("Variant incompatible with product policy", ex.getMessage());
+    }
+
+    @Test
+    void reserveFallsBackToPerVariantWhenLegacyPolicyIsNull() {
+        Product product = new Product();
+        product.setName("Legacy nuez");
+        product.setProductType(null);
+        product.setInventoryPolicy(null);
+
+        ProductVariant variant = new ProductVariant();
+        ReflectionTestUtils.setField(variant, "id", UUID.randomUUID());
+        variant.setProduct(product);
+        variant.setWeightGrams(null);
+        variant.setPrice(new BigDecimal("5000.00"));
+        variant.setStockAvailable(3);
+        variant.setStockReserved(1);
+        variant.setActive(true);
+        variant.setSku("SKU-" + UUID.randomUUID());
+
+        inventoryPolicyService.reserve(variant, 2);
+
+        assertEquals(1, variant.getStockAvailable());
+        assertEquals(3, variant.getStockReserved());
     }
 
     private ProductVariant bulkVariant(int weightGrams, int stockBaseGrams) {

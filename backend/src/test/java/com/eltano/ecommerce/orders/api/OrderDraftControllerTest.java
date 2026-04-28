@@ -27,6 +27,7 @@ import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.common.api.MercadoPagoRequestException;
 import com.eltano.ecommerce.common.api.RestExceptionHandler;
 import com.eltano.ecommerce.config.SecurityConfig;
+import com.eltano.ecommerce.audit.service.AdminAuditService;
 import com.eltano.ecommerce.orders.service.OrderDraftService;
 
 @WebMvcTest(controllers = OrderDraftController.class, properties = "app.mercadopago.enabled=true")
@@ -38,6 +39,9 @@ class OrderDraftControllerTest {
 
     @MockBean
     private OrderDraftService orderDraftService;
+
+    @MockBean
+    private AdminAuditService adminAuditService;
 
     @Test
     void createDraftReturns201AndBody() throws Exception {
@@ -100,6 +104,25 @@ class OrderDraftControllerTest {
                         """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Insufficient stock"));
+    }
+
+    @Test
+    void createDraftReturns409ForBulkWeightBoundaryConflict() throws Exception {
+        when(orderDraftService.createDraft(any())).thenThrow(new ConflictException("Insufficient stock: requires 1000g"));
+
+        mockMvc.perform(post("/api/orders/drafts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "customerName": "Juan Perez",
+                          "phone": "+5491112345678",
+                          "items": [
+                            {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 2}
+                          ]
+                        }
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Insufficient stock: requires 1000g"));
     }
 
     @Test

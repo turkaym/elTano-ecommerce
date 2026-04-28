@@ -155,4 +155,35 @@ describe('ProductsPage', () => {
     })
     expect(screen.queryByText('Harina de coco')).not.toBeInTheDocument()
   })
+
+  it('renders multi-variant cards with "Desde" price semantics', async () => {
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
+      source: 'api',
+      items: [
+        {
+          id: 'prod-desde',
+          name: 'Mix granola premium',
+          description: 'Version multi-formato',
+          categoryName: 'Granolas',
+          categorySlug: 'granolas',
+          productType: 'ENVASADO',
+          inventoryPolicy: 'PER_VARIANT',
+          variants: [
+            { id: 'var-a', unitLabel: 'bolsa 250 g', price: 3900, stockAvailable: 5 },
+            { id: 'var-b', unitLabel: 'bolsa 500 g', price: 7100, stockAvailable: 4 },
+          ],
+          isMultiVariant: true,
+          minPrice: 3900,
+          variantId: null,
+          unitLabel: 'Seleccionar presentación',
+          price: 3900,
+          stockAvailable: 9,
+        },
+      ],
+    })
+
+    renderProductsAt('/productos')
+
+    expect(await screen.findByText(/Desde\s*\$\s*3.900/i)).toBeInTheDocument()
+  })
 })

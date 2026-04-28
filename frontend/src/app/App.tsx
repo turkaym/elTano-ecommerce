@@ -70,6 +70,7 @@ export function App() {
   const returnDraftId = returnParams.get('draftId')
   const providerStatusHint = returnParams.get('status') ?? returnParams.get('result')
   const searchValue = searchParams.get('q') ?? ''
+  const isAdminRoute = location.pathname.startsWith('/admin')
 
   function handleSearchChange(nextValue: string) {
     const nextParams = new URLSearchParams(searchParams)
@@ -302,33 +303,35 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <div className="app-chrome">
-        <header className="top-shell">
-          <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
-            {showBrandLogo ? (
-              <img
-                className="brand-logo"
-                src="/logo-el-tano.png"
-                alt="El Tano Frutos Secos"
-                onError={() => setShowBrandLogo(false)}
-              />
-            ) : (
-              <p className="hero-kicker">El Tano Frutos Secos</p>
-            )}
-          </div>
-
-          <div className="top-shell-right">
-            <StorefrontNav />
-
-            <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
-              <span aria-hidden="true">👤</span>
-              <span aria-hidden="true">🛒</span>
+      {!isAdminRoute ? (
+        <div className="app-chrome">
+          <header className="top-shell">
+            <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
+              {showBrandLogo ? (
+                <img
+                  className="brand-logo"
+                  src="/logo-el-tano.png"
+                  alt="El Tano Frutos Secos"
+                  onError={() => setShowBrandLogo(false)}
+                />
+              ) : (
+                <p className="hero-kicker">El Tano Frutos Secos</p>
+              )}
             </div>
-          </div>
-        </header>
 
-        <SearchBar value={searchValue} onChange={handleSearchChange} />
-      </div>
+            <div className="top-shell-right">
+              <StorefrontNav />
+
+              <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
+                <span aria-hidden="true">👤</span>
+                <span aria-hidden="true">🛒</span>
+              </div>
+            </div>
+          </header>
+
+          <SearchBar value={searchValue} onChange={handleSearchChange} />
+        </div>
+      ) : null}
 
       <AppRoutes homeContent={homeContent} checkoutReturnContent={checkoutReturnContent} />
     </div>

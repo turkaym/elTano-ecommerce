@@ -67,6 +67,7 @@ textarea:focus-visible,
   width: 100%;
   margin: 0;
   padding: 0 0 2.75rem;
+  overflow-x: clip;
 }
 
 .app-chrome {
@@ -92,14 +93,16 @@ textarea:focus-visible,
   justify-content: space-between;
   align-items: center;
   gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .top-shell-right {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: var(--space-3);
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .top-shell-brand {
@@ -140,6 +143,7 @@ textarea:focus-visible,
 
 .top-shell-right .category-nav {
   margin: 0;
+  flex: 1 1 16rem;
 }
 
 .category-pill {
@@ -268,16 +272,23 @@ textarea:focus-visible,
 
 .hero-content {
   position: absolute;
-  right: clamp(1.8rem, 4.2vw, 4.4rem);
-  top: clamp(67%, 71vw, 74%);
+  right: clamp(1rem, 3.5vw, 2rem);
+  left: clamp(1rem, 3.5vw, 2rem);
+  bottom: clamp(1rem, 3.2vw, 1.5rem);
+  top: auto;
   z-index: 1;
   display: flex;
   justify-content: flex-end;
-  transform: translateY(-50%);
 }
 
 .hero-actions {
   display: flex;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.hero .btn {
+  max-width: 100%;
 }
 
 .btn {
@@ -858,6 +869,17 @@ textarea:focus-visible,
 
   .top-shell {
     align-items: center;
+    flex-wrap: nowrap;
+  }
+
+  .top-shell-right {
+    justify-content: flex-end;
+    width: auto;
+    flex-wrap: nowrap;
+  }
+
+  .top-shell-right .category-nav {
+    flex: 0 1 auto;
   }
 
   .search-bar {
@@ -874,6 +896,8 @@ textarea:focus-visible,
     left: auto;
     right: clamp(2.8rem, 6.4vw, 5.6rem);
     top: 68%;
+    bottom: auto;
+    transform: translateY(-50%);
   }
 
   .section {

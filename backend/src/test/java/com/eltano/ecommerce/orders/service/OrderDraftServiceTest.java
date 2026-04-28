@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
@@ -100,6 +101,29 @@ class OrderDraftServiceTest {
                 "+5491112345678",
                 null,
                 List.of(new OrderDraftService.CommandItem(variant.getId(), 3)))));
+        verify(orderDraftRepository, never()).save(any(OrderDraft.class));
+    }
+
+    @Test
+    void createDraftSupportsLegacyNullTypeAndPolicyProducts() {
+        stubPersistenceLayer();
+        Product product = new Product();
+        product.setName("Producto legado");
+        product.setProductType(null);
+        product.setInventoryPolicy(null);
+
+        ProductVariant variant = variantWith("Producto legado", 4700, 8, 0);
+        variant.setProduct(product);
+        when(productVariantRepository.findAllByIdInForUpdate(anyList())).thenReturn(List.of(variant));
+
+        OrderDraftService.Result result = orderDraftService.createDraft(new OrderDraftService.Command(
+                "Juan Perez",
+                "+5491112345678",
+                null,
+                List.of(new OrderDraftService.CommandItem(variant.getId(), 2))));
+
+        assertEquals(new BigDecimal("9400.00"), result.total());
+        verify(inventoryPolicyService).reserve(variant, 2);
     }
 
     @Test

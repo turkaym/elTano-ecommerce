@@ -73,4 +73,43 @@ describe('CategoryDetailPage', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText('Almendra tostada')).not.toBeInTheDocument()
   })
+
+  it('suppresses customer-facing stock counters in category detail runtime rendering', () => {
+    vi.mocked(useCatalogQuery).mockReturnValue({
+      source: 'api',
+      isLoading: false,
+      categories: [{ name: 'Frutos secos', slug: 'frutos-secos', count: 1 }],
+      items: [
+        {
+          id: '1',
+          name: 'Mix premium',
+          description: 'Blend tostado',
+          categoryName: 'Frutos secos',
+          categorySlug: 'frutos-secos',
+          productType: 'ENVASADO',
+          inventoryPolicy: 'PER_VARIANT',
+          variants: [{ id: 'v1', unitLabel: 'bolsa 500 g', price: 5200, stockAvailable: 10 }],
+          isMultiVariant: false,
+          minPrice: 5200,
+          variantId: 'v1',
+          unitLabel: 'bolsa 500 g',
+          price: 5200,
+          stockAvailable: 10,
+        },
+      ],
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/categorias/frutos-secos']}>
+        <Routes>
+          <Route path="/categorias/:slug" element={<CategoryDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Mix premium')).toBeInTheDocument()
+    expect(screen.queryByText(/stock disponible/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/quedan\s+\d+/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\d+\s*unidades/i)).not.toBeInTheDocument()
+  })
 })

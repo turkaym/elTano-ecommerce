@@ -162,6 +162,15 @@ describe('App checkout MVP flow', () => {
     expect(screen.getByRole('heading', { name: 'Finalizar pedido' })).toBeInTheDocument()
   })
 
+  it('does not expose customer-facing stock counters in featured cards', async () => {
+    renderAppAt()
+    await screen.findByText('Almendra natural premium')
+
+    expect(screen.queryByText(/stock disponible/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/quedan\s+\d+/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\d+\s*unidades/i)).not.toBeInTheDocument()
+  })
+
   it('keeps account icon as visual placeholder without auth actions', async () => {
     renderAppAt()
     await screen.findByText('Almendra natural premium')

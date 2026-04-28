@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eltano.ecommerce.catalog.api.dto.PublicCatalogProductResponse;
+import com.eltano.ecommerce.catalog.domain.ProductImage;
 import com.eltano.ecommerce.catalog.domain.Product;
 import com.eltano.ecommerce.catalog.domain.ProductVariant;
 import com.eltano.ecommerce.catalog.repository.ProductRepository;
@@ -63,6 +64,16 @@ public class CatalogQueryService {
                         variant.getAttributesJson()))
                 .toList();
 
+        List<PublicCatalogProductResponse.PublicCatalogImageResponse> images = product.getImages().stream()
+                .sorted(java.util.Comparator.comparingInt(ProductImage::getSortOrder))
+                .map(image -> new PublicCatalogProductResponse.PublicCatalogImageResponse(
+                        image.getId(),
+                        image.getUrl(),
+                        image.getAltText(),
+                        image.getSortOrder(),
+                        image.isPrimary()))
+                .toList();
+
         return new PublicCatalogProductResponse(
                 product.getId(),
                 product.getName(),
@@ -73,6 +84,7 @@ public class CatalogQueryService {
                 product.getProductType(),
                 product.getInventoryPolicy(),
                 product.getStockBaseGrams(),
+                images,
                 variants);
     }
 }
