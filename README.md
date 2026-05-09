@@ -30,8 +30,51 @@ Monorepo inicial para el MVP de elTano con frontend en React + Vite (TypeScript)
    ```
    En Windows PowerShell:
    ```powershell
-   .\mvnw.cmd spring-boot:run
+    .\mvnw.cmd spring-boot:run
+    ```
+
+## Verificacion completa (contrato canonico)
+
+### Prerrequisitos
+
+- Java 21 disponible en `PATH` (`java -version`).
+- Node.js y npm disponibles en `PATH` (`node -v` y `npm -v`).
+
+Si falta alguno de los prerrequisitos, la verificacion fallara de forma inmediata (comando no encontrado / version incompatible). Instala la herramienta faltante y reintenta.
+
+### Secuencia exacta (orden obligatorio)
+
+1. Backend (politica canonica wrapper-first cross-platform):
+   ```bash
+   # Windows (PowerShell/CMD)
+   cd backend && .\mvnw.cmd -B clean verify
+
+   # Unix/macOS (bash/zsh)
+   cd backend && ./mvnw -B clean verify
    ```
+   `mvn -B clean verify` se permite como alternativa opcional **solo** si Maven esta instalado en PATH.
+2. Frontend:
+   ```bash
+   cd frontend && npm ci && npm test -- --watch=false && npm run lint && npm run build
+   ```
+
+### Criterio de exito por etapa
+
+- `./mvnw.cmd -B clean verify` (Windows) o `./mvnw -B clean verify` (Unix/macOS) termina con exit code `0`.
+- `mvn -B clean verify` puede usarse de forma opcional cuando existe Maven en PATH, con el mismo criterio de exit code `0`.
+- `npm ci`, `npm test -- --watch=false`, `npm run lint` y `npm run build` terminan con exit code `0`.
+- Si una etapa falla, no continuar con la siguiente hasta corregir el error reportado.
+
+### Aprobacion de release (obligatorio)
+
+- Registrar y aprobar la evidencia en `docs/release-readiness-checklist.md`.
+- Sin checklist con gates en verde y decision final en READY, la release queda bloqueada.
+
+### Guia de fallo rapida
+
+- Error de Java/Maven: validar JDK 21 y ejecutar desde `backend/`.
+- Error de Node/npm: validar versiones y ejecutar `npm ci` antes de tests/lint/build.
+- Error de tests: revisar stacktrace y corregir la falla especifica antes de reintentar la secuencia completa.
 
 ## Variables de entorno
 

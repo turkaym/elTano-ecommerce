@@ -13,12 +13,16 @@ import org.springframework.transaction.annotation.Transactional;
 import com.eltano.ecommerce.catalog.domain.Category;
 import com.eltano.ecommerce.catalog.domain.Product;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJob;
+import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobInput;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobRow;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobRowOutcome;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobStatus;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobType;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogSourceFormat;
+import com.eltano.ecommerce.catalog.jobs.api.dto.AdminCatalogJobListItemResponse;
+import com.eltano.ecommerce.catalog.jobs.api.dto.AdminCatalogJobReportDiagnosticsResponse;
 import com.eltano.ecommerce.catalog.jobs.repository.AdminCatalogJobRepository;
+import com.eltano.ecommerce.catalog.jobs.repository.AdminCatalogJobInputRepository;
 import com.eltano.ecommerce.catalog.jobs.repository.AdminCatalogJobRowRepository;
 import com.eltano.ecommerce.catalog.jobs.worker.AdminCatalogJobRetryPolicy;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
@@ -34,16 +38,19 @@ public class AdminCatalogJobService {
     private static final String VALIDATION_REPORT_HEADER = "rowNumber,errorCode,errorMessage,payload";
 
     private final AdminCatalogJobRepository jobRepository;
+    private final AdminCatalogJobInputRepository jobInputRepository;
     private final AdminCatalogJobRowRepository jobRowRepository;
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
 
     public AdminCatalogJobService(
             AdminCatalogJobRepository jobRepository,
+            AdminCatalogJobInputRepository jobInputRepository,
             AdminCatalogJobRowRepository jobRowRepository,
             CategoryRepository categoryRepository,
             ProductRepository productRepository) {
         this.jobRepository = jobRepository;
+        this.jobInputRepository = jobInputRepository;
         this.jobRowRepository = jobRowRepository;
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
@@ -58,7 +65,13 @@ public class AdminCatalogJobService {
     public AdminCatalogJob enqueueCsvImport(String createdBy, String csvPayload) {
         validateImportPayload(csvPayload);
         AdminCatalogJob job = newJob(createdBy, AdminCatalogJobType.IMPORT, AdminCatalogSourceFormat.CSV);
-        return jobRepository.save(job);
+        AdminCatalogJob savedJob = jobRepository.save(job);
+
+        AdminCatalogJobInput input = new AdminCatalogJobInput();
+        input.setJobId(savedJob.getId());
+        input.setPayloadText(csvPayload);
+        jobInputRepository.save(input);
+        return savedJob;
     }
 
     @Transactional
@@ -88,6 +101,34 @@ public class AdminCatalogJobService {
     public List<AdminCatalogJobRow> listRows(UUID jobId) {
         ensureJobExists(jobId);
         return jobRowRepository.findByJobIdOrderByRowNumberAsc(jobId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminCatalogJobListItemResponse> listJobs() {
+        return jobRepository.findAllByOrderByCreatedAtDescIdDesc().stream()
+                .map(job -> new AdminCatalogJobListItemResponse(
+                        job.getId(),
+                        job.getJobType().name(),
+                        job.getStatus().name(),
+                        job.getCreatedAt(),
+                        job.getUpdatedAt()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AdminCatalogJobReportDiagnosticsResponse diagnosticsReport(UUID jobId) {
+        AdminCatalogJob job = getJob(jobId);
+        List<AdminCatalogJobRow> rows = listRows(jobId);
+        long failedRows = rows.stream().filter(row -> row.getOutcome() == AdminCatalogJobRowOutcome.FAILED).count();
+        List<AdminCatalogJobReportDiagnosticsResponse.Row> mappedRows = rows.stream()
+                .map(row -> new AdminCatalogJobReportDiagnosticsResponse.Row(
+                        row.getRowNumber(),
+                        row.getOutcome().name(),
+                        row.getErrorCode(),
+                        row.getErrorMessage(),
+                        row.getPayloadJson()))
+                .toList();
+        return new AdminCatalogJobReportDiagnosticsResponse(job.getSummary(), failedRows, mappedRows);
     }
 
     @Transactional(readOnly = true)
@@ -131,8 +172,30 @@ public class AdminCatalogJobService {
             return "processed=" + exportedRows + ",succeeded=" + exportedRows + ",failed=0";
         }
 
-        throw new AdminCatalogJobRetryPolicy.RetryableJobException(
-                "Import execution is deferred until payload persistence is added");
+        AdminCatalogJobInput input = jobInputRepository.findById(jobId)
+                .orElseThrow(() -> new AdminCatalogJobRetryPolicy.RetryableJobException(
+                        "Import payload missing for job " + jobId));
+
+        List<String> lines = splitLines(input.getPayloadText());
+        if (lines.isEmpty()) {
+            throw new AdminCatalogJobRetryPolicy.RetryableJobException("Import payload missing header for job " + jobId);
+        }
+
+        int processed = 0;
+        int succeeded = 0;
+        int failed = 0;
+
+        for (int i = 1; i < lines.size(); i++) {
+            processed++;
+            CsvRowResult result = processImportRow(job, i, lines.get(i));
+            if (result.outcome() == AdminCatalogJobRowOutcome.SUCCESS) {
+                succeeded++;
+            } else {
+                failed++;
+            }
+        }
+
+        return buildSummary(processed, succeeded, failed);
     }
 
     private CsvRowResult processImportRow(AdminCatalogJob job, int rowNumber, String line) {
@@ -215,6 +278,10 @@ public class AdminCatalogJobService {
         job.setStatus(AdminCatalogJobStatus.FAILED);
         job.setSummary(summary);
         job.setCompletedAt(Instant.now());
+    }
+
+    private String buildSummary(int processed, int succeeded, int failed) {
+        return "processed=" + processed + ",succeeded=" + succeeded + ",failed=" + failed;
     }
 
     private List<String> splitLines(String csvPayload) {

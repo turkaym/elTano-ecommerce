@@ -27,6 +27,7 @@ import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobStatus;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobType;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogSourceFormat;
 import com.eltano.ecommerce.catalog.jobs.repository.AdminCatalogJobRepository;
+import com.eltano.ecommerce.catalog.jobs.repository.AdminCatalogJobInputRepository;
 import com.eltano.ecommerce.catalog.jobs.repository.AdminCatalogJobRowRepository;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
 import com.eltano.ecommerce.catalog.repository.ProductRepository;
@@ -37,6 +38,9 @@ class AdminCatalogJobServiceTest {
 
     @Mock
     private AdminCatalogJobRepository jobRepository;
+
+    @Mock
+    private AdminCatalogJobInputRepository jobInputRepository;
 
     @Mock
     private AdminCatalogJobRowRepository jobRowRepository;
@@ -51,7 +55,7 @@ class AdminCatalogJobServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AdminCatalogJobService(jobRepository, jobRowRepository, categoryRepository, productRepository);
+        service = new AdminCatalogJobService(jobRepository, jobInputRepository, jobRowRepository, categoryRepository, productRepository);
     }
 
     @Test

@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.eltano.ecommerce.catalog.jobs.AdminCatalogJobService;
 import com.eltano.ecommerce.catalog.jobs.api.dto.AdminCatalogJobResponse;
+import com.eltano.ecommerce.catalog.jobs.api.dto.AdminCatalogJobListItemResponse;
+import com.eltano.ecommerce.catalog.jobs.api.dto.AdminCatalogJobReportDiagnosticsResponse;
 import com.eltano.ecommerce.catalog.jobs.api.dto.AdminCatalogJobRowResponse;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJob;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobRow;
@@ -65,6 +67,11 @@ public class AdminCatalogJobController {
         return ResponseEntity.ok(toJobResponse(adminCatalogJobService.getJob(id)));
     }
 
+    @GetMapping
+    public ResponseEntity<List<AdminCatalogJobListItemResponse>> listJobs() {
+        return ResponseEntity.ok(adminCatalogJobService.listJobs());
+    }
+
     @GetMapping("/{id}/rows")
     public ResponseEntity<List<AdminCatalogJobRowResponse>> getRows(@PathVariable UUID id) {
         List<AdminCatalogJobRowResponse> rows = adminCatalogJobService.listRows(id).stream()
@@ -80,6 +87,11 @@ public class AdminCatalogJobController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=validation-report-" + id + ".csv")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(body);
+    }
+
+    @GetMapping(value = "/{id}/report/diagnostics", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<AdminCatalogJobReportDiagnosticsResponse> getValidationReportDiagnostics(@PathVariable UUID id) {
+        return ResponseEntity.ok(adminCatalogJobService.diagnosticsReport(id));
     }
 
     @GetMapping(value = "/{id}/export-file", produces = "text/csv")
@@ -112,6 +124,7 @@ public class AdminCatalogJobController {
                 job.getCreatedBy(),
                 job.getSourceFormat().name(),
                 job.getSummary(),
+                job.getLastError(),
                 job.getCreatedAt(),
                 job.getUpdatedAt(),
                 job.getCompletedAt());

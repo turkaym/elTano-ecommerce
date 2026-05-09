@@ -1,0 +1,57 @@
+# Proposal: Project Final Stabilization
+
+## Intent
+Create a reproducible full-suite baseline for backend + frontend verification to improve release-readiness signal quality, without changing production behavior.
+
+## Scope
+
+### In Scope
+- Define and document one canonical full-suite flow at repo root (backend + frontend commands, expected outcomes, prerequisites).
+- Stabilization-only updates to test/config/docs/scripts that improve repeatability and log clarity.
+- Targeted reduction of known expected-error test noise (e.g., duplicate-key logs) while preserving assertions and failure visibility.
+
+### Out of Scope
+- Any user-facing or API behavior change.
+- Domain logic, schema, business rules, or feature development.
+- Performance tuning outside test/runtime reproducibility.
+
+## Capabilities
+
+### New Capabilities
+None.
+
+### Modified Capabilities
+None (no spec-level behavior changes).
+
+## Approach
+Follow minimal-risk sequencing: (1) codify baseline command contract, (2) align toolchain/command prerequisites for reproducibility, (3) harden noisy test logging narrowly at test scope only. Keep production codepaths and acceptance behavior unchanged.
+
+## Affected Areas
+
+| Area | Impact | Description |
+|------|--------|-------------|
+| `README.md` | Modified | Add canonical full-suite baseline/runbook and expected pass criteria. |
+| `backend/pom.xml` | Modified (if needed) | Verification flow consistency only; no production behavior impact. |
+| `frontend/package.json` | Modified (if needed) | Full-suite entrypoint/consistency only; no runtime behavior impact. |
+| `backend/src/test/**` | Modified | Narrow test-log noise control for known expected-error paths. |
+
+## Risks
+
+| Risk | Likelihood | Mitigation |
+|------|------------|------------|
+| Local/CI environment drift still causes non-reproducible failures | Med | Pin/document Java/Node/tool versions and prerequisites in baseline runbook. |
+| Over-suppressing logs hides genuine persistence regressions | Low/Med | Suppress only known expected signatures; keep errors/assertions and fail-fast behavior intact. |
+| Baseline not adopted consistently | Low | Use one documented command contract and reference it in contributor workflow. |
+
+## Rollback Plan
+Revert stabilization-only commits (docs/test/config) and restore prior command definitions. Because production logic is untouched, rollback risk is limited to verification ergonomics.
+
+## Dependencies
+- Existing green local baseline (`mvn test`, `mvn verify`, `npm test`, `npm run build`, `npm run lint`).
+- Consistent Java/Node/npm versions between local and CI.
+
+## Success Criteria
+- [ ] A single documented full-suite baseline flow exists and is reproducible on clean local setup.
+- [ ] Full suite passes repeatedly with unchanged product behavior and unchanged functional assertions.
+- [ ] Known expected-error test noise is reduced without masking real failures.
+- [ ] CI/local verification outcomes match baseline expectations.

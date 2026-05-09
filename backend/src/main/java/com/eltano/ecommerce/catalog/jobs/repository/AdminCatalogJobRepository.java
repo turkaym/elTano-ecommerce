@@ -45,6 +45,8 @@ public interface AdminCatalogJobRepository extends JpaRepository<AdminCatalogJob
 
     Optional<AdminCatalogJob> findFirstByStatusAndLeasedByOrderByUpdatedAtDesc(AdminCatalogJobStatus status, String leasedBy);
 
+    List<AdminCatalogJob> findAllByOrderByCreatedAtDescIdDesc();
+
     long countByStatus(AdminCatalogJobStatus status);
 
     @Query("""

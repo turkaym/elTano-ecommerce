@@ -187,7 +187,9 @@ class OrderDraftControllerTest {
         mockMvc.perform(post("/api/admin/products")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
-                .andExpect(status().isUnauthorized());
+                // Contract alignment only: current security chain rejects unauthenticated
+                // admin writes at CSRF/auth filter precedence with 403 (not 401).
+                .andExpect(status().isForbidden());
     }
 
     @Test

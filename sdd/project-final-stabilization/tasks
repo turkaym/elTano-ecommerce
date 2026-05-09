@@ -1,0 +1,54 @@
+# Tasks: Project Final Stabilization
+
+## Phase 1: Baseline Contract & Preconditions
+
+- [x] 1.1 RED: Audit current verification entrypoints in `README.md`, `backend/pom.xml`, and `frontend/package.json`; note mismatches against spec scenarios for reproducibility and prerequisite guidance.
+- [x] 1.2 GREEN: Update `README.md` with one canonical full-suite contract (preconditions, ordered commands, expected stage outcomes, fail guidance).
+- [x] 1.3 REFACTOR: Normalize wording/labels in `README.md` so backend/frontend stages map 1:1 to real script/lifecycle names.
+
+## Phase 2: Config/Script Stabilization (No Runtime Behavior Change)
+
+- [x] 2.1 RED: Add/adjust tests or checks that assert canonical frontend script names exist in `frontend/package.json` (`test`, `lint`, `build`) and are CI-usable.
+- [x] 2.2 GREEN: Align `frontend/package.json` scripts only as needed for contract parity (no app behavior changes).
+- [x] 2.3 RED: Add/adjust verification check for backend lifecycle parity in `backend/pom.xml` (local `mvn verify` semantics match CI expectations).
+- [x] 2.4 GREEN: Update `backend/pom.xml` only for verification consistency; avoid production runtime/plugin behavior changes.
+- [x] 2.5 REFACTOR: Re-run diff review ensuring touched files are docs/tests/config only; split/reject any runtime-semantic edits.
+
+## Phase 3: Test-Noise Hardening via Strict TDD
+
+- [x] 3.1 RED: In targeted backend integration tests under `backend/src/test/java/**`, codify expected duplicate-key/error-path assertions before noise filtering.
+- [x] 3.2 GREEN: Implement test-only noise controls in `backend/src/test/resources/application-test.yml` and/or `backend/src/test/resources/logback-test.xml` with narrow signature/package scope.
+- [x] 3.3 REFACTOR: Tighten filters to minimum allowlist; confirm unexpected errors remain visible and still fail tests.
+
+## Phase 4: Full Verification & Evidence
+
+- [x] 4.1 Run backend verification exactly: `cd backend && mvn -B clean verify`.
+- [x] 4.2 Run frontend verification exactly: `cd frontend && npm ci && npm test -- --watch=false && npm run lint && npm run build`.
+- [x] 4.3 Run canonical end-to-end order from root exactly as documented in `README.md`; confirm all stages exit `0`.
+- [x] 4.4 Capture stabilization evidence in `sdd/project-final-stabilization/tasks` completion notes (what changed, commands run, outcomes).
+
+## Completion Notes (Stabilization Evidence)
+
+- Added RED checks in `backend/src/test/java/com/eltano/ecommerce/verification/VerificationContractIntegrationTest.java` for canonical README contract, frontend script parity (`test`, `lint`, `build`), and backend verify lifecycle parity (`pom.xml` without test-skip toggles).
+- Updated `README.md` with canonical full-suite contract: prerequisites, exact command order, per-stage success criteria, and fail guidance.
+- Strengthened duplicate-key error-path assertions in:
+  - `backend/src/test/java/com/eltano/ecommerce/orders/repository/PaymentWebhookEventRepositoryTest.java`
+  - `backend/src/test/java/com/eltano/ecommerce/catalog/AdminCatalogMigrationTest.java`
+- Added test-only noise control in `backend/src/test/resources/application-test.yml`:
+  - `logging.level.org.hibernate.engine.jdbc.spi.SqlExceptionHelper: ERROR`
+  - Result: duplicate-key path still visible as `ERROR` and tests still fail on unexpected issues; only lower-signal warning line removed.
+- Validation outcomes:
+  - Backend (`./mvnw.cmd -B clean verify` as `mvn` equivalent): ✅ PASS (118 tests, 0 failures).
+  - Frontend (`npm ci && npm test -- --watch=false && npm run lint && npm run build`): ✅ PASS (20 files / 73 tests, lint/build success).
+  - Root canonical order (adapted PowerShell equivalent of documented `cd ... && ...` sequence): ✅ PASS end-to-end, all stages exit `0`.
+- Scope check: ✅ touched files are docs/tests/config only; no production runtime behavior edits.
+
+## Validation Commands
+
+```bash
+# backend
+cd backend && mvn -B clean verify
+
+# frontend
+cd frontend && npm ci && npm test -- --watch=false && npm run lint && npm run build
+```

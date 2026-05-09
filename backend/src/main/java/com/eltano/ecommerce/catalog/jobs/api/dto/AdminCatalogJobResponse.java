@@ -10,6 +10,7 @@ public record AdminCatalogJobResponse(
         String createdBy,
         String sourceFormat,
         String summary,
+        String lastError,
         Instant createdAt,
         Instant updatedAt,
         Instant completedAt) {

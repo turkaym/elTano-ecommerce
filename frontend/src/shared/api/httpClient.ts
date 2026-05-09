@@ -1,4 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL?.trim() ?? ''
+const ADMIN_BASIC_USER = import.meta.env.VITE_ADMIN_BASIC_USER?.trim() ?? ''
+const ADMIN_BASIC_PASS = import.meta.env.VITE_ADMIN_BASIC_PASS?.trim() ?? ''
 
 interface ApiErrorPayload {
   code?: string
@@ -51,10 +53,64 @@ function joinUrl(base: string, path: string): string {
   return `${normalizedBase}${normalizedPath}`
 }
 
+function buildAuthHeader(path: string): Record<string, string> {
+  if (!path.startsWith('/api/admin/')) {
+    return {}
+  }
+
+  if (!ADMIN_BASIC_USER || !ADMIN_BASIC_PASS) {
+    return {}
+  }
+
+  return {
+    Authorization: `Basic ${btoa(`${ADMIN_BASIC_USER}:${ADMIN_BASIC_PASS}`)}`,
+  }
+}
+
+function buildCredentials(path: string): RequestCredentials {
+  if (path.startsWith('/api/admin/')) {
+    return 'include'
+  }
+
+  return 'same-origin'
+}
+
+function readCookieValue(name: string): string | null {
+  if (typeof document === 'undefined' || !document.cookie) {
+    return null
+  }
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${name}=`))
+  if (!cookie) {
+    return null
+  }
+  return decodeURIComponent(cookie.slice(name.length + 1))
+}
+
+function buildCsrfHeader(path: string, method: string): Record<string, string> {
+  if (!path.startsWith('/api/admin/')) {
+    return {}
+  }
+  if (method.toUpperCase() === 'GET') {
+    return {}
+  }
+  const token = readCookieValue('XSRF-TOKEN')
+  if (!token) {
+    return {}
+  }
+  return {
+    'X-XSRF-TOKEN': token,
+  }
+}
+
 export async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(joinUrl(API_URL, path), {
+    credentials: buildCredentials(path),
     headers: {
       Accept: 'application/json',
+      ...buildAuthHeader(path),
     },
   })
 
@@ -68,9 +124,12 @@ export async function getJson<T>(path: string): Promise<T> {
 export async function postJson<TRequest, TResponse>(path: string, payload: TRequest): Promise<TResponse> {
   const response = await fetch(joinUrl(API_URL, path), {
     method: 'POST',
+    credentials: buildCredentials(path),
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      ...buildAuthHeader(path),
+      ...buildCsrfHeader(path, 'POST'),
     },
     body: JSON.stringify(payload),
   })
@@ -85,13 +144,24 @@ export async function postJson<TRequest, TResponse>(path: string, payload: TRequ
 export async function deleteRequest(path: string): Promise<void> {
   const response = await fetch(joinUrl(API_URL, path), {
     method: 'DELETE',
+    credentials: buildCredentials(path),
     headers: {
       Accept: 'application/json',
+      ...buildAuthHeader(path),
+      ...buildCsrfHeader(path, 'DELETE'),
     },
   })
 
   if (!response.ok) {
     throw await buildApiClientError(response)
+  }
+}
+
+export function buildAdminWriteHeaders(path: string, method: string, headers: Record<string, string>): Record<string, string> {
+  return {
+    ...headers,
+    ...buildAuthHeader(path),
+    ...buildCsrfHeader(path, method),
   }
 }
 

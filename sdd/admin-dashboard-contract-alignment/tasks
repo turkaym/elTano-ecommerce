@@ -1,0 +1,26 @@
+# Tasks: Admin Dashboard Contract Alignment
+
+## Batch 1: Backend Contract Foundation (RED → GREEN)
+
+- [ ] 1.1 **RED** Add failing integration assertions in `backend/src/test/java/com/eltano/ecommerce/catalog/jobs/AdminCatalogCsvImportIntegrationTest.java` for `GET /api/admin/catalog/jobs` contract (200 JSON, ordered newest-first, required fields, empty-list case).
+- [ ] 1.2 **RED** In the same test class, add failing assertions that `GET /api/admin/catalog/jobs/{id}/report` remains CSV and `GET /api/admin/catalog/jobs/{id}/report/diagnostics` returns JSON summary/rows shape.
+- [ ] 1.3 **GREEN** Extend `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/repository/AdminCatalogJobRepository.java` with stable-sort query (`createdAt desc, id desc`) to satisfy list ordering.
+- [ ] 1.4 **GREEN** Add `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/api/dto/AdminCatalogJobListItemResponse.java` and `.../AdminCatalogJobReportDiagnosticsResponse.java` with aligned fields (`outcome,errorCode,errorMessage,payload`).
+- [ ] 1.5 **GREEN** Implement list + diagnostics read methods in `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/AdminCatalogJobService.java` using new DTOs and preserving null/empty optional error fields.
+- [ ] 1.6 **GREEN** Update `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/api/AdminCatalogJobController.java` to expose `/api/admin/catalog/jobs` and `/{id}/report/diagnostics` while keeping existing CSV `/report` behavior untouched.
+
+## Batch 2: Frontend Client/DTO + CSRF Alignment (RED → GREEN)
+
+- [ ] 2.1 **RED** Add failing CSRF lifecycle tests in `frontend/src/shared/api/httpClient.test.ts` for: header injected only on non-GET `/api/admin/**`, not on GET or non-admin paths.
+- [ ] 2.2 **GREEN** Implement CSRF cookie read + conditional `X-XSRF-TOKEN` injection in `frontend/src/shared/api/httpClient.ts`.
+- [ ] 2.3 **RED** Update/add failing tests in `frontend/src/features/admin/services/adminOperationsService.test.tsx` for endpoint split (`/report` CSV vs `/report/diagnostics` JSON) and aligned diagnostics row field names.
+- [ ] 2.4 **GREEN** Refactor `frontend/src/features/admin/services/adminOperationsService.ts` DTOs and API calls to backend-native contracts (`outcome,errorCode,errorMessage,payload`) and keep CSV download path separate.
+- [ ] 2.5 **RED** Add/update failing UI assertions in `frontend/src/features/admin/pages/AdminCatalogJobsPage.test.tsx` that render list + diagnostics directly from aligned fields without adapter aliases.
+- [ ] 2.6 **GREEN** Update `frontend/src/features/admin/pages/AdminCatalogJobsPage.tsx` to consume aligned DTO fields directly.
+
+## Batch 3: Contract/Integration Verification and Runbook
+
+- [ ] 3.1 **REFACTOR** Clean duplicated fixture builders across backend/frontend tests while keeping contract assertions explicit and drift-sensitive.
+- [ ] 3.2 Run backend contract suite (`AdminCatalogCsvImportIntegrationTest`) and ensure failures occur on endpoint/shape drift per spec `contract-and-integration-tests`.
+- [ ] 3.3 Run frontend test suites: `adminOperationsService.test.tsx`, `AdminCatalogJobsPage.test.tsx`, `httpClient.test.ts`; confirm drift failures when aligned fields are removed/renamed.
+- [ ] 3.4 Create/update runbook notes in `sdd/admin-dashboard-contract-alignment/tasks` footer: validation commands, expected pass criteria, and rollback check (CSV endpoint still backward-compatible).

@@ -1,0 +1,33 @@
+# Apply Progress: admin-dashboard-contract-alignment (short cleanup pass)
+
+## Scope
+- Addressed only remaining non-blocking verify warnings with test-focused edits.
+- No feature behavior changes introduced.
+
+## Remediation Completed
+
+### 1) Fragile index-coupled fetch assertion replaced
+- **File**: `frontend/src/features/admin/services/adminOperationsService.test.tsx`
+- **Change**: Replaced `fetchSpy.mock.calls[3]` endpoint assertion with a predicate-based scan over all fetch calls that validates:
+  - URL contains `/api/admin/catalog/jobs/job-1/report/diagnostics`
+  - HTTP method is `GET` (from `init.method`, `Request.method`, or default)
+- **Result**: Assertion no longer depends on call order while preserving endpoint/method contract intent.
+
+### 2) Explicit page-level list DTO mapping assertion added
+- **File**: `frontend/src/features/admin/pages/AdminCatalogJobsPage.test.tsx`
+- **Change**:
+  - Seeded `listAdminCatalogJobs` mock with explicit list DTO fields:
+    - `id`, `type`, `status`, `createdAt`, `updatedAt`
+  - Added explicit assertions that page uses list DTO `id` directly when loading dependent data:
+    - `getAdminCatalogJobRows('job-1')`
+    - `getAdminCatalogJobReport('job-1')`
+- **Result**: Test now enforces page-level direct consumption of backend list DTO identity and prevents adapter/index drift.
+
+## Validation Evidence
+- `npm run test -- src/features/admin/services/adminOperationsService.test.tsx src/features/admin/pages/AdminCatalogJobsPage.test.tsx`
+  - **Pass**: 2 files, 9 tests passed.
+- `npx tsc -b --noEmit`
+  - **Pass**: completed with no TypeScript errors.
+
+## Status
+- Cleanup pass goal complete for requested warnings.

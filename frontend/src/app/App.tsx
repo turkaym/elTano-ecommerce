@@ -310,7 +310,7 @@ export function App() {
               {showBrandLogo ? (
                 <img
                   className="brand-logo"
-                  src="/logo-el-tano.png"
+                  src="/elTanoLogo.png"
                   alt="El Tano Frutos Secos"
                   onError={() => setShowBrandLogo(false)}
                 />
@@ -322,14 +322,16 @@ export function App() {
             <div className="top-shell-right">
               <StorefrontNav />
 
+              <div className="search-inline" aria-label="Buscador rápido">
+                <SearchBar value={searchValue} onChange={handleSearchChange} />
+              </div>
+
               <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
                 <span aria-hidden="true">👤</span>
                 <span aria-hidden="true">🛒</span>
               </div>
             </div>
           </header>
-
-          <SearchBar value={searchValue} onChange={handleSearchChange} />
         </div>
       ) : null}
 

@@ -15,10 +15,15 @@ vi.mock('../features/checkout/services/checkoutService', () => ({
   getDraftPaymentStatus: vi.fn(),
 }))
 
-vi.mock('../shared/config/flags', () => ({
-  checkoutMvpEnabled: true,
-  checkoutPaymentEnabled: true,
-}))
+vi.mock('../shared/config/flags', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../shared/config/flags')>()
+  return {
+    ...actual,
+    checkoutMvpEnabled: true,
+    checkoutPaymentEnabled: true,
+    adminDashboardEnabled: false,
+  }
+})
 
 import { getFeaturedProducts } from '../features/catalog/services/catalogService'
 import {

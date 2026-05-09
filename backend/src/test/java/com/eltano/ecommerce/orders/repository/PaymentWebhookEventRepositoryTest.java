@@ -1,7 +1,7 @@
 package com.eltano.ecommerce.orders.repository;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
 
@@ -39,8 +39,10 @@ class PaymentWebhookEventRepositoryTest {
         duplicate.setProvider("mercadopago");
         duplicate.setOutcome("DUPLICATE_IGNORED");
 
-        assertThrows(DataIntegrityViolationException.class,
+        DataIntegrityViolationException duplicateViolation = assertThrows(DataIntegrityViolationException.class,
                 () -> paymentWebhookEventRepository.saveAndFlush(duplicate));
+
+        assertTrue(duplicateViolation.getMessage().toLowerCase().contains("unique"));
     }
 
     @Test

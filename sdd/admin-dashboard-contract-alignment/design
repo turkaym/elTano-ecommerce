@@ -1,0 +1,104 @@
+# Design: Admin Dashboard Contract Alignment
+
+## Technical Approach
+Implement additive backend endpoints to align with current admin dashboard needs while preserving existing CSV behavior, then update frontend DTOs to consume backend contracts directly. The change follows the spec domains for jobs listing, report diagnostics, CSRF behavior, and contract drift tests.
+
+## Architecture Decisions
+
+### Decision: Keep CSV export endpoint unchanged; add JSON diagnostics endpoint
+
+| Option | Tradeoff | Decision |
+|---|---|---|
+| Reuse `GET /{id}/report` for CSV and JSON via content negotiation | High ambiguity, fragile client behavior, harder tests | ❌ |
+| Keep `GET /{id}/report` as CSV and add `GET /{id}/report/diagnostics` JSON | Additive change, low compatibility risk, clear contract split | ✅ |
+
+### Decision: Add jobs list endpoint as read-only summary DTO
+
+| Option | Tradeoff | Decision |
+|---|---|---|
+| Return full job detail graph | Larger payload, tighter coupling to internals | ❌ |
+| Return minimal list item (`id,type,status,createdAt,updatedAt`) with stable sort | Small payload, clear UI contract, easier drift detection | ✅ |
+
+### Decision: Centralize frontend DTO normalization in service layer types
+
+| Option | Tradeoff | Decision |
+|---|---|---|
+| Keep UI adapters (`status/message` aliases) in page components | Hidden drift, repeated mapping logic | ❌ |
+| Align service DTOs to backend names (`outcome,errorCode,errorMessage,payload`) and update pages accordingly | Small refactor in tests/pages, stronger contract fidelity | ✅ |
+
+### Decision: CSRF token lifecycle in shared admin HTTP client
+
+| Option | Tradeoff | Decision |
+|---|---|---|
+| Per-call manual header handling in each admin service | Duplication and missed endpoints risk | ❌ |
+| Auto-inject `X-XSRF-TOKEN` for non-GET `/api/admin/**` requests from `XSRF-TOKEN` cookie | Single control point, consistent behavior | ✅ |
+
+## Data Flow
+
+`AdminCatalogJobsPage` → `adminOperationsService` → `httpClient` → `/api/admin/catalog/jobs` (list)
+
+`AdminCatalogJobsPage` → `adminOperationsService` → `httpClient` → `/api/admin/catalog/jobs/{id}/report/diagnostics` (JSON)
+
+`CSV download action` → `adminOperationsService` → `httpClient/fetch` → `/api/admin/catalog/jobs/{id}/report` (CSV unchanged)
+
+For admin writes:
+
+Browser receives `Set-Cookie: XSRF-TOKEN=...` → `httpClient` reads cookie on POST/PUT/PATCH/DELETE `/api/admin/**` → sends `X-XSRF-TOKEN` header → Spring Security validates matcher in `SecurityConfig`.
+
+## File Changes
+
+| File | Action | Description |
+|---|---|---|
+| `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/api/AdminCatalogJobController.java` | Modify | Add `GET /api/admin/catalog/jobs` and JSON diagnostics endpoint (`/{id}/report/diagnostics`); keep CSV report endpoint untouched. |
+| `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/AdminCatalogJobService.java` | Modify | Add list query method with newest-first stable sort; add diagnostics read method (summary + aligned rows). |
+| `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/repository/AdminCatalogJobRepository.java` | Modify | Add derived query for sorting (`OrderByCreatedAtDescIdDesc`) or equivalent pageable method. |
+| `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/api/dto/AdminCatalogJobListItemResponse.java` | Create | Minimal list DTO contract. |
+| `backend/src/main/java/com/eltano/ecommerce/catalog/jobs/api/dto/AdminCatalogJobReportDiagnosticsResponse.java` | Create | JSON diagnostics contract with metadata + rows. |
+| `frontend/src/features/admin/services/adminOperationsService.ts` | Modify | Update DTO types and endpoint paths to aligned contracts; keep CSV download separate. |
+| `frontend/src/features/admin/pages/AdminCatalogJobsPage.tsx` | Modify | Consume aligned row fields directly (`outcome/errorCode/errorMessage/payload`). |
+| `frontend/src/shared/api/httpClient.ts` | Modify | Add CSRF cookie parsing + conditional header injection for admin writes only. |
+| `backend/src/test/java/com/eltano/ecommerce/catalog/jobs/AdminCatalogCsvImportIntegrationTest.java` | Modify | Add contract assertions for list endpoint and diagnostics/CSV split. |
+| `frontend/src/features/admin/services/adminOperationsService.test.tsx` | Modify | Update fixtures to aligned DTO field names; assert endpoint split behavior. |
+| `frontend/src/features/admin/pages/AdminCatalogJobsPage.test.tsx` | Modify | Verify rendering with aligned fields and no adapter assumptions. |
+| `frontend/src/shared/api/httpClient.test.ts` | Modify | Add CSRF header lifecycle tests for admin writes vs GET/non-admin paths. |
+
+## Interfaces / Contracts
+
+```http
+GET /api/admin/catalog/jobs
+200 OK
+[
+  {
+    "id": "uuid",
+    "type": "IMPORT|EXPORT",
+    "status": "QUEUED|PROCESSING|COMPLETED|FAILED",
+    "createdAt": "2026-05-03T14:00:00Z",
+    "updatedAt": "2026-05-03T14:01:00Z"
+  }
+]
+
+GET /api/admin/catalog/jobs/{id}/report/diagnostics
+200 OK
+{
+  "summary": "processed=2,succeeded=1,failed=1",
+  "failedRows": 1,
+  "rows": [
+    {"rowNumber":2,"outcome":"FAILED","errorCode":"DUPLICATE_SLUG","errorMessage":"...","payload":"..."}
+  ]
+}
+```
+
+## Testing Strategy
+
+| Layer | What to Test | Approach |
+|---|---|---|
+| Unit (backend/frontend) | DTO mapping and CSRF header injection rules | Service/controller unit tests and httpClient helper tests. |
+| Integration | Backend endpoint contracts (`/jobs`, `/report`, `/report/diagnostics`) and CSRF enforcement on writes | Spring MockMvc with basic auth + csrf; assert content types and shapes. |
+| E2E-like frontend | Dashboard fetch sequence and aligned field rendering | Vitest + mocked fetch fixtures using backend field names only. |
+
+## Migration / Rollout
+No migration required. Rollout order: (1) backend additive endpoints, (2) frontend switch to aligned DTOs, (3) enforce drift tests in CI.
+
+## Open Questions
+- [ ] Should diagnostics endpoint include pagination for rows now, or keep full list for current job sizes?
+- [ ] Do we need a typed backend enum exposure (`type/status/outcome`) document in `docs/` for external admin tooling?

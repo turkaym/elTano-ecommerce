@@ -19,6 +19,9 @@ import com.eltano.ecommerce.orders.repository.OrderDraftRepository;
 @Service
 public class AdminOrderQueryService {
 
+    private static final Instant MIN_CREATED_AT = Instant.EPOCH;
+    private static final Instant MAX_CREATED_AT_EXCLUSIVE = Instant.parse("9999-12-31T00:00:00Z");
+
     private final OrderDraftRepository orderDraftRepository;
 
     public AdminOrderQueryService(OrderDraftRepository orderDraftRepository) {
@@ -100,7 +103,7 @@ public class AdminOrderQueryService {
     private Instant parseFrom(String from) {
         String normalized = normalize(from);
         if (normalized == null) {
-            return null;
+            return MIN_CREATED_AT;
         }
         return LocalDate.parse(normalized).atStartOfDay().toInstant(ZoneOffset.UTC);
     }
@@ -108,7 +111,7 @@ public class AdminOrderQueryService {
     private Instant parseToExclusive(String to) {
         String normalized = normalize(to);
         if (normalized == null) {
-            return null;
+            return MAX_CREATED_AT_EXCLUSIVE;
         }
         return LocalDate.parse(normalized).plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
     }

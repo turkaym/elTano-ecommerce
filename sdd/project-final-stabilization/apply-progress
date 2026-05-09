@@ -1,0 +1,31 @@
+# Apply Progress: project-final-stabilization
+
+## Mode
+- Strict TDD (enabled from cached testing capabilities)
+
+## Completed
+- Implemented verification-contract checks with RED->GREEN evidence in backend tests.
+- Documented canonical full-suite verification contract in `README.md`.
+- Hardened duplicate-key assertion paths in targeted backend tests.
+- Added narrow test-only logging noise control in `application-test.yml`.
+- Executed backend, frontend, and root canonical verification sequences successfully.
+
+## Files Changed
+- `README.md`
+- `backend/src/test/java/com/eltano/ecommerce/verification/VerificationContractIntegrationTest.java` (new)
+- `backend/src/test/java/com/eltano/ecommerce/orders/repository/PaymentWebhookEventRepositoryTest.java`
+- `backend/src/test/java/com/eltano/ecommerce/catalog/AdminCatalogMigrationTest.java`
+- `backend/src/test/resources/application-test.yml`
+- `sdd/project-final-stabilization/tasks`
+
+## Validation Evidence
+- RED evidence: `VerificationContractIntegrationTest` failed initially because README lacked canonical section.
+- GREEN evidence: targeted tests pass after README + test/config updates.
+- Full validations:
+  - `./mvnw.cmd -B clean verify` (backend): PASS
+  - `npm ci && npm test -- --watch=false && npm run lint && npm run build` (frontend): PASS
+  - Root canonical ordered sequence (PowerShell-adapted equivalent): PASS
+
+## Scope Compliance
+- Docs/tests/config only.
+- No production runtime/API/domain behavior changes.

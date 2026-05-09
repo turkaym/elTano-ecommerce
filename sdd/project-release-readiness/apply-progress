@@ -1,0 +1,56 @@
+# Apply Progress: project-release-readiness
+
+## Mode Resolution
+- **Resolved mode**: Strict TDD
+- **Source**: Engram `sdd/eltano-ecommerce/testing-capabilities` (observation #634, `Strict TDD Mode: enabled`)
+
+## Completed Tasks
+- ✅ 1.1, 1.2, 1.3
+- ✅ 2.1, 2.2, 2.3, 2.4
+- ✅ 3.1, 3.2, 3.3
+- ✅ 4.1, 4.2, 4.3
+- ✅ 5.1, 5.2, 5.3 (remediation)
+
+## TDD Cycle Evidence
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|---|---|---|---|---|---|---|---|
+| 1.1 | `frontend/src/app/routes/AppRoutes.admin-routes.test.tsx` | Integration | ✅ existing file baseline via targeted run | ✅ Written (seam-level + loading boundary assertions) | ➖ (RED phase intentionally failing) | ✅ Added second isolation behavior case | ➖ None |
+| 1.2 / 2.1 | `frontend/src/app/routes/AppRoutes.admin-routes.test.tsx` | Integration | ✅ same targeted run | ✅ Prior RED reused | ✅ Pass after deterministic promise resolution and scoped mock lifecycle | ✅ 2 behavior cases (loading→settled + isolation) | ✅ helper extraction (`renderAdminRoutes`) |
+| 2.2 | `frontend/src/test/setupTests.ts` | Unit infra | N/A (setup hook) | ✅ Written as hygiene requirement | ✅ Pass validated through repeated test runs | Triangulation skipped: global hook with single deterministic output | ➖ None |
+
+## Validation Evidence
+
+### Targeted admin-route TDD gate
+- RED run (expected fail): `npx vitest run src/app/routes/AppRoutes.admin-routes.test.tsx --coverage` → **failed** with:
+  - missing deterministic loading boundary (`Verificando acceso admin…` not reliably observed)
+  - mock leakage (`bootstrapAdminSession` called 2 times in second test)
+- GREEN run: same command → **pass** (2/2 tests)
+- Stability runs (3 consecutive): same command x3 → **all pass**
+
+### Full quality gates
+- `npx vitest run --coverage` → pass
+- `npm test -- --watch=false` → pass
+- `npm run lint` → pass
+- `npm run build` → pass
+- `mvn -B clean verify` → **fail** (`mvn` not found in PATH)
+- Additional context (non-blocking): `./mvnw.cmd -B clean verify` → pass (BUILD SUCCESS)
+
+### Remediation gate execution (wrapper-first policy)
+- Canonical backend policy aligned to wrapper-first cross-platform:
+  - Windows: `./mvnw.cmd -B clean verify`
+  - Unix/macOS: `./mvnw -B clean verify`
+  - Optional alternative: `mvn -B clean verify` when installed in PATH.
+- Re-run evidence: `./mvnw.cmd -B clean verify` (2026-05-02 11:02 ART) → **pass** (`BUILD SUCCESS`, `Tests run: 118, Failures: 0, Errors: 0, Skipped: 0`), log: `C:\Users\marco\.local\share\opencode\tool-output\tool_de8ff001c0013XYjh5YLBE9qhC`.
+
+## Scope Guard
+- Only test/docs/config artifacts changed:
+  - `frontend/src/app/routes/AppRoutes.admin-routes.test.tsx`
+  - `frontend/src/test/setupTests.ts`
+  - `README.md`
+  - `docs/release-readiness-checklist.md`
+  - `sdd/project-release-readiness/tasks`
+  - `sdd/project-release-readiness/apply-progress`
+- No production runtime source changes were introduced.
+
+## Release Readiness Outcome
+- Current checklist decision: **READY** (all blocking gates green under canonical wrapper-first backend policy).

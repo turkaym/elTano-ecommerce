@@ -187,7 +187,7 @@ describe('App checkout MVP flow', () => {
     await screen.findByText('Almendra natural premium')
 
     const brandLogo = screen.getByRole('img', { name: 'El Tano Frutos Secos' })
-    expect(brandLogo).toHaveAttribute('src', '/logo-el-tano.png')
+    expect(brandLogo).toHaveAttribute('src', '/elTanoLogo.png')
 
     fireEvent.error(brandLogo)
     expect(screen.getByText('El Tano Frutos Secos')).toBeInTheDocument()

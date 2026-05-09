@@ -28,11 +28,11 @@ public interface OrderDraftRepository extends JpaRepository<OrderDraft, UUID> {
             select od
             from OrderDraft od
             where (:status is null or od.status = :status)
-              and (:fromInstant is null or od.createdAt >= :fromInstant)
-              and (:toInstantExclusive is null or od.createdAt < :toInstantExclusive)
-              and (:customer is null or lower(od.customerName) like lower(concat('%', :customer, '%')))
-              and (:reference is null or lower(od.reference) like lower(concat('%', :reference, '%')))
-            """)
+              and od.createdAt >= :fromInstant
+              and od.createdAt < :toInstantExclusive
+              and (:customer is null or lower(od.customerName) like lower(concat('%', cast(:customer as string), '%')))
+              and (:reference is null or lower(od.reference) like lower(concat('%', cast(:reference as string), '%')))
+             """)
     Page<OrderDraft> searchAdmin(
             com.eltano.ecommerce.orders.domain.OrderDraftStatus status,
             java.time.Instant fromInstant,

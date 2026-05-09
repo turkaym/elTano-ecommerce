@@ -102,6 +102,8 @@ class AdminCatalogJobWorkerIntegrationTest {
         AdminCatalogJob queued = queuedJob(AdminCatalogJobType.EXPORT);
         when(jobService.executeClaimedJob(eq(queued.getId()))).thenReturn("processed=1,succeeded=1,failed=0");
 
+        assertEquals(AdminCatalogJobStatus.QUEUED, repository.findById(queued.getId()).orElseThrow().getStatus());
+
         worker.runOnce();
 
         AdminCatalogJob updated = repository.findById(queued.getId()).orElseThrow();

@@ -1,0 +1,46 @@
+# Apply Progress: baseline-test-debt-cleanup
+
+## Mode Resolution
+- **Resolved mode**: Strict TDD
+- **Reason**: execution request explicitly required strict TDD evidence and test runner exists (Maven + Vitest).
+- **Tooling adaptation**: tasks referenced Gradle and `pnpm --dir`; this repo uses `backend/mvnw.cmd` and frontend-local `pnpm vitest`.
+
+## Completed Tasks
+- [x] 1.1 Captured backend RED: `OrderDraftControllerTest.adminEndpointsRemainProtectedInMvpScope` failed `401 != 403`.
+- [x] 1.2 Captured backend RED: `MercadoPagoWebhookControllerTest` failed context boot due to missing `AdminAuditService` bean.
+- [x] 1.3 Captured frontend RED: flags mock missing `adminDashboardEnabled` export in `App.payment.test.tsx`.
+- [x] 2.1 Updated backend assertion to `403` plus explicit contract-alignment comment.
+- [x] 2.2 Validated task 2.1 passes.
+- [x] 2.3 Added `@MockBean AdminAuditService` in webhook controller test class, preserving `SecurityConfig` import.
+- [x] 2.4 Validated webhook controller test class passes and context boots.
+- [x] 2.5 Replaced brittle full flags mock with partial mock (`importOriginal` + spread + overrides).
+- [x] 2.6 Validated frontend payment test passes without module-shape/export errors.
+- [x] 3.1 Performed clarity-only refactor in comments/mock wiring (no runtime behavior changes).
+- [x] 3.2 Ran focused backend + frontend regressions successfully.
+- [x] 3.3 Verified edits are constrained to test paths (plus pre-existing unrelated test-file diffs already present in working tree).
+
+## Files Changed
+- `backend/src/test/java/com/eltano/ecommerce/orders/api/OrderDraftControllerTest.java`
+- `backend/src/test/java/com/eltano/ecommerce/orders/api/MercadoPagoWebhookControllerTest.java`
+- `frontend/src/app/App.payment.test.tsx`
+- `sdd/baseline-test-debt-cleanup/tasks`
+
+## TDD Cycle Evidence
+| Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
+|------|-----------|-------|------------|-----|-------|-------------|----------|
+| 1.1 + 2.1 + 2.2 | `OrderDraftControllerTest.java` | Integration (MVC) | ✅ Ran targeted test; failing 401/403 captured | ✅ Existing failing assertion observed | ✅ Re-run passed (1/1) after assertion alignment | ➖ Single behavior contract alignment | ✅ Added explicit contract-only comment |
+| 1.2 + 2.3 + 2.4 | `MercadoPagoWebhookControllerTest.java` | Integration (MVC) | ✅ Ran class; context boot failure captured | ✅ Existing failing context boot observed | ✅ Re-run passed (5/5) after adding missing mock | ➖ Single dependency gap scenario | ✅ Minimal mock addition only |
+| 1.3 + 2.5 + 2.6 | `App.payment.test.tsx` | Integration (frontend app) | ✅ Ran file; export-shape failure captured (4/4 failed) | ✅ Existing failing module-shape error observed | ✅ Re-run passed (4/4) with partial mock | ✅ 4 behavior cases in file all passing with stable module shape | ✅ Partial mock pattern reduces duplication/drift |
+| 3.2 | Backend + frontend focused regressions | Integration | N/A | N/A | ✅ Backend 21/21 + frontend 4/4 | N/A | N/A |
+
+## Commands + Outcomes
+- `backend`: `.\mvnw.cmd test -Dtest=OrderDraftControllerTest#adminEndpointsRemainProtectedInMvpScope` → FAIL (before), PASS (after)
+- `backend`: `.\mvnw.cmd test -Dtest=MercadoPagoWebhookControllerTest` → ERROR context boot (before), PASS (after)
+- `frontend`: `pnpm vitest run src/app/App.payment.test.tsx` → FAIL 4/4 export error (before), PASS 4/4 (after)
+- `backend regression`: `.\mvnw.cmd test "-Dtest=OrderDraftControllerTest,MercadoPagoWebhookControllerTest"` → PASS 21 tests
+- `scope check`: `git diff --name-only -- backend/src/test frontend/src/app/App.payment.test.tsx` → only test-file paths listed
+
+## Scope Guard
+- No production runtime code edited.
+- No security/audit runtime wiring modified.
+- All behavior changes are test assertion/mocking alignment only.

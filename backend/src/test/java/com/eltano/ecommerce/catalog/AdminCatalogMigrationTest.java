@@ -102,6 +102,9 @@ class AdminCatalogMigrationTest {
 
         product.replaceImages(List.of(first, duplicatedSortOrder));
 
-        assertThrows(DataIntegrityViolationException.class, () -> productRepository.saveAndFlush(product));
+        DataIntegrityViolationException duplicateSortOrderViolation = assertThrows(DataIntegrityViolationException.class,
+                () -> productRepository.saveAndFlush(product));
+
+        assertTrue(duplicateSortOrderViolation.getMessage().toLowerCase().contains("unique"));
     }
 }

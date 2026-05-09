@@ -1,0 +1,32 @@
+# Archive Report — baseline-test-debt-cleanup
+
+## Artifact Traceability (Engram Observation IDs)
+- `sdd/baseline-test-debt-cleanup/explore` → **#654**
+- `sdd/baseline-test-debt-cleanup/proposal` → **#655**
+- `sdd/baseline-test-debt-cleanup/spec` → **#656**
+- `sdd/baseline-test-debt-cleanup/design` → **#658**
+- `sdd/baseline-test-debt-cleanup/tasks` → **#659**
+- `sdd/baseline-test-debt-cleanup/apply-progress` → **#660**
+- `sdd/baseline-test-debt-cleanup/verify-report` → **NOT FOUND IN ENGRAM**
+
+## Final Decision
+**Decision**: ✅ **ARCHIVED (PASS WITH WARNINGS)**
+
+The change is archive-ready in Engram mode based on completed proposal/spec/design/tasks plus implementation evidence in `apply-progress` (#660), all indicating test-only scope and successful targeted regressions.
+
+## Warnings
+1. **Missing required verification artifact in Engram**: `sdd/baseline-test-debt-cleanup/verify-report` is not present as an Engram observation.
+2. **Contract deviation**: The phase contract expects explicit verify-report retrieval; closure relied on `apply-progress` evidence as a fallback.
+
+## Follow-ups
+1. Persist a canonical Engram verification artifact at topic key: `sdd/baseline-test-debt-cleanup/verify-report`.
+2. Ensure future `sdd-verify` runs always publish `verify-report` before archive.
+3. (Optional hardening) Add archive preflight check to block archive when verify-report topic is missing.
+
+## Archive Summary
+- Scope remained test-only (no production runtime/security/audit behavior changes).
+- Tasks are fully checked in the tasks artifact (all items marked complete).
+- Backend and frontend targeted regressions were reported as passing in apply evidence.
+
+## SDD Closure Status
+SDD cycle is treated as complete for this change **with the above warning debt recorded**.

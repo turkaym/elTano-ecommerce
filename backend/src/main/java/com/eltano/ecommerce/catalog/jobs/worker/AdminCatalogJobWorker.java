@@ -32,18 +32,21 @@ public class AdminCatalogJobWorker {
     private final MeterRegistry meterRegistry;
     private final String workerId;
     private final int leaseSeconds;
+    private final boolean workerEnabled;
 
     public AdminCatalogJobWorker(
             AdminCatalogJobRepository repository,
             AdminCatalogJobService jobService,
             AdminCatalogJobRetryPolicy retryPolicy,
             MeterRegistry meterRegistry,
+            @Value("${app.catalog.jobs.worker.enabled:false}") boolean workerEnabled,
             @Value("${app.catalog.jobs.worker.id:admin-catalog-worker}") String workerId,
             @Value("${app.catalog.jobs.worker.lease-seconds:30}") int leaseSeconds) {
         this.repository = repository;
         this.jobService = jobService;
         this.retryPolicy = retryPolicy;
         this.meterRegistry = meterRegistry;
+        this.workerEnabled = workerEnabled;
         this.workerId = workerId;
         this.leaseSeconds = leaseSeconds;
     }
@@ -55,6 +58,9 @@ public class AdminCatalogJobWorker {
 
     @Transactional
     public void runOnce() {
+        if (!workerEnabled) {
+            return;
+        }
         Instant now = Instant.now();
         meterRegistry.gauge("admin.catalog.jobs.queue.depth", repository.countByStatus(AdminCatalogJobStatus.QUEUED));
         Timer.Sample claimSample = Timer.start(meterRegistry);
@@ -92,19 +98,39 @@ public class AdminCatalogJobWorker {
 
     @Transactional
     protected void complete(UUID jobId, String summary, Instant completedAt) {
-        repository.markCompleted(jobId, workerId, summary, completedAt);
+        int updated = repository.markCompleted(jobId, workerId, summary, completedAt);
+        if (updated == 0) {
+            log.warn("admin_catalog_job complete_skipped workerId={} jobId={}", workerId, jobId);
+        }
     }
 
     @Transactional
     protected void handleFailure(AdminCatalogJob job, RuntimeException error, Instant now) {
         String message = error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage();
         if (retryPolicy.shouldRetry(job.getAttemptCount(), job.getMaxAttempts(), error)) {
-            repository.releaseClaimForRetry(job.getId(), workerId, message, retryPolicy.nextAttemptAt(now, job.getAttemptCount()));
+            int updated = repository.releaseClaimForRetry(job.getId(), workerId, message,
+                    retryPolicy.nextAttemptAt(now, job.getAttemptCount()));
+            if (updated == 0) {
+                log.warn("admin_catalog_job retry_skipped workerId={} jobId={} attempt={} error={}",
+                        workerId,
+                        job.getId(),
+                        job.getAttemptCount(),
+                        message);
+                return;
+            }
             meterRegistry.counter("admin.catalog.jobs.retried").increment();
             log.warn("admin_catalog_job retried workerId={} jobId={} attempt={} error={}", workerId, job.getId(), job.getAttemptCount(), message);
             return;
         }
-        repository.markFailed(job.getId(), workerId, message, now);
+        int updated = repository.markFailed(job.getId(), workerId, message, now);
+        if (updated == 0) {
+            log.warn("admin_catalog_job fail_skipped workerId={} jobId={} attempt={} error={}",
+                    workerId,
+                    job.getId(),
+                    job.getAttemptCount(),
+                    message);
+            return;
+        }
         meterRegistry.counter("admin.catalog.jobs.failed.terminal").increment();
         log.error("admin_catalog_job failed_terminal workerId={} jobId={} attempt={} error={}", workerId, job.getId(), job.getAttemptCount(), message);
     }

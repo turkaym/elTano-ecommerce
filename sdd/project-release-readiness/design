@@ -1,0 +1,68 @@
+# Design: Project Release Readiness
+
+## Technical Approach
+
+Implement a narrow, test-only stabilization in `AppRoutes.admin-routes.test.tsx` and add a release-checklist artifact with binary gates. The test change removes timing-sensitive global `fetch` coupling by mocking seam-level async dependencies (`bootstrapAdminSession` and `listAdminProducts`) and asserting a stable loading→settled UI transition. The checklist documents required release commands and evidence capture, aligned with the existing README verification contract. No production runtime code path is changed.
+
+## Architecture Decisions
+
+| Decision | Options | Tradeoff | Decision |
+|---|---|---|---|
+| Deterministic async seams in admin routes test | A) keep mocking `globalThis.fetch` B) mock feature seams (`bootstrapAdminSession`, `listAdminProducts`) | A is brittle under coverage timing and indirect call chains; B is explicit, local, and resilient to HTTP client internals | **B** |
+| Mock lifecycle isolation | A) per-test explicit `restoreAllMocks` B) centralized `afterEach` in `setupTests.ts` | A is explicit in file but easy to forget; B enforces suite-wide hygiene with minimal drift | **B** (plus local reset where needed) |
+| Release gate artifact location | A) append to README only B) dedicated checklist doc referenced by README | A can bloat operational docs; B is auditable and easier for PR evidence links | **B** |
+
+## Data Flow
+
+### Test determinism flow
+
+`AppRoutes` render → `AdminGuard.bootstrapAdminSession()` (mocked resolved `authenticated`) → nested admin page mounts → `AdminProductsPage.listAdminProducts()` (mocked resolved array) → deterministic UI assertion.
+
+```
+Test case
+  ├─ spy bootstrapAdminSession() => resolved authenticated
+  ├─ spy listAdminProducts() => resolved []
+  ├─ render AppRoutes(/admin)
+  ├─ wait for loading marker to disappear (or role=heading present)
+  └─ assert "Sin productos"
+```
+
+### Release gate flow
+
+Release candidate branch → run blocking commands in fixed order → record exit codes + links/log snippets in checklist → evaluate warnings ownership → mark READY / NOT READY.
+
+## File Changes
+
+| File | Action | Description |
+|---|---|---|
+| `frontend/src/app/routes/AppRoutes.admin-routes.test.tsx` | Modify | Replace ambient `fetch` mock with seam-level async spies; add stable wait boundaries and deterministic assertions. |
+| `frontend/src/test/setupTests.ts` | Modify | Add `vi.restoreAllMocks()` in shared `afterEach` to prevent inter-test leakage. |
+| `README.md` | Modify | Link to release checklist artifact from verification section. |
+| `docs/release-readiness-checklist.md` *(or `sdd/project-release-readiness/release-checklist.md` if project prefers local artifact)* | Create | Binary blocking gates, evidence table, warning-debt acceptance schema, and final readiness decision block. |
+
+## Interfaces / Contracts
+
+No production API/interface contract changes.
+
+Checklist contract (documentation-level):
+
+- **Blocking gates**: `npx vitest run --coverage`, `npm test -- --watch=false`, `npm run lint`, `npm run build`, `mvn -B clean verify`.
+- **Evidence per gate**: command, executor, timestamp, exit code, artifact/log reference.
+- **Warning debt rule**: each unresolved WARNING requires explicit acceptance, owner, and follow-up issue; otherwise release = blocked.
+
+## Testing Strategy
+
+| Layer | What to Test | Approach |
+|---|---|---|
+| Unit/Component | Admin routes coverage flake path | Run `frontend/src/app/routes/AppRoutes.admin-routes.test.tsx` repeatedly under coverage; ensure 3 consecutive passes. |
+| Integration (frontend suite) | Mock isolation | Execute full frontend tests and verify no cross-test mock contamination after global restore hook. |
+| Release Governance | Checklist validity | Dry-run checklist completion on RC branch; verify failed gate sets NOT READY and missing warning owner blocks approval. |
+
+## Migration / Rollout
+
+No migration required. Rollout is documentation + test harness update only.
+
+## Open Questions
+
+- [ ] Confirm final checklist location preference: `docs/` vs `sdd/...` artifact path for long-term maintenance.
+- [ ] Confirm whether PR template should include a required “Release Readiness Checklist” link field in this change or deferred.

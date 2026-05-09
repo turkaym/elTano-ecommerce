@@ -1,0 +1,104 @@
+# Verification Report
+
+**Change**: project-final-stabilization  
+**Version**: N/A  
+**Mode**: Strict TDD
+
+---
+
+### Completeness
+| Metric | Value |
+|--------|-------|
+| Tasks total | 14 |
+| Tasks complete | 14 |
+| Tasks incomplete | 0 |
+
+All tasks in `sdd/project-final-stabilization/tasks` are marked complete.
+
+---
+
+### Build & Tests Execution
+
+**Build**: ✅ Passed
+
+- Backend: `.\mvnw.cmd -B clean verify` → **BUILD SUCCESS**
+- Frontend: `npm run build` (`tsc -b && vite build`) → **passed**
+
+**Tests**: ✅ Passed
+
+- Backend: **118 run / 0 failed / 0 skipped**
+- Frontend: **73 run / 0 failed / 0 skipped**
+
+**Canonical root sequence (executed)**: ✅ Passed  
+`backend/.\mvnw.cmd -B clean verify` → `frontend/npm ci` → `npm test -- --watch=false` → `npm run lint` → `npm run build` all exited `0`.
+
+**Coverage**: 90.26% statements (frontend V8) → ➖ threshold not defined
+
+---
+
+### TDD Compliance
+| Check | Result | Details |
+|-------|--------|---------|
+| RED evidence exists | ✅ | `VerificationContractIntegrationTest` and duplicate-key paths contain explicit assertions |
+| GREEN evidence exists | ✅ | Full backend/frontend suites are green in executed runs |
+| Evidence format completeness | ⚠️ | `apply-progress` does not include an explicit TDD Cycle Evidence table |
+| Scenario-level runtime proof coverage | ⚠️ | Core executable scenarios are proven; governance/process scenarios rely on structural evidence |
+
+**TDD compliance summary**: Runtime proof is sufficient for executable behaviors; remaining gaps are documentation/evidence-format classification gaps.
+
+---
+
+### Spec Compliance Matrix
+
+| Requirement | Scenario | Test | Result |
+|-------------|----------|------|--------|
+| Reproducible Full-Suite Verification Contract | Canonical full-suite contract is documented and executable | `VerificationContractIntegrationTest > readmeDefinesCanonicalFullSuiteVerificationContract` + executed backend/frontend canonical command sequence | ✅ COMPLIANT |
+| Reproducible Full-Suite Verification Contract | Environment prerequisites are missing | README prerequisite/fail-guidance checks (structural), no automated failing-prereq execution harness | ⚠️ PARTIAL |
+| Minimal Test-Noise Hardening | Known expected-error signature is encountered | `PaymentWebhookEventRepositoryTest > providerEventIdMustBeUnique` (expected duplicate-key path still visible as `ERROR`, assertions pass) | ✅ COMPLIANT |
+| Minimal Test-Noise Hardening | Unexpected error appears during verification | Full suites still fail on unexpected errors by default; no dedicated suppression-guard test | ⚠️ PARTIAL |
+| No Production Runtime Behavior Change | Verification hardening artifacts are applied | Scope evidence from changed artifacts (`README`, tests, test config) + all suites pass | ✅ COMPLIANT |
+| No Production Runtime Behavior Change | Runtime-impacting modification is proposed | Enforced as change-governance rule in spec/tasks; non-executable policy scenario | ✅ COMPLIANT (policy/structural) |
+
+**Compliance summary**: 4/6 fully compliant, 2/6 partial, 0 failing.
+
+---
+
+### Correctness (Static — Structural Evidence)
+| Requirement | Status | Notes |
+|------------|--------|-------|
+| Reproducible full-suite contract | ✅ Implemented | README includes prerequisites, exact command order, and pass/fail guidance; corresponding contract test exists |
+| Minimal test-noise hardening | ✅ Implemented | `application-test.yml` narrows `SqlExceptionHelper` to `ERROR`; expected duplicate-key signature remains visible |
+| No production runtime behavior change | ✅ Implemented (change-local) | Change-local artifacts are docs/tests/test-config. No required production-semantic edits for this change |
+
+---
+
+### Coherence (Design)
+| Decision | Followed? | Notes |
+|----------|-----------|-------|
+| Canonical contract in root README | ✅ Yes | Implemented and tested |
+| Keep native `mvn` + `npm` commands | ✅ Yes | No new wrapper runner introduced |
+| Test-only narrow noise suppression | ✅ Yes | Implemented in test profile logging (`application-test.yml`) |
+
+---
+
+### Issues Found
+
+**CRITICAL** (must fix before archive):
+None.
+
+**WARNING** (should fix):
+1. `apply-progress` strict-TDD evidence format is incomplete (missing explicit TDD cycle table).
+2. Prerequisite-missing scenario is validated structurally (docs guidance) but not by an automated failing-prereq execution test.
+3. Unexpected-error-visibility scenario has implicit evidence (suite behavior) but no dedicated guard test.
+4. Current workspace includes unrelated runtime-file changes outside this change scope; this does not invalidate change-local verification but should be tracked explicitly.
+
+**SUGGESTION** (nice to have):
+1. Add an automated preflight check test/script for missing Java/Node/npm prerequisites.
+2. Add an explicit negative test ensuring non-allowlisted errors are never suppressed by test logging filters.
+
+---
+
+### Verdict
+**PASS WITH WARNINGS**
+
+Change-local requirements for verification contract reproducibility, minimal test-noise hardening, and no-runtime-change intent are met with executed and structural evidence; remaining gaps are evidence-format/classification and should be remediated before archival polish.
