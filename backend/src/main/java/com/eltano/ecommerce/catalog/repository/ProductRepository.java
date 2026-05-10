@@ -18,6 +18,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     long countByCategoryId(UUID categoryId);
 
+    long countByCategoryIdAndActiveTrueAndDeletedAtIsNull(UUID categoryId);
+
     List<Product> findAllByCategoryId(UUID categoryId);
 
     @Query("""

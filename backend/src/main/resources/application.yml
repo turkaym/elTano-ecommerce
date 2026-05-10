@@ -32,6 +32,11 @@ app:
         max-attempts: ${CATALOG_JOBS_WORKER_MAX_ATTEMPTS:3}
         lease-seconds: ${CATALOG_JOBS_WORKER_LEASE_SECONDS:30}
         concurrency: ${CATALOG_JOBS_WORKER_CONCURRENCY:1}
+  uploads:
+    product-images:
+      directory: ${PRODUCT_IMAGE_UPLOAD_DIR:uploads/product-images}
+      public-path: ${PRODUCT_IMAGE_PUBLIC_PATH:/uploads/product-images}
+      max-size-bytes: ${PRODUCT_IMAGE_MAX_SIZE_BYTES:5242880}
   mercadopago:
     enabled: ${MP_ENABLED:false}
     api-base-url: ${MP_API_BASE_URL:https://api.mercadopago.com}

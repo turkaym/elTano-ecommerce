@@ -17,11 +17,13 @@ import {
   updateAdminCategory,
   updateAdminProduct,
   createAdminCategory,
+  uploadAdminProductImage,
 } from './adminOperationsService'
 
 describe('admin operations service e2e-like flows', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
   })
 
   it('covers catalog create-delete-restore flow using admin endpoints', async () => {
@@ -45,7 +47,63 @@ describe('admin operations service e2e-like flows', () => {
     const restored = await restoreAdminProduct('prod-1')
 
     expect(created).toMatchObject({ id: 'prod-1', name: 'Nuez' })
-    expect(restored).toMatchObject({ id: 'prod-1', deletedAt: null })
+    expect(restored).toBeUndefined()
+  })
+
+  it('treats product restore 204 response as successful reactivation', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(null, { status: 204 }))
+
+    await expect(restoreAdminProduct('prod-1')).resolves.toBeUndefined()
+
+    const calls = vi.mocked(globalThis.fetch).mock.calls
+    expect(String(calls[0][0])).toContain('/api/admin/products/prod-1/restore')
+    expect(calls[0][1]?.method).toBe('POST')
+  })
+
+  it('uploads admin product image with FormData and returns the public URL payload', async () => {
+    document.cookie = 'XSRF-TOKEN=csrf-upload-token; path=/'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ url: '/uploads/product-images/nuez.png', contentType: 'image/png' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const file = new File(['image-bytes'], 'nuez.png', { type: 'image/png' })
+    const result = await uploadAdminProductImage(file)
+
+    expect(result).toMatchObject({ url: '/uploads/product-images/nuez.png', contentType: 'image/png' })
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(String(url)).toContain('/api/admin/uploads/product-images')
+    expect(init?.method).toBe('POST')
+    expect(init?.credentials).toBe('include')
+    expect(init?.body).toBeInstanceOf(FormData)
+    expect((init?.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('csrf-upload-token')
+    expect((init?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+  })
+
+  it('propagates normalized admin upload errors with correlation metadata', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          code: 'BAD_REQUEST',
+          message: 'Product image must be a JPG, PNG, or WebP file',
+          correlationId: 'corr-upload-400',
+          fieldErrors: [],
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    const result = uploadAdminProductImage(new File(['text'], 'bad.txt', { type: 'text/plain' }))
+
+    await expect(result).rejects.toBeInstanceOf(ApiClientError)
+    await expect(result).rejects.toMatchObject({
+      status: 400,
+      code: 'BAD_REQUEST',
+      correlationId: 'corr-upload-400',
+      message: 'Product image must be a JPG, PNG, or WebP file',
+    })
   })
 
   it('retrieves orders list and import job status for operators', async () => {

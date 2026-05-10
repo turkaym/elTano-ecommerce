@@ -61,14 +61,45 @@ export interface AdminCategoryDto {
   id: string
   name: string
   slug: string
+  active?: boolean
   deletedAt?: string | null
+}
+
+export interface AdminProductVariantDto {
+  id?: string
+  sku?: string
+  unitType?: 'WEIGHT' | 'UNIT'
+  weightGrams?: number | null
+  unitLabel?: string | null
+  price?: number | string
+  stockAvailable?: number
+  stockReserved?: number
+  active?: boolean
+  attributesJson?: string | null
+}
+
+export interface AdminProductImageDto {
+  id?: string
+  url?: string
+  altText?: string | null
+  sortOrder?: number
+  primary?: boolean
 }
 
 export interface AdminProductDto {
   id: string
   name: string
-  slug?: string
+  slug?: string | null
+  description?: string | null
+  active?: boolean
   categoryId?: string | null
+  categoryName?: string | null
+  categorySlug?: string | null
+  productType?: 'GRANEL' | 'ENVASADO' | 'UNIDAD' | null
+  inventoryPolicy?: 'BULK_WEIGHT' | 'PER_VARIANT' | null
+  stockBaseGrams?: number | null
+  variants?: AdminProductVariantDto[]
+  images?: AdminProductImageDto[]
   deletedAt?: string | null
 }
 
@@ -110,6 +141,12 @@ export interface AdminWriteError {
   fieldErrors?: ApiFieldError[]
 }
 
+export interface AdminProductImageUploadResult {
+  url: string
+  contentType?: string
+  sizeBytes?: number
+}
+
 export async function listAdminProducts() {
   return getJson<AdminProductDto[]>('/api/admin/products')
 }
@@ -139,10 +176,29 @@ export async function deleteAdminProduct(productId: string) {
 }
 
 export async function restoreAdminProduct(productId: string) {
-  return postJson<Record<string, never>, Record<string, unknown>>(
-    `/api/admin/products/${productId}/restore`,
-    {},
-  )
+  await postWithoutJson(`/api/admin/products/${productId}/restore`)
+}
+
+export async function uploadAdminProductImage(file: File): Promise<AdminProductImageUploadResult> {
+  const path = '/api/admin/uploads/product-images'
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch(joinUrl(API_URL, path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...buildAdminWriteHeaders(path, 'POST', adminAuthHeader()),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    throw await mapResponseToClientError(response)
+  }
+
+  return (await response.json()) as AdminProductImageUploadResult
 }
 
 export async function listAdminOrders(params: { page?: number; size?: number } = {}) {
@@ -261,6 +317,22 @@ async function putJson<TRequest, TResponse>(path: string, payload: TRequest): Pr
   }
 
   return (await response.json()) as TResponse
+}
+
+async function postWithoutJson(path: string): Promise<void> {
+  const response = await fetch(joinUrl(API_URL, path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...buildAdminWriteHeaders(path, 'POST', adminAuthHeader()),
+    },
+    body: JSON.stringify({}),
+  })
+
+  if (!response.ok) {
+    throw await mapResponseToClientError(response)
+  }
 }
 
 async function mapResponseToClientError(response: Response): Promise<ApiClientError> {

@@ -15,6 +15,7 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -28,11 +29,18 @@ public class SecurityConfig {
     @Value("${app.admin.enabled:true}")
     private boolean adminEnabled;
 
+    @Value("${app.uploads.product-images.public-path:/uploads/product-images}")
+    private String productImagesPublicPath;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
+        csrfRequestHandler.setCsrfRequestAttributeName(null);
+
         http
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                        .csrfTokenRequestHandler(csrfRequestHandler)
                         .requireCsrfProtectionMatcher(adminWriteRequestMatcher()))
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -42,6 +50,8 @@ public class SecurityConfig {
                         .requestMatchers("/error")
                         .permitAll()
                         .requestMatchers("/api/health", "/api/catalog/**")
+                        .permitAll()
+                        .requestMatchers(normalizedProductImagesPublicMatcher())
                         .permitAll()
                         .requestMatchers("/api/orders/**")
                         .permitAll()
@@ -118,4 +128,18 @@ public class SecurityConfig {
                     && !HttpMethod.TRACE.matches(method);
         };
     }
+
+    private String normalizedProductImagesPublicMatcher() {
+        String path = productImagesPublicPath == null || productImagesPublicPath.isBlank()
+                ? "/uploads/product-images"
+                : productImagesPublicPath.trim();
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        if (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return path + "/**";
+    }
+
 }

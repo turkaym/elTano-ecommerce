@@ -37,6 +37,9 @@ import com.eltano.ecommerce.common.api.UnprocessableEntityException;
 public class AdminProductService {
 
     private static final Pattern HTTP_URL_PATTERN = Pattern.compile("^https?://.+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern UPLOADED_PRODUCT_IMAGE_PATH_PATTERN = Pattern.compile(
+            "^/uploads/product-images/[^/?#]+\\.(?:jpe?g|png|webp)$",
+            Pattern.CASE_INSENSITIVE);
 
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
@@ -302,7 +305,7 @@ public class AdminProductService {
         for (int index = 0; index < images.size(); index++) {
             AdminProductImageUpsertRequest image = images.get(index);
             String url = image.url() == null ? "" : image.url().trim();
-            if (!HTTP_URL_PATTERN.matcher(url).matches()) {
+            if (!isValidImageUrl(url)) {
                 fieldErrors.add(new UnprocessableEntityException.FieldError(
                         "images[" + index + "].url",
                         "Image URL must be a valid http/https URL"));
@@ -328,6 +331,11 @@ public class AdminProductService {
         if (!fieldErrors.isEmpty()) {
             throw new UnprocessableEntityException("Product images validation failed", fieldErrors);
         }
+    }
+
+    private boolean isValidImageUrl(String url) {
+        return HTTP_URL_PATTERN.matcher(url).matches()
+                || UPLOADED_PRODUCT_IMAGE_PATH_PATTERN.matcher(url).matches();
     }
 
     private AdminProductResponse toResponse(Product product) {

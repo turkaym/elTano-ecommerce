@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.eltano.ecommerce.catalog.domain.Category;
 import com.eltano.ecommerce.catalog.domain.Product;
+import com.eltano.ecommerce.catalog.api.dto.AdminCategoryUpsertRequest;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
 import com.eltano.ecommerce.catalog.repository.ProductRepository;
 import com.eltano.ecommerce.catalog.service.AdminCategoryService;
@@ -77,6 +78,22 @@ class AdminCategoryServiceTest {
 
         verify(productRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyList());
         verify(categoryRepository, never()).delete(source);
+    }
+
+    @Test
+    void updateRejectsDeactivationWhenActiveProductsRemain() {
+        UUID sourceId = UUID.randomUUID();
+        Category source = category(sourceId, "Frutos secos", "frutos-secos");
+
+        when(categoryRepository.findById(sourceId)).thenReturn(Optional.of(source));
+        when(categoryRepository.existsBySlugIgnoreCaseAndIdNot("frutos-secos", sourceId)).thenReturn(false);
+        when(productRepository.countByCategoryIdAndActiveTrueAndDeletedAtIsNull(sourceId)).thenReturn(1L);
+
+        assertThrows(UnprocessableEntityException.class,
+                () -> adminCategoryService.update(sourceId,
+                        new AdminCategoryUpsertRequest("Frutos secos", "frutos-secos", false)));
+
+        verify(categoryRepository, never()).save(source);
     }
 
     private Category category(UUID id, String name, String slug) {

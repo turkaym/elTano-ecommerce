@@ -47,6 +47,17 @@ public class AdminCategoryService {
 
         ensureSlugUnique(request.slug(), id);
 
+        if (!request.active() && category.isActive()) {
+            long activeProducts = productRepository.countByCategoryIdAndActiveTrueAndDeletedAtIsNull(id);
+            if (activeProducts > 0) {
+                throw new UnprocessableEntityException(
+                        "Category cannot be deactivated while active products are associated",
+                        List.of(new UnprocessableEntityException.FieldError(
+                                "active",
+                                "Deactivate or reassign active products before deactivating this category")));
+            }
+        }
+
         category.setName(request.name().trim());
         category.setSlug(request.slug().trim());
         category.setActive(request.active());

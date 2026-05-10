@@ -4,8 +4,11 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -13,6 +16,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -21,6 +25,9 @@ class AdminSecurityIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     @Test
     void deniesAnonymousAdminAccessWith401() throws Exception {
@@ -78,5 +85,55 @@ class AdminSecurityIntegrationTest {
                         }
                         """))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void keepsAdminCreateAndUpdateProtectedByCsrfInMockMvcFlow() throws Exception {
+        mockMvc.perform(get("/api/admin/categories")
+                .with(httpBasic("admin-user", "admin-pass")))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        MvcResult createResult = mockMvc.perform(post("/api/admin/categories")
+                .with(httpBasic("admin-user", "admin-pass"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "name": "Pistachos",
+                          "slug": "pistachos-admin-csrf-cookie-test",
+                          "active": true
+                        }
+                        """))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        JsonNode createdCategory = objectMapper.readTree(createResult.getResponse().getContentAsString());
+        String categoryId = createdCategory.get("id").asText();
+
+        mockMvc.perform(put("/api/admin/categories/{id}", categoryId)
+                .with(httpBasic("admin-user", "admin-pass"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "name": "Pistachos Premium",
+                          "slug": "pistachos-admin-csrf-cookie-test",
+                          "active": true
+                        }
+                        """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/admin/categories/{id}", categoryId)
+                .with(httpBasic("admin-user", "admin-pass"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "name": "Pistachos Premium",
+                          "slug": "pistachos-admin-csrf-cookie-test",
+                          "active": true
+                        }
+                        """))
+                .andExpect(status().isOk());
     }
 }
