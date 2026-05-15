@@ -183,7 +183,7 @@ describe('App Mercado Pago flow', () => {
     await user.click(screen.getByRole('button', { name: 'Confirmar por WhatsApp' }))
 
     expect(window.open).toHaveBeenCalledWith(
-      'https://wa.me/5491123456789?text=Hola%2C%20confirmo%20ET-2026-0001.',
+      'https://wa.me/5492966659577?text=Hola%2C%20confirmo%20ET-2026-0001.',
       '_blank',
       'noopener,noreferrer',
     )

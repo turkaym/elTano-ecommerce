@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.eltano.ecommerce.catalog.api.dto.PublicCatalogProductResponse;
+import com.eltano.ecommerce.catalog.domain.InventoryPolicy;
 import com.eltano.ecommerce.catalog.domain.ProductImage;
 import com.eltano.ecommerce.catalog.domain.Product;
 import com.eltano.ecommerce.catalog.domain.ProductVariant;
@@ -50,6 +51,7 @@ public class CatalogQueryService {
     }
 
     private PublicCatalogProductResponse toPublicResponse(Product product) {
+        Integer stockAvailableBaseGrams = stockAvailableBaseGrams(product);
         List<PublicCatalogProductResponse.PublicCatalogVariantResponse> variants = product.getVariants().stream()
                 .filter(ProductVariant::isActive)
                 .map(variant -> new PublicCatalogProductResponse.PublicCatalogVariantResponse(
@@ -59,7 +61,7 @@ public class CatalogQueryService {
                         variant.getWeightGrams(),
                         variant.getUnitLabel(),
                         variant.getPrice(),
-                        variant.getStockAvailable(),
+                        publicStockAvailable(product, variant, stockAvailableBaseGrams),
                         variant.getStockReserved(),
                         variant.getAttributesJson()))
                 .toList();
@@ -84,7 +86,30 @@ public class CatalogQueryService {
                 product.getProductType(),
                 product.getInventoryPolicy(),
                 product.getStockBaseGrams(),
+                isBulkWeight(product) ? product.getStockReservedBaseGrams() : null,
+                stockAvailableBaseGrams,
                 images,
                 variants);
+    }
+
+    private Integer stockAvailableBaseGrams(Product product) {
+        if (!isBulkWeight(product) || product.getStockBaseGrams() == null) {
+            return null;
+        }
+        return Math.max(0, product.getStockBaseGrams() - product.getStockReservedBaseGrams());
+    }
+
+    private int publicStockAvailable(Product product, ProductVariant variant, Integer stockAvailableBaseGrams) {
+        if (!isBulkWeight(product)) {
+            return variant.getStockAvailable();
+        }
+        if (stockAvailableBaseGrams == null || variant.getWeightGrams() == null || variant.getWeightGrams() <= 0) {
+            return 0;
+        }
+        return stockAvailableBaseGrams / variant.getWeightGrams();
+    }
+
+    private boolean isBulkWeight(Product product) {
+        return product.getInventoryPolicy() == InventoryPolicy.BULK_WEIGHT;
     }
 }

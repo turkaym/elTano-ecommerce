@@ -14,6 +14,8 @@ function toCatalogListItem(product: CatalogProduct): CatalogListItem | null {
     unitLabel: variant.unitLabel,
     price: Number(variant.price),
     stockAvailable: variant.stockAvailable,
+    stockReserved: variant.stockReserved,
+    weightGrams: variant.weightGrams,
   }))
 
   if (!variants.length) {
@@ -22,7 +24,9 @@ function toCatalogListItem(product: CatalogProduct): CatalogListItem | null {
 
   const minPrice = variants.reduce((lowest, variant) => Math.min(lowest, variant.price), variants[0].price)
   const defaultVariant = variants.find((variant) => variant.stockAvailable > 0) ?? variants[0]
-  const stockAvailable = variants.reduce((total, variant) => total + variant.stockAvailable, 0)
+  const stockAvailable = product.inventoryPolicy === 'BULK_WEIGHT'
+    ? Math.max(0, product.stockAvailableBaseGrams ?? 0)
+    : variants.reduce((total, variant) => total + variant.stockAvailable, 0)
   const isMultiVariant = variants.length > 1
 
   return {
@@ -33,6 +37,7 @@ function toCatalogListItem(product: CatalogProduct): CatalogListItem | null {
     categorySlug: product.categorySlug,
     productType: product.productType,
     inventoryPolicy: product.inventoryPolicy,
+    stockAvailableBaseGrams: product.stockAvailableBaseGrams,
     variants,
     isMultiVariant,
     minPrice,

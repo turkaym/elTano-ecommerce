@@ -1,4 +1,5 @@
 import type { CatalogListItem } from '../../../shared/types/catalog'
+import { FeaturedProductCard, type FeaturedAddToCartPayload } from './FeaturedProductsSection'
 
 interface CatalogEmptyStateProps {
   title: string
@@ -10,13 +11,8 @@ interface CatalogProductGridProps {
   isLoading?: boolean
   emptyTitle: string
   emptyDescription: string
+  onAddToCart?: (payload: FeaturedAddToCartPayload) => void
 }
-
-const currencyFormatter = new Intl.NumberFormat('es-AR', {
-  style: 'currency',
-  currency: 'ARS',
-  maximumFractionDigits: 0,
-})
 
 export function CatalogEmptyState({ title, description }: CatalogEmptyStateProps) {
   return (
@@ -32,6 +28,7 @@ export function CatalogProductGrid({
   isLoading = false,
   emptyTitle,
   emptyDescription,
+  onAddToCart,
 }: CatalogProductGridProps) {
   if (isLoading) {
     return (
@@ -49,20 +46,36 @@ export function CatalogProductGrid({
   return (
     <div className="products-grid">
       {items.map((product) => (
-        <article className="product-card" key={product.id}>
-          <p className="product-category">{product.categoryName}</p>
-          <h3 className="product-name">{product.name}</h3>
-          <p className="product-description">{product.description}</p>
-          <p className="product-unit">{product.unitLabel}</p>
-          <div className="product-footer">
-            <strong className="product-price">
-              {product.isMultiVariant
-                ? `Desde ${currencyFormatter.format(product.minPrice)}`
-                : currencyFormatter.format(product.price)}
-            </strong>
-          </div>
-        </article>
+        onAddToCart ? (
+          <FeaturedProductCard key={product.id} product={product} onAddToCart={onAddToCart} />
+        ) : (
+          <CatalogReadOnlyProductCard key={product.id} product={product} />
+        )
       ))}
     </div>
+  )
+}
+
+const currencyFormatter = new Intl.NumberFormat('es-AR', {
+  style: 'currency',
+  currency: 'ARS',
+  maximumFractionDigits: 0,
+})
+
+function CatalogReadOnlyProductCard({ product }: { product: CatalogListItem }) {
+  return (
+    <article className="product-card">
+      <p className="product-category">{product.categoryName}</p>
+      <h3 className="product-name">{product.name}</h3>
+      <p className="product-description">{product.description}</p>
+      <p className="product-unit">{product.unitLabel}</p>
+      <div className="product-footer">
+        <strong className="product-price">
+          {product.isMultiVariant
+            ? `Desde ${currencyFormatter.format(product.minPrice)}`
+            : currencyFormatter.format(product.price)}
+        </strong>
+      </div>
+    </article>
   )
 }

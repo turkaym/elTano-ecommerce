@@ -1,8 +1,9 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogListItem } from '../../../shared/types/catalog'
+import { CART_STORAGE_KEY } from '../../cart/storage/cartStorage'
 import { ProductsPage } from './ProductsPage'
 
 vi.mock('../services/catalogQueryService', () => ({
@@ -76,6 +77,7 @@ function renderProductsAt(pathname = '/productos') {
 describe('ProductsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     vi.mocked(getCatalogListItems).mockResolvedValue({
       source: 'api',
       items: catalogItems,
@@ -185,5 +187,77 @@ describe('ProductsPage', () => {
     renderProductsAt('/productos')
 
     expect(await screen.findByText(/Desde\s*\$\s*3.900/i)).toBeInTheDocument()
+  })
+
+  it('lets shoppers add an in-stock productos card to the cart', async () => {
+    const user = userEvent.setup()
+    renderProductsAt('/productos')
+
+    await screen.findByText('Almendra tostada')
+    await user.click(within(screen.getByRole('heading', { name: 'Almendra tostada' }).closest('article')!).getByRole('button', { name: 'Agregar' }))
+
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '[]')).toEqual([
+        expect.objectContaining({
+          variantId: 'var-1',
+          productName: 'Almendra tostada',
+          unitLabel: 'bolsa 500 g',
+          price: 6800,
+          quantity: 1,
+          stockAvailable: 10,
+        }),
+      ])
+    })
+  })
+
+  it('supports variant and quantity selection on productos cards and keeps out-of-stock variants unavailable', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
+      source: 'api',
+      items: [
+        {
+          id: 'prod-mix',
+          name: 'Mix semillas',
+          description: 'Multi presentación',
+          categoryName: 'Semillas',
+          categorySlug: 'semillas',
+          productType: 'GRANEL',
+          inventoryPolicy: 'BULK_WEIGHT',
+          stockAvailableBaseGrams: 300,
+          variants: [
+            { id: 'mix-100', unitLabel: '100g', price: 1200, stockAvailable: 3 },
+            { id: 'mix-500', unitLabel: '500g', price: 6000, stockAvailable: 0 },
+          ],
+          isMultiVariant: true,
+          minPrice: 1200,
+          variantId: null,
+          unitLabel: 'Seleccionar presentación',
+          price: 1200,
+          stockAvailable: 3,
+        },
+      ],
+    })
+
+    renderProductsAt('/productos')
+
+    await screen.findByText('Mix semillas')
+    expect(screen.getByRole('option', { name: '500g - sin stock' })).toBeDisabled()
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Mix semillas'), 'mix-100')
+    fireEvent.change(screen.getByLabelText('Cantidad para Mix semillas'), { target: { value: '2' } })
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '[]')).toEqual([
+        expect.objectContaining({
+          variantId: 'mix-100',
+          productName: 'Mix semillas',
+          unitLabel: '100g',
+          price: 1200,
+          quantity: 2,
+          stockAvailable: 3,
+        }),
+      ])
+    })
   })
 })

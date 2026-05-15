@@ -177,8 +177,7 @@ describe('App checkout MVP flow', () => {
 
     const iconContainer = screen.getByLabelText('Accesos de cuenta y carrito')
 
-    expect(within(iconContainer).queryByRole('button')).not.toBeInTheDocument()
-    expect(within(iconContainer).queryByRole('link')).not.toBeInTheDocument()
+    expect(within(iconContainer).queryByLabelText(/cuenta/i)).not.toBeInTheDocument()
   })
 
   it('shows logo in header with graceful fallback text and keeps hero CTA target', async () => {
@@ -287,6 +286,99 @@ describe('App checkout MVP flow', () => {
     })
   })
 
+  it('updates the shared cart badge when adding from productos cards', async () => {
+    const user = userEvent.setup()
+
+    renderAppAt('/productos')
+
+    await screen.findByText('Almendra natural premium')
+    const productCard = screen.getByRole('heading', { name: 'Almendra natural premium' }).closest('article')
+    expect(productCard).not.toBeNull()
+
+    fireEvent.change(within(productCard!).getByLabelText('Cantidad para Almendra natural premium'), {
+      target: { value: '2' },
+    })
+    await user.click(within(productCard!).getByRole('button', { name: 'Agregar' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: 'Ver carrito, 2 items' }),
+      ).toHaveTextContent('2')
+    })
+  })
+
+  it('does not render a header cart badge when the cart is empty', async () => {
+    renderAppAt()
+
+    await screen.findByText('Almendra natural premium')
+
+    expect(screen.getByRole('link', { name: 'Ver carrito, 0 items' })).toBeInTheDocument()
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
+  })
+
+  it('keeps home featured add-to-cart updating the shared cart badge', async () => {
+    const user = userEvent.setup()
+
+    renderAppAt('/')
+
+    await screen.findByText('Almendra natural premium')
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: 'Ver carrito, 1 item' }),
+      ).toHaveTextContent('1')
+    })
+  })
+
+  it('navigates from the header cart icon to the home cart section from productos', async () => {
+    const user = userEvent.setup()
+
+    renderAppAt('/productos')
+
+    await screen.findByText('Almendra natural premium')
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 0 items' }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/')
+      expect(window.location.hash).toBe('#carrito')
+    })
+    expect(screen.getByRole('heading', { name: 'Carrito' })).toHaveFocus()
+  })
+
+  it('does not update the shared cart badge for out-of-stock productos cards', async () => {
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
+      source: 'api',
+      items: [
+        {
+          id: 'prod-out',
+          name: 'Harina sin stock',
+          description: 'No disponible',
+          categoryName: 'Harinas',
+          categorySlug: 'harinas',
+          productType: 'ENVASADO',
+          inventoryPolicy: 'PER_VARIANT',
+          variants: [
+            { id: 'var-out', unitLabel: 'bolsa 500 g', price: 5300, stockAvailable: 0 },
+          ],
+          isMultiVariant: false,
+          minPrice: 5300,
+          variantId: 'var-out',
+          unitLabel: 'bolsa 500 g',
+          price: 5300,
+          stockAvailable: 0,
+        },
+      ],
+    })
+
+    renderAppAt('/productos')
+
+    await screen.findByText('Harina sin stock')
+
+    expect(screen.getByRole('button', { name: 'Sin stock' })).toBeDisabled()
+    expect(within(screen.getByLabelText('Accesos de cuenta y carrito')).queryByText('1')).not.toBeInTheDocument()
+  })
+
   it('does not redirect to WhatsApp when draft API fails', async () => {
     const user = userEvent.setup()
     vi.mocked(createOrderDraft).mockRejectedValueOnce(new Error('backend down'))
@@ -363,7 +455,7 @@ describe('App checkout MVP flow', () => {
     })
 
     expect(window.open).toHaveBeenCalledWith(
-      'https://wa.me/5491123456789?text=Hola%2C%20confirmo%20pedido%20ET-2026-0002',
+      'https://wa.me/5492966659577?text=Hola%2C%20confirmo%20pedido%20ET-2026-0002',
       '_blank',
       'noopener,noreferrer',
     )

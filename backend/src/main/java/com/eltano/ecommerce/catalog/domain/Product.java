@@ -56,6 +56,9 @@ public class Product {
     @Column
     private Integer stockBaseGrams;
 
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int stockReservedBaseGrams;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
@@ -141,6 +144,14 @@ public class Product {
 
     public void setStockBaseGrams(Integer stockBaseGrams) {
         this.stockBaseGrams = stockBaseGrams;
+    }
+
+    public int getStockReservedBaseGrams() {
+        return stockReservedBaseGrams;
+    }
+
+    public void setStockReservedBaseGrams(int stockReservedBaseGrams) {
+        this.stockReservedBaseGrams = stockReservedBaseGrams;
     }
 
     public Category getCategory() {

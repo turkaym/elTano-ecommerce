@@ -57,4 +57,28 @@ describe('useCartStore', () => {
 
     expect(result.current.warning).toBeNull()
   })
+
+  it('caps bulk-weight cart quantity by selected presentation stock availability', () => {
+    const { result } = renderHook(() => useCartStore())
+
+    act(() => {
+      result.current.addItem({
+        ...baseItem,
+        variantId: 'gr-100',
+        unitLabel: '100g',
+        quantity: 3,
+        stockAvailable: 3,
+      })
+      result.current.addItem({
+        ...baseItem,
+        variantId: 'gr-100',
+        unitLabel: '100g',
+        quantity: 1,
+        stockAvailable: 3,
+      })
+    })
+
+    expect(result.current.items).toHaveLength(1)
+    expect(result.current.items[0]?.quantity).toBe(3)
+  })
 })

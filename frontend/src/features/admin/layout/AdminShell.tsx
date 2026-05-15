@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { clearAdminSessionMarker } from '../auth/adminAccess'
 
 const adminNavItems = [
+  { to: '/admin', label: 'Dashboard', end: true },
   { to: '/admin/productos', label: 'Productos' },
   { to: '/admin/categorias', label: 'Categorías' },
   { to: '/admin/pedidos', label: 'Pedidos' },
@@ -28,7 +29,7 @@ export function AdminShell() {
           <ul>
             {adminNavItems.map((item) => (
               <li key={item.to}>
-                <NavLink to={item.to} className={({ isActive }) => `admin-nav-link${isActive ? ' admin-nav-link-active' : ''}`}>
+                <NavLink end={item.end} to={item.to} className={({ isActive }) => `admin-nav-link${isActive ? ' admin-nav-link-active' : ''}`}>
                   {item.label}
                 </NavLink>
               </li>

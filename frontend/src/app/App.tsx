@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { AppRoutes } from './routes/AppRoutes'
 import { PaymentReturnStatus } from '../features/checkout/components/PaymentReturnStatus'
 import { CartPanel } from '../features/cart/components/CartPanel'
@@ -21,7 +21,7 @@ import {
 import type { FeaturedProduct } from '../shared/types/catalog'
 import type { CreateOrderDraftRequest } from '../shared/types/checkout'
 
-const whatsappPhone = '5491123456789'
+const whatsappPhone = '5492966659577'
 const paymentDraftMessageStorageKey = 'checkout-payment-draft-messages'
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -71,6 +71,7 @@ export function App() {
   const providerStatusHint = returnParams.get('status') ?? returnParams.get('result')
   const searchValue = searchParams.get('q') ?? ''
   const isAdminRoute = location.pathname.startsWith('/admin')
+  const cartItemLabel = cart.totals.itemCount === 1 ? 'item' : 'items'
 
   function handleSearchChange(nextValue: string) {
     const nextParams = new URLSearchParams(searchParams)
@@ -108,6 +109,19 @@ export function App() {
       isMounted = false
     }
   }, [])
+
+  useEffect(() => {
+    if (location.pathname !== '/' || location.hash !== '#carrito') {
+      return
+    }
+
+    const cartHeading = document.getElementById('carrito-title')
+    const cartSection = document.getElementById('carrito')
+    if (typeof cartSection?.scrollIntoView === 'function') {
+      cartSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    cartHeading?.focus({ preventScroll: true })
+  }, [location.pathname, location.hash])
 
   function handleAddToCart(payload: FeaturedAddToCartPayload) {
     const selectedProduct = products.find((product) => product.id === payload.productId)
@@ -328,14 +342,29 @@ export function App() {
 
               <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
                 <span aria-hidden="true">👤</span>
-                <span aria-hidden="true">🛒</span>
+                <Link
+                  className="cart-icon-link cart-icon-with-badge"
+                  to="/#carrito"
+                  aria-label={`Ver carrito, ${cart.totals.itemCount} ${cartItemLabel}`}
+                >
+                  <span aria-hidden="true">🛒</span>
+                  {cart.totals.itemCount > 0 ? (
+                    <span className="cart-icon-badge" aria-hidden="true">
+                      {cart.totals.itemCount}
+                    </span>
+                  ) : null}
+                </Link>
               </div>
             </div>
           </header>
         </div>
       ) : null}
 
-      <AppRoutes homeContent={homeContent} checkoutReturnContent={checkoutReturnContent} />
+      <AppRoutes
+        homeContent={homeContent}
+        checkoutReturnContent={checkoutReturnContent}
+        onCatalogAddToCart={cart.addItem}
+      />
     </div>
   )
 }

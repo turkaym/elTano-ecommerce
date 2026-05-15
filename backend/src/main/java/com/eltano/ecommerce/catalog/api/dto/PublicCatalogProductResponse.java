@@ -18,6 +18,8 @@ public record PublicCatalogProductResponse(
         ProductType productType,
         InventoryPolicy inventoryPolicy,
         Integer stockBaseGrams,
+        Integer stockReservedBaseGrams,
+        Integer stockAvailableBaseGrams,
         List<PublicCatalogImageResponse> images,
         List<PublicCatalogVariantResponse> variants) {
 

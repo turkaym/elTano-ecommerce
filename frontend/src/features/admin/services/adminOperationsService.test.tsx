@@ -7,6 +7,7 @@ import {
   deleteAdminProduct,
   getAdminCatalogJobReport,
   getAdminCatalogJobRows,
+  getAdminOrderDetail,
   getAdminImportJobStatus,
   listAdminCatalogJobs,
   listAdminCategories,
@@ -15,6 +16,8 @@ import {
   mapAdminWriteError,
   restoreAdminProduct,
   updateAdminCategory,
+  updateAdminOrderPaymentStatus,
+  updateAdminOrderStatus,
   updateAdminProduct,
   createAdminCategory,
   uploadAdminProductImage,
@@ -127,6 +130,103 @@ describe('admin operations service e2e-like flows', () => {
     expect(orders.items).toHaveLength(1)
     expect(orders.items[0].reference).toBe('ET-2026-0001')
     expect(jobStatus.status).toBe('COMPLETED')
+  })
+
+  it('serializes supported order filters and retrieves order detail contract', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ items: [], page: 2, size: 10, totalElements: 0, totalPages: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'ord-1',
+            reference: 'ET-2026-0007',
+            status: 'PAID',
+            customer: 'Ana Gómez',
+            phone: '11223344',
+            note: 'Tocar timbre',
+            currency: 'ARS',
+            subtotal: 9000,
+            total: 9500,
+            payment: { provider: 'mercadopago', statusDetail: 'approved', externalId: 'pay-1', updatedAt: '2026-05-01T10:00:00Z' },
+            items: [{ id: 'line-1', variantId: 'var-1', productName: 'Nuez', unitLabel: '250g', unitPrice: 4500, quantity: 2, subtotal: 9000 }],
+            createdAt: '2026-05-01T09:00:00Z',
+            updatedAt: '2026-05-01T10:00:00Z',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      )
+
+    const list = await listAdminOrders({
+      status: 'PAID',
+      query: 'ET-2026-A2F8F0',
+      from: '2026-05-01',
+      to: '2026-05-31',
+      page: 2,
+      size: 10,
+    })
+    const detail = await getAdminOrderDetail('ord-1')
+
+    expect(list).toMatchObject({ page: 2, size: 10 })
+    const [listUrl] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(String(listUrl)).toContain('/api/admin/orders?')
+    expect(String(listUrl)).toContain('status=PAID')
+    expect(String(listUrl)).toContain('query=ET-2026-A2F8F0')
+    expect(String(listUrl)).not.toContain('customer=')
+    expect(String(listUrl)).not.toContain('reference=')
+    expect(String(listUrl)).toContain('from=2026-05-01')
+    expect(String(listUrl)).toContain('to=2026-05-31')
+    expect(String(listUrl)).toContain('page=2')
+    expect(String(listUrl)).toContain('size=10')
+    expect(detail.payment?.statusDetail).toBe('approved')
+    expect(detail.items[0]).toMatchObject({ productName: 'Nuez', quantity: 2, subtotal: 9000 })
+    expect(String(vi.mocked(globalThis.fetch).mock.calls[1][0])).toContain('/api/admin/orders/ord-1')
+  })
+
+  it('patches admin order status with JSON payload and CSRF write headers', async () => {
+    document.cookie = 'XSRF-TOKEN=csrf-order-token; path=/'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'ord-1', reference: 'ET-2026-0007', status: 'CANCELLED', customer: 'Ana', subtotal: 9000, total: 9500, items: [], createdAt: '2026-05-01T09:00:00Z', updatedAt: '2026-05-01T10:00:00Z' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const updated = await updateAdminOrderStatus('ord-1', 'CANCELLED')
+
+    expect(updated.status).toBe('CANCELLED')
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(String(url)).toContain('/api/admin/orders/ord-1/status')
+    expect(init?.method).toBe('PATCH')
+    expect(init?.credentials).toBe('include')
+    expect(init?.body).toBe(JSON.stringify({ status: 'CANCELLED' }))
+    expect((init?.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+    expect((init?.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('csrf-order-token')
+  })
+
+  it('patches admin order payment status with JSON payload and CSRF write headers', async () => {
+    document.cookie = 'XSRF-TOKEN=csrf-payment-token; path=/'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'ord-1', reference: 'ET-2026-0007', status: 'PAID', customer: 'Ana', subtotal: 9000, total: 9500, items: [], createdAt: '2026-05-01T09:00:00Z', updatedAt: '2026-05-01T10:00:00Z' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const updated = await updateAdminOrderPaymentStatus('ord-1', 'PAID')
+
+    expect(updated.status).toBe('PAID')
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(String(url)).toContain('/api/admin/orders/ord-1/payment-status')
+    expect(init?.method).toBe('PATCH')
+    expect(init?.credentials).toBe('include')
+    expect(init?.body).toBe(JSON.stringify({ status: 'PAID' }))
+    expect((init?.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+    expect((init?.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('csrf-payment-token')
   })
 
   it('retrieves categories, jobs, rows and report DTOs for diagnostics', async () => {

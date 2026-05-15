@@ -59,6 +59,8 @@ class StorefrontSmokeMvcTest {
                 ProductType.ENVASADO,
                 InventoryPolicy.PER_VARIANT,
                 null,
+                null,
+                null,
                 List.of(new PublicCatalogProductResponse.PublicCatalogImageResponse(
                         UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
                         "https://cdn.example.com/a.jpg",

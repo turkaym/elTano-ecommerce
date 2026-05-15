@@ -54,6 +54,13 @@ const VARIANT_PRESETS: { label: string; amount: string; unit: VariantUnit }[] = 
   { label: 'unidad', amount: '1', unit: 'unidad' },
 ]
 
+const GRANEL_FIXED_PRESENTATIONS = [
+  { label: '100g', weightGrams: 100 },
+  { label: '250g', weightGrams: 250 },
+  { label: '500g', weightGrams: 500 },
+  { label: '1kg', weightGrams: 1000 },
+]
+
 export function AdminProductsPage() {
   const [items, setItems] = useState<AdminProductDto[]>([])
   const [categories, setCategories] = useState<AdminCategoryDto[]>([])
@@ -72,6 +79,8 @@ export function AdminProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [stockFilter, setStockFilter] = useState<StockFilter>('all')
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [stockBaseGrams, setStockBaseGrams] = useState('')
+  const [pricePerKg, setPricePerKg] = useState('')
   const write = useAdminWriteState()
 
   useEffect(() => {
@@ -114,19 +123,24 @@ export function AdminProductsPage() {
     const normalizedName = name.trim()
     const normalizedSlug = slug.trim() || slugify(normalizedName)
     const normalizedDescription = description.trim()
+    const resolvedProductType = resolveProductType(variants)
+    const shouldGenerateGranelVariants = resolvedProductType === 'GRANEL' && Number(pricePerKg) > 0
     const validationErrors = validateProductForm({
       description: normalizedDescription,
       imageUrl: imageUrl.trim(),
       variants,
+      skipVariantPrice: shouldGenerateGranelVariants,
     })
     if (validationErrors.length) {
       write.fail({ message: 'Revisá los datos del producto.', fieldErrors: validationErrors })
       return
     }
 
-    const payloadVariants = variants.map((variant, index) => buildVariantPayload(variant, normalizedSlug, index))
-    const productType = resolveProductType(variants)
+    const productType = resolvedProductType
     const inventoryPolicy = resolveInventoryPolicy(productType)
+    const payloadVariants = shouldGenerateGranelVariants
+      ? buildFixedGranelVariantPayloads(normalizedSlug, Number(pricePerKg))
+      : variants.map((variant, index) => buildVariantPayload(variant, normalizedSlug, index))
     const payload = {
       name: normalizedName,
       slug: normalizedSlug,
@@ -135,7 +149,7 @@ export function AdminProductsPage() {
       categoryId,
       productType,
       inventoryPolicy,
-      stockBaseGrams: resolveStockBaseGrams(inventoryPolicy, payloadVariants),
+      stockBaseGrams: resolveStockBaseGrams(inventoryPolicy, payloadVariants, stockBaseGrams),
       variants: payloadVariants,
       images: [
         {
@@ -205,6 +219,9 @@ export function AdminProductsPage() {
 
   if (status === 'loading') return <AdminLoadingState label="Cargando productos…" />
   if (status === 'error') return <AdminErrorState message="No se pudo cargar productos admin." />
+
+  const currentProductType = resolveProductType(variants)
+  const isGranelProduct = currentProductType === 'GRANEL'
 
   return (
     <section className="admin-page" aria-label="Listado de productos admin">
@@ -316,6 +333,44 @@ export function AdminProductsPage() {
         <fieldset className="admin-card admin-fieldset">
           <legend>Variantes</legend>
           <p className="admin-card-help">Separá precios, cantidades y stock por presentación.</p>
+          {isGranelProduct ? (
+            <div className="admin-card-help" aria-label="Stock granel compartido">
+              <p>El stock granel se administra una sola vez y las presentaciones comparten ese stock base.</p>
+              <div className="admin-form-grid">
+                <label className="admin-field">
+                  <span>Stock total granel en gramos</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={stockBaseGrams}
+                    onChange={(event) => setStockBaseGrams(event.target.value)}
+                    aria-label="Stock total granel en gramos"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>Precio por kg granel</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={pricePerKg}
+                    onChange={(event) => setPricePerKg(event.target.value)}
+                    aria-label="Precio por kg granel"
+                  />
+                </label>
+              </div>
+              <div className="admin-form-grid" aria-label="Precios calculados granel">
+                {GRANEL_FIXED_PRESENTATIONS.map((presentation, index) => (
+                  <div className="admin-field" key={presentation.label} aria-label={`Precio calculado variante ${index + 1}`}>
+                    <span>{presentation.label}</span>
+                    <strong>{formatCurrency(calculateGranelPrice(Number(pricePerKg), presentation.weightGrams))}</strong>
+                    <small>Precio calculado desde precio por kg granel.</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="admin-preset-row" aria-label="Presets de variantes">
             {VARIANT_PRESETS.map((preset) => (
               <button className="btn btn-secondary admin-chip" key={preset.label} type="button" onClick={() => applyVariantPreset(preset)}>
@@ -360,28 +415,38 @@ export function AdminProductsPage() {
                   <option value="unidad">unidad</option>
                 </select>
               </label>
-              <label className="admin-field">
-                <span>Precio variante {index + 1}</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={variant.price}
-                  onChange={(event) => updateVariant(index, { price: event.target.value })}
-                  aria-label={`Precio variante ${index + 1}`}
-                />
-              </label>
-              <label className="admin-field">
-                <span>Stock variante {index + 1}</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={variant.stock}
-                  onChange={(event) => updateVariant(index, { stock: event.target.value })}
-                  aria-label={`Stock variante ${index + 1}`}
-                />
-              </label>
+              {isGranelProduct ? (
+                <div className="admin-field" aria-label={`Precio calculado presentación variante ${index + 1}`}>
+                  <span>Precio calculado variante {index + 1}</span>
+                  <strong>{formatCurrency(calculateVariantPriceFromKg(Number(pricePerKg), variant))}</strong>
+                  <small>El stock de esta presentación sale del stock granel base.</small>
+                </div>
+              ) : (
+                <>
+                  <label className="admin-field">
+                    <span>Precio variante {index + 1}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={variant.price}
+                      onChange={(event) => updateVariant(index, { price: event.target.value })}
+                      aria-label={`Precio variante ${index + 1}`}
+                    />
+                  </label>
+                  <label className="admin-field">
+                    <span>Stock variante {index + 1}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={variant.stock}
+                      onChange={(event) => updateVariant(index, { stock: event.target.value })}
+                      aria-label={`Stock variante ${index + 1}`}
+                    />
+                  </label>
+                </>
+              )}
               <label className="admin-field admin-checkbox-field">
                 <span>Activa variante {index + 1}</span>
                 <input
@@ -521,6 +586,8 @@ export function AdminProductsPage() {
     setImageId(undefined)
     setImagePreviewBroken(false)
     setVariants([{ ...DEFAULT_VARIANT }])
+    setStockBaseGrams('')
+    setPricePerKg('')
     setSelectedCategoryId(categoryId)
     setEditingId(null)
   }
@@ -538,6 +605,8 @@ export function AdminProductsPage() {
     setImageAltText(primaryImage?.altText || item.name)
     setImagePreviewBroken(false)
     setVariants(item.variants?.length ? item.variants.map(variantToFormRow) : [{ ...DEFAULT_VARIANT }])
+    setStockBaseGrams(item.stockBaseGrams == null ? '' : String(item.stockBaseGrams))
+    setPricePerKg('')
   }
 }
 
@@ -570,6 +639,12 @@ function primaryImageUrl(item: AdminProductDto): string {
 }
 
 function variantSummary(item: AdminProductDto): string {
+  if (item.inventoryPolicy === 'BULK_WEIGHT' || item.productType === 'GRANEL') {
+    const stock = item.stockBaseGrams ?? 0
+    const stockLabel = stockStatusLabel(stock >= 1000 ? stock / 1000 : stock)
+    const variants = item.variants?.map((variant) => `${variant.unitLabel || `${variant.weightGrams}g`} · $${variant.price ?? 0}`).join(' | ') || 'Sin presentaciones'
+    return `stock granel ${stock}g${stockLabel ? ` · ${stockLabel}` : ''} · ${variants}`
+  }
   if (!item.variants?.length) return 'Sin variantes'
   return item.variants
     .map((variant) => {
@@ -585,6 +660,7 @@ function validateProductForm(input: {
   description: string
   imageUrl: string
   variants: ProductVariantFormRow[]
+  skipVariantPrice?: boolean
 }): { field: string; message: string }[] {
   const errors: { field: string; message: string }[] = []
   if (!input.description) errors.push({ field: 'description', message: 'Descripción es requerida.' })
@@ -596,7 +672,7 @@ function validateProductForm(input: {
   }
 
   input.variants.forEach((variant) => {
-    if (Number(variant.price) <= 0 || Number.isNaN(Number(variant.price))) {
+    if (!input.skipVariantPrice && (Number(variant.price) <= 0 || Number.isNaN(Number(variant.price)))) {
       errors.push({ field: 'variants', message: 'El precio debe ser mayor a 0.' })
     }
     if (Number(variant.stock) < 0 || Number.isNaN(Number(variant.stock))) {
@@ -608,6 +684,37 @@ function validateProductForm(input: {
   })
 
   return errors
+}
+
+function buildFixedGranelVariantPayloads(slug: string, pricePerKg: number) {
+  return GRANEL_FIXED_PRESENTATIONS.map((presentation) => ({
+    id: undefined,
+    sku: `${slug.toUpperCase()}-${presentation.label.toUpperCase()}`,
+    unitType: 'WEIGHT' as const,
+    weightGrams: presentation.weightGrams,
+    unitLabel: presentation.label,
+    price: calculateGranelPrice(pricePerKg, presentation.weightGrams),
+    stockAvailable: 0,
+    stockReserved: 0,
+    active: true,
+    attributesJson: null,
+  }))
+}
+
+function calculateGranelPrice(pricePerKg: number, weightGrams: number): number {
+  if (!Number.isFinite(pricePerKg) || pricePerKg <= 0) return 0
+  return Math.round((pricePerKg * weightGrams) / 1000)
+}
+
+function calculateVariantPriceFromKg(pricePerKg: number, variant: ProductVariantFormRow): number {
+  const amount = Number(variant.amount)
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  const weightGrams = toWeightGrams(amount, variant.unit) ?? 0
+  return calculateGranelPrice(pricePerKg, weightGrams)
+}
+
+function formatCurrency(value: number): string {
+  return `$${value}`
 }
 
 function buildVariantPayload(variant: ProductVariantFormRow, slug: string, index: number) {
@@ -690,10 +797,12 @@ function stockStatusLabel(stock: number): string {
 }
 
 function hasOutOfStockVariant(item: AdminProductDto): boolean {
+  if (item.inventoryPolicy === 'BULK_WEIGHT' || item.productType === 'GRANEL') return (item.stockBaseGrams ?? 0) < 100
   return item.variants?.some((variant) => (variant.stockAvailable ?? 0) <= 0) ?? false
 }
 
 function hasLowStockVariant(item: AdminProductDto): boolean {
+  if (item.inventoryPolicy === 'BULK_WEIGHT' || item.productType === 'GRANEL') return (item.stockBaseGrams ?? 0) <= LOW_STOCK_THRESHOLD * 1000
   return item.variants?.some((variant) => (variant.stockAvailable ?? 0) <= LOW_STOCK_THRESHOLD) ?? false
 }
 
@@ -713,8 +822,11 @@ function resolveInventoryPolicy(productType: ProductType): InventoryPolicy {
   return productType === 'GRANEL' ? 'BULK_WEIGHT' : 'PER_VARIANT'
 }
 
-function resolveStockBaseGrams(inventoryPolicy: InventoryPolicy, variants: ReturnType<typeof buildVariantPayload>[]): number | null {
+function resolveStockBaseGrams(inventoryPolicy: InventoryPolicy, variants: ReturnType<typeof buildVariantPayload>[], explicitStockBaseGrams = ''): number | null {
   if (inventoryPolicy !== 'BULK_WEIGHT') return 0
+
+  const explicit = Number(explicitStockBaseGrams)
+  if (explicitStockBaseGrams.trim() && Number.isFinite(explicit) && explicit >= 0) return Math.round(explicit)
 
   return variants.reduce((total, variant) => {
     const weightGrams = variant.weightGrams ?? 0

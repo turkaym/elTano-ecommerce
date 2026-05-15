@@ -19,6 +19,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.mock.web.MockMultipartFile;
 
 import com.eltano.ecommerce.catalog.domain.Category;
+import com.eltano.ecommerce.catalog.domain.InventoryPolicy;
+import com.eltano.ecommerce.catalog.domain.Product;
+import com.eltano.ecommerce.catalog.domain.ProductType;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
 import com.eltano.ecommerce.catalog.repository.ProductRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -219,6 +222,28 @@ class AdminProductControllerIntegrationTest {
                 .with(httpBasic("storefront-user", "storefront-pass"))
                 .with(csrf()))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void listIncludesGranelReservedBaseGrams() throws Exception {
+        Category category = createCategory();
+        Product product = new Product();
+        product.setName("Almendra a granel");
+        product.setSlug("almendra-granel");
+        product.setDescription("desc");
+        product.setActive(true);
+        product.setCategory(category);
+        product.setProductType(ProductType.GRANEL);
+        product.setInventoryPolicy(InventoryPolicy.BULK_WEIGHT);
+        product.setStockBaseGrams(5000);
+        product.setStockReservedBaseGrams(750);
+        productRepository.save(product);
+
+        mockMvc.perform(get("/api/admin/products")
+                .with(httpBasic("admin-user", "admin-pass")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].stockBaseGrams").value(5000))
+                .andExpect(jsonPath("$[0].stockReservedBaseGrams").value(750));
     }
 
     private Category createCategory() {

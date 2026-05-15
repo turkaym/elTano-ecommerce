@@ -21,6 +21,8 @@ import com.eltano.ecommerce.catalog.domain.ProductImage;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
 import com.eltano.ecommerce.catalog.repository.ProductRepository;
 
+import jakarta.persistence.Column;
+
 @SpringBootTest(properties = "app.catalog.seed-on-empty=false")
 @ActiveProfiles("test")
 class AdminCatalogMigrationTest {
@@ -41,6 +43,26 @@ class AdminCatalogMigrationTest {
         assertTrue(migration.contains("create table if not exists product_images"));
         assertTrue(migration.contains("uk_product_images_product_sort_order"));
         assertTrue(migration.contains("idx_product_images_primary"));
+    }
+
+    @Test
+    void migrationV19BackfillsReservedStockBeforeNotNullConstraint() throws Exception {
+        String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_9__bulk_stock_reservations.sql"));
+
+        assertTrue(migration.contains("add column if not exists stock_reserved_base_grams integer"));
+        assertTrue(migration.contains("alter column stock_reserved_base_grams set default 0"));
+        assertTrue(migration.contains("update products"));
+        assertTrue(migration.contains("set stock_reserved_base_grams = 0"));
+        assertTrue(migration.contains("where stock_reserved_base_grams is null"));
+        assertTrue(migration.contains("alter column stock_reserved_base_grams set not null"));
+    }
+
+    @Test
+    void productReservedStockMappingAllowsHibernateUpdateToCreateBackfilledColumn() throws Exception {
+        Column reservedStockColumn = Product.class.getDeclaredField("stockReservedBaseGrams").getAnnotation(Column.class);
+
+        assertEquals(false, reservedStockColumn.nullable());
+        assertTrue(reservedStockColumn.columnDefinition().contains("default 0"));
     }
 
     @Test

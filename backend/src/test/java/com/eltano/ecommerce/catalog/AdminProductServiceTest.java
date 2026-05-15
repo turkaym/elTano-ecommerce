@@ -1,12 +1,13 @@
 package com.eltano.ecommerce.catalog;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -158,6 +159,38 @@ class AdminProductServiceTest {
         assertEquals(ProductType.ENVASADO, existing.getProductType());
         assertEquals(InventoryPolicy.PER_VARIANT, existing.getInventoryPolicy());
         verify(productRepository, never()).save(any(Product.class));
+    }
+
+    @Test
+    void listMapsGranelReservedBaseGrams() {
+        Product product = product(UUID.randomUUID());
+        product.setProductType(ProductType.GRANEL);
+        product.setInventoryPolicy(InventoryPolicy.BULK_WEIGHT);
+        product.setStockBaseGrams(5000);
+        product.setStockReservedBaseGrams(750);
+        when(productRepository.findAllWithRelations()).thenReturn(List.of(product));
+
+        var responses = adminProductService.list();
+
+        assertEquals(1, responses.size());
+        assertEquals(5000, responses.get(0).stockBaseGrams());
+        assertEquals(750, responses.get(0).stockReservedBaseGrams());
+        verifyNoInteractions(productVariantRepository, categoryRepository);
+    }
+
+    @Test
+    void listDefaultsMissingGranelReservedBaseGramsToZero() {
+        Product product = product(UUID.randomUUID());
+        product.setProductType(ProductType.GRANEL);
+        product.setInventoryPolicy(InventoryPolicy.BULK_WEIGHT);
+        product.setStockBaseGrams(5000);
+        when(productRepository.findAllWithRelations()).thenReturn(List.of(product));
+
+        var responses = adminProductService.list();
+
+        assertEquals(1, responses.size());
+        assertEquals(5000, responses.get(0).stockBaseGrams());
+        assertEquals(0, responses.get(0).stockReservedBaseGrams());
     }
 
     private Product product(UUID productId) {

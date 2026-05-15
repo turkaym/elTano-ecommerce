@@ -26,9 +26,9 @@ export function CartPanel({
   onClear,
 }: CartPanelProps) {
   return (
-    <section className="section" aria-labelledby="carrito-title">
+    <section id="carrito" className="section" aria-labelledby="carrito-title">
       <div className="section-header section-header-inline">
-        <h2 id="carrito-title">Carrito</h2>
+        <h2 id="carrito-title" tabIndex={-1}>Carrito</h2>
         <span className="cart-count">{totals.itemCount} item(s)</span>
       </div>
 

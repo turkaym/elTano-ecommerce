@@ -15,6 +15,7 @@ public record AdminOrderListResponse(
             String reference,
             String status,
             String customer,
+            String paymentStatus,
             java.math.BigDecimal total,
             java.time.Instant createdAt) {
     }

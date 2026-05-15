@@ -3,9 +3,7 @@ package com.eltano.ecommerce.catalog.config;
 import java.nio.file.Path;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
-@Component
 @ConfigurationProperties(prefix = "app.uploads.product-images")
 public class ProductImageUploadProperties {
 

@@ -28,7 +28,7 @@ describe('AppRoutes admin nested routes', () => {
     )
   }
 
-  it('shows admin loading boundaries then settles on empty products state', async () => {
+  it('shows admin loading boundaries then settles on the dashboard landing page', async () => {
     let resolveBootstrap: ((value: 'authenticated') => void) | undefined
     const bootstrapPromise = new Promise<'authenticated'>((resolve) => {
       resolveBootstrap = resolve
@@ -41,28 +41,43 @@ describe('AppRoutes admin nested routes', () => {
 
     const bootstrapSpy = vi.spyOn(adminAccess, 'bootstrapAdminSession').mockReturnValue(bootstrapPromise)
     const listSpy = vi.spyOn(adminOperationsService, 'listAdminProducts').mockReturnValue(productsPromise)
+    const ordersSpy = vi.spyOn(adminOperationsService, 'listAdminOrders').mockResolvedValue({
+      items: [],
+      page: 0,
+      size: 8,
+      totalElements: 0,
+      totalPages: 0,
+    })
 
     renderAdminRoutes()
 
     expect(await screen.findByRole('heading', { name: 'Verificando acceso admin…' })).toBeInTheDocument()
     resolveBootstrap?.('authenticated')
     await waitForElementToBeRemoved(() => screen.queryByRole('heading', { name: 'Verificando acceso admin…' }))
-    expect(await screen.findByText('Cargando productos…')).toBeInTheDocument()
+    expect(await screen.findByText('Cargando dashboard admin…')).toBeInTheDocument()
     resolveProducts?.([])
-    await waitForElementToBeRemoved(() => screen.queryByText('Cargando productos…'))
+    await waitForElementToBeRemoved(() => screen.queryByText('Cargando dashboard admin…'))
 
-    expect(await screen.findByRole('heading', { name: 'Sin productos' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Dashboard admin' })).toBeInTheDocument()
     expect(bootstrapSpy).toHaveBeenCalledTimes(1)
     expect(listSpy).toHaveBeenCalledTimes(1)
+    expect(ordersSpy).toHaveBeenCalledWith({ page: 0, size: 8 })
   })
 
   it('isolates seam mocks to avoid reused state between tests', async () => {
     const bootstrapSpy = vi.spyOn(adminAccess, 'bootstrapAdminSession').mockResolvedValue('authenticated')
     const listSpy = vi.spyOn(adminOperationsService, 'listAdminProducts').mockResolvedValue([])
+    vi.spyOn(adminOperationsService, 'listAdminOrders').mockResolvedValue({
+      items: [],
+      page: 0,
+      size: 8,
+      totalElements: 0,
+      totalPages: 0,
+    })
 
     renderAdminRoutes()
 
-    expect(await screen.findByRole('heading', { name: 'Sin productos' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Dashboard admin' })).toBeInTheDocument()
     expect(bootstrapSpy).toHaveBeenCalledTimes(1)
     expect(listSpy).toHaveBeenCalledTimes(1)
   })

@@ -105,6 +105,42 @@ class OrderDraftServiceTest {
     }
 
     @Test
+    void createDraftRejectsBulkWeightCartWhenCombinedPresentationsExceedSharedAvailableGrams() {
+        orderDraftService = new OrderDraftService(
+                productVariantRepository,
+                orderDraftRepository,
+                mercadoPagoClient,
+                new InventoryPolicyService());
+        Product product = new Product();
+        product.setName("Almendra");
+        product.setInventoryPolicy(com.eltano.ecommerce.catalog.domain.InventoryPolicy.BULK_WEIGHT);
+        product.setProductType(com.eltano.ecommerce.catalog.domain.ProductType.GRANEL);
+        product.setStockBaseGrams(300);
+        product.setStockReservedBaseGrams(0);
+
+        ProductVariant hundredGrams = variantWith("Almendra", 1200, 0, 0);
+        hundredGrams.setProduct(product);
+        hundredGrams.setWeightGrams(100);
+        hundredGrams.setUnitLabel("100g");
+        ProductVariant twoHundredFiftyGrams = variantWith("Almendra", 3000, 0, 0);
+        twoHundredFiftyGrams.setProduct(product);
+        twoHundredFiftyGrams.setWeightGrams(250);
+        twoHundredFiftyGrams.setUnitLabel("250g");
+        when(productVariantRepository.findAllByIdInForUpdate(anyList()))
+                .thenReturn(List.of(hundredGrams, twoHundredFiftyGrams));
+
+        assertThrows(ConflictException.class, () -> orderDraftService.createDraft(new OrderDraftService.Command(
+                "Juan Perez",
+                "+5491112345678",
+                null,
+                List.of(
+                        new OrderDraftService.CommandItem(hundredGrams.getId(), 1),
+                        new OrderDraftService.CommandItem(twoHundredFiftyGrams.getId(), 1)))));
+        assertEquals(100, product.getStockReservedBaseGrams());
+        verify(orderDraftRepository, never()).save(any(OrderDraft.class));
+    }
+
+    @Test
     void createDraftSupportsLegacyNullTypeAndPolicyProducts() {
         stubPersistenceLayer();
         Product product = new Product();

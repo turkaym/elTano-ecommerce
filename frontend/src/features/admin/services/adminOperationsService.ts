@@ -31,13 +31,48 @@ function adminAuthHeader(): Record<string, string> {
   }
 }
 
-interface AdminOrderSummary {
+export interface AdminOrderSummary {
   id: string
   reference: string
   status: string
   customer: string
-  total: string
+  paymentStatus?: string | null
+  total: number | string
   createdAt: string
+}
+
+export interface AdminOrderDetailItem {
+  id: string
+  variantId: string
+  productName: string
+  unitLabel: string
+  unitPrice: number | string
+  quantity: number
+  subtotal: number | string
+}
+
+export interface AdminOrderPaymentInfo {
+  provider?: string | null
+  preferenceId?: string | null
+  externalId?: string | null
+  statusDetail?: string | null
+  updatedAt?: string | null
+}
+
+export interface AdminOrderDetailResponse {
+  id: string
+  reference: string
+  status: string
+  customer: string
+  phone?: string | null
+  note?: string | null
+  currency?: string | null
+  subtotal: number | string
+  total: number | string
+  payment?: AdminOrderPaymentInfo | null
+  items: AdminOrderDetailItem[]
+  createdAt: string
+  updatedAt: string
 }
 
 export interface AdminOrderListResponse {
@@ -98,6 +133,7 @@ export interface AdminProductDto {
   productType?: 'GRANEL' | 'ENVASADO' | 'UNIDAD' | null
   inventoryPolicy?: 'BULK_WEIGHT' | 'PER_VARIANT' | null
   stockBaseGrams?: number | null
+  stockReservedBaseGrams?: number | null
   variants?: AdminProductVariantDto[]
   images?: AdminProductImageDto[]
   deletedAt?: string | null
@@ -201,12 +237,41 @@ export async function uploadAdminProductImage(file: File): Promise<AdminProductI
   return (await response.json()) as AdminProductImageUploadResult
 }
 
-export async function listAdminOrders(params: { page?: number; size?: number } = {}) {
+export interface AdminOrderListParams {
+  status?: string
+  query?: string
+  customer?: string
+  reference?: string
+  from?: string
+  to?: string
+  page?: number
+  size?: number
+}
+
+export async function listAdminOrders(params: AdminOrderListParams = {}) {
   const query = new URLSearchParams()
+  if (params.status) query.set('status', params.status)
+  if (params.from) query.set('from', params.from)
+  if (params.to) query.set('to', params.to)
+  if (params.query) query.set('query', params.query)
+  if (params.customer) query.set('customer', params.customer)
+  if (params.reference) query.set('reference', params.reference)
   if (params.page !== undefined) query.set('page', String(params.page))
   if (params.size !== undefined) query.set('size', String(params.size))
   const suffix = query.size > 0 ? `?${query.toString()}` : ''
   return getJson<AdminOrderListResponse>(`/api/admin/orders${suffix}`)
+}
+
+export async function getAdminOrderDetail(orderId: string) {
+  return getJson<AdminOrderDetailResponse>(`/api/admin/orders/${orderId}`)
+}
+
+export async function updateAdminOrderStatus(orderId: string, status: string) {
+  return patchJson<{ status: string }, AdminOrderDetailResponse>(`/api/admin/orders/${orderId}/status`, { status })
+}
+
+export async function updateAdminOrderPaymentStatus(orderId: string, status: 'PAID') {
+  return patchJson<{ status: string }, AdminOrderDetailResponse>(`/api/admin/orders/${orderId}/payment-status`, { status })
 }
 
 export async function listAdminCatalogJobs() {
@@ -308,6 +373,25 @@ async function putJson<TRequest, TResponse>(path: string, payload: TRequest): Pr
       'Content-Type': 'application/json',
       Accept: 'application/json',
       ...buildAdminWriteHeaders(path, 'PUT', adminAuthHeader()),
+    },
+    body: JSON.stringify(payload),
+  })
+
+  if (!response.ok) {
+    throw await mapResponseToClientError(response)
+  }
+
+  return (await response.json()) as TResponse
+}
+
+async function patchJson<TRequest, TResponse>(path: string, payload: TRequest): Promise<TResponse> {
+  const response = await fetch(joinUrl(API_URL, path), {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...buildAdminWriteHeaders(path, 'PATCH', adminAuthHeader()),
     },
     body: JSON.stringify(payload),
   })

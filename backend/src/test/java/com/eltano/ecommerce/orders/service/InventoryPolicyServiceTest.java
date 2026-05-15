@@ -27,12 +27,13 @@ class InventoryPolicyServiceTest {
     }
 
     @Test
-    void reserveUsesBulkWeightAndDecrementsBaseGrams() {
+    void reserveUsesBulkWeightAndIncrementsSharedReservedGramsWithoutDeductingBase() {
         ProductVariant variant = bulkVariant(500, 5000);
 
         inventoryPolicyService.reserve(variant, 2);
 
-        assertEquals(4000, variant.getProduct().getStockBaseGrams());
+        assertEquals(5000, variant.getProduct().getStockBaseGrams());
+        assertEquals(1000, variant.getProduct().getStockReservedBaseGrams());
     }
 
     @Test
@@ -48,7 +49,8 @@ class InventoryPolicyServiceTest {
 
         inventoryPolicyService.reserve(variant, 2);
 
-        assertEquals(0, variant.getProduct().getStockBaseGrams());
+        assertEquals(1000, variant.getProduct().getStockBaseGrams());
+        assertEquals(1000, variant.getProduct().getStockReservedBaseGrams());
     }
 
     @Test
@@ -96,7 +98,30 @@ class InventoryPolicyServiceTest {
         inventoryPolicyService.reserve(variant, 2);
         inventoryPolicyService.release(variant, 1);
 
-        assertEquals(6000, variant.getProduct().getStockBaseGrams());
+        assertEquals(7000, variant.getProduct().getStockBaseGrams());
+        assertEquals(1000, variant.getProduct().getStockReservedBaseGrams());
+    }
+
+    @Test
+    void finalizeBulkWeightDeductsReservedGramsFromSharedBaseStock() {
+        ProductVariant variant = bulkVariant(250, 2000);
+
+        inventoryPolicyService.reserve(variant, 3);
+        inventoryPolicyService.finalizeReservation(variant, 2);
+
+        assertEquals(1500, variant.getProduct().getStockBaseGrams());
+        assertEquals(250, variant.getProduct().getStockReservedBaseGrams());
+    }
+
+    @Test
+    void reserveBulkWeightChecksSharedAvailabilityMinusExistingReservations() {
+        ProductVariant variant = bulkVariant(500, 1500);
+
+        inventoryPolicyService.reserve(variant, 2);
+
+        assertThrows(ConflictException.class, () -> inventoryPolicyService.reserve(variant, 2));
+        assertEquals(1500, variant.getProduct().getStockBaseGrams());
+        assertEquals(1000, variant.getProduct().getStockReservedBaseGrams());
     }
 
     @Test
@@ -151,6 +176,7 @@ class InventoryPolicyServiceTest {
         product.setProductType(ProductType.GRANEL);
         product.setInventoryPolicy(InventoryPolicy.BULK_WEIGHT);
         product.setStockBaseGrams(stockBaseGrams);
+        product.setStockReservedBaseGrams(0);
 
         ProductVariant variant = new ProductVariant();
         ReflectionTestUtils.setField(variant, "id", UUID.randomUUID());

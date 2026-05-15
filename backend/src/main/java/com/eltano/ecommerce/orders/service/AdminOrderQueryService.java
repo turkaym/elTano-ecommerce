@@ -3,7 +3,7 @@ package com.eltano.ecommerce.orders.service;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.eltano.ecommerce.common.api.ResourceNotFoundException;
 import com.eltano.ecommerce.orders.domain.OrderDraft;
+import com.eltano.ecommerce.orders.domain.OrderDraftLine;
 import com.eltano.ecommerce.orders.domain.OrderDraftStatus;
 import com.eltano.ecommerce.orders.repository.OrderDraftRepository;
 
@@ -21,6 +22,7 @@ public class AdminOrderQueryService {
 
     private static final Instant MIN_CREATED_AT = Instant.EPOCH;
     private static final Instant MAX_CREATED_AT_EXCLUSIVE = Instant.parse("9999-12-31T00:00:00Z");
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("America/Argentina/Buenos_Aires");
 
     private final OrderDraftRepository orderDraftRepository;
 
@@ -35,6 +37,7 @@ public class AdminOrderQueryService {
             String to,
             String customer,
             String reference,
+            String query,
             Pageable pageable) {
         OrderDraftStatus parsedStatus = parseStatus(status);
         Instant fromInstant = parseFrom(from);
@@ -46,6 +49,7 @@ public class AdminOrderQueryService {
                 toInstantExclusive,
                 normalize(customer),
                 normalize(reference),
+                normalize(query),
                 pageable);
 
         return new OrderListResult(
@@ -58,7 +62,7 @@ public class AdminOrderQueryService {
 
     @Transactional(readOnly = true)
     public OrderDetail getOrder(UUID orderId) {
-        OrderDraft draft = orderDraftRepository.findById(orderId)
+        OrderDraft draft = orderDraftRepository.findWithLinesById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
 
         return new OrderDetail(
@@ -71,6 +75,13 @@ public class AdminOrderQueryService {
                 draft.getCurrency(),
                 draft.getSubtotal(),
                 draft.getTotal(),
+                new PaymentInfo(
+                        draft.getPaymentProvider(),
+                        draft.getPaymentPreferenceId(),
+                        draft.getPaymentExternalId(),
+                        draft.getPaymentStatusDetail(),
+                        draft.getPaymentUpdatedAt()),
+                draft.getLines().stream().map(this::toLineItem).toList(),
                 draft.getCreatedAt(),
                 draft.getUpdatedAt());
     }
@@ -81,8 +92,20 @@ public class AdminOrderQueryService {
                 draft.getReference(),
                 draft.getStatus().name(),
                 draft.getCustomerName(),
+                draft.getPaymentStatusDetail(),
                 draft.getTotal(),
                 draft.getCreatedAt());
+    }
+
+    private OrderLineItem toLineItem(OrderDraftLine line) {
+        return new OrderLineItem(
+                line.getId(),
+                line.getVariant().getId(),
+                line.getProductName(),
+                line.getUnitLabel(),
+                line.getUnitPrice(),
+                line.getQuantity(),
+                line.getLineTotal());
     }
 
     private String normalize(String value) {
@@ -105,7 +128,7 @@ public class AdminOrderQueryService {
         if (normalized == null) {
             return MIN_CREATED_AT;
         }
-        return LocalDate.parse(normalized).atStartOfDay().toInstant(ZoneOffset.UTC);
+        return LocalDate.parse(normalized).atStartOfDay(BUSINESS_ZONE).toInstant();
     }
 
     private Instant parseToExclusive(String to) {
@@ -113,7 +136,7 @@ public class AdminOrderQueryService {
         if (normalized == null) {
             return MAX_CREATED_AT_EXCLUSIVE;
         }
-        return LocalDate.parse(normalized).plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
+        return LocalDate.parse(normalized).plusDays(1).atStartOfDay(BUSINESS_ZONE).toInstant();
     }
 
     public record OrderListItem(
@@ -121,6 +144,7 @@ public class AdminOrderQueryService {
             String reference,
             String status,
             String customer,
+            String paymentStatus,
             BigDecimal total,
             Instant createdAt) {
     }
@@ -143,7 +167,27 @@ public class AdminOrderQueryService {
             String currency,
             BigDecimal subtotal,
             BigDecimal total,
+            PaymentInfo payment,
+            java.util.List<OrderLineItem> items,
             Instant createdAt,
             Instant updatedAt) {
+    }
+
+    public record PaymentInfo(
+            String provider,
+            String preferenceId,
+            String externalId,
+            String statusDetail,
+            Instant updatedAt) {
+    }
+
+    public record OrderLineItem(
+            UUID id,
+            UUID variantId,
+            String productName,
+            String unitLabel,
+            BigDecimal unitPrice,
+            int quantity,
+            BigDecimal subtotal) {
     }
 }

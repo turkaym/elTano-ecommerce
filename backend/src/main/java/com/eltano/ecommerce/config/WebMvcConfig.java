@@ -1,6 +1,7 @@
 package com.eltano.ecommerce.config;
 
 import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -9,6 +10,7 @@ import com.eltano.ecommerce.audit.api.AdminAuditInterceptor;
 import com.eltano.ecommerce.catalog.config.ProductImageUploadProperties;
 
 @Configuration
+@EnableConfigurationProperties(ProductImageUploadProperties.class)
 public class WebMvcConfig implements WebMvcConfigurer {
 
     private final AdminAuditInterceptor adminAuditInterceptor;

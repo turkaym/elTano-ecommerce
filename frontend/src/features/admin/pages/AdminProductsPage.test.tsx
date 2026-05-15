@@ -21,6 +21,9 @@ vi.mock('../services/adminOperationsService', () => ({
       description: 'Nuez mariposa premium',
       categoryId: 'c-1',
       categoryName: 'Secos',
+      productType: 'GRANEL',
+      inventoryPolicy: 'BULK_WEIGHT',
+      stockBaseGrams: 6000,
       active: true,
       variants: [
         {
@@ -76,6 +79,7 @@ describe('AdminProductsPage', () => {
     expect(within(filters).getByLabelText(/Filtrar productos por stock/i)).toBeInTheDocument()
 
     expect(screen.getByRole('article', { name: /Producto Nuez/i })).toHaveTextContent('Estado: Activo')
+    expect(screen.getByRole('article', { name: /Producto Nuez/i })).toHaveTextContent('stock granel 6000g')
     expect(screen.getByRole('button', { name: /Desactivar producto Nuez/i })).toBeInTheDocument()
   })
 
@@ -99,7 +103,7 @@ describe('AdminProductsPage', () => {
     expect(screen.getByText('Sin productos')).toBeInTheDocument()
   })
 
-  it('creates product with explicit category, description, image and priced stock variant', async () => {
+  it('creates packaged product with explicit category, description, image and editable priced stock variant', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Durazno' } })
@@ -110,7 +114,7 @@ describe('AdminProductsPage', () => {
     fireEvent.change(screen.getByLabelText(/Texto alternativo imagen/i), { target: { value: 'Durazno amarillo' } })
     fireEvent.change(screen.getByLabelText(/SKU variante 1/i), { target: { value: 'DUR-500G' } })
     fireEvent.change(screen.getByLabelText(/Cantidad variante 1/i), { target: { value: '500' } })
-    fireEvent.change(screen.getByLabelText(/Unidad variante 1/i), { target: { value: 'g' } })
+    fireEvent.change(screen.getByLabelText(/Unidad variante 1/i), { target: { value: 'ml' } })
     fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '3200' } })
     fireEvent.change(screen.getByLabelText(/Stock variante 1/i), { target: { value: '12' } })
     fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
@@ -123,15 +127,15 @@ describe('AdminProductsPage', () => {
           categoryId: 'c-2',
           description: 'Durazno fresco de estación',
           active: true,
-          productType: 'GRANEL',
-          inventoryPolicy: 'BULK_WEIGHT',
-          stockBaseGrams: 6000,
+          productType: 'ENVASADO',
+          inventoryPolicy: 'PER_VARIANT',
+          stockBaseGrams: 0,
           variants: [
             expect.objectContaining({
               sku: 'DUR-500G',
-              unitType: 'WEIGHT',
-              weightGrams: 500,
-              unitLabel: '500g',
+              unitType: 'UNIT',
+              weightGrams: null,
+              unitLabel: '500ml',
               price: 3200,
               stockAvailable: 12,
               stockReserved: 0,
@@ -153,6 +157,70 @@ describe('AdminProductsPage', () => {
     expect(vi.mocked(listAdminProducts).mock.calls.length).toBeGreaterThan(1)
   })
 
+  it('uses shared granel stock and price per kg to generate fixed calculated presentations without per-variant stock buckets', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+    fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Almendra' } })
+    fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Almendra tostada' } })
+    fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: 'https://cdn.test/almendra.jpg' } })
+    fireEvent.change(screen.getByLabelText(/Stock total granel en gramos/i), { target: { value: '5000' } })
+    fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '3000' } })
+
+    expect(screen.getByText(/El stock granel se administra una sola vez/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Stock variante 1/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Precio variante 1/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/Precio calculado variante 1/i)).toHaveTextContent('$300')
+    expect(screen.getByLabelText(/Precio calculado variante 2/i)).toHaveTextContent('$750')
+    expect(screen.getByLabelText(/Precio calculado variante 3/i)).toHaveTextContent('$1500')
+    expect(screen.getByLabelText(/Precio calculado variante 4/i)).toHaveTextContent('$3000')
+
+    fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
+
+    await waitFor(() =>
+      expect(vi.mocked(createAdminProduct)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productType: 'GRANEL',
+          inventoryPolicy: 'BULK_WEIGHT',
+          stockBaseGrams: 5000,
+          variants: [
+            expect.objectContaining({ unitLabel: '100g', weightGrams: 100, price: 300, stockAvailable: 0 }),
+            expect.objectContaining({ unitLabel: '250g', weightGrams: 250, price: 750, stockAvailable: 0 }),
+            expect.objectContaining({ unitLabel: '500g', weightGrams: 500, price: 1500, stockAvailable: 0 }),
+            expect.objectContaining({ unitLabel: '1kg', weightGrams: 1000, price: 3000, stockAvailable: 0 }),
+          ],
+        }),
+      ),
+    )
+  })
+
+  it('recalculates granel calculated variant prices when price per kg changes', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '3000' } })
+    expect(screen.getByLabelText(/Precio calculado variante 4/i)).toHaveTextContent('$3000')
+    expect(screen.getByLabelText(/Precio calculado variante 3/i)).toHaveTextContent('$1500')
+
+    fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '4200' } })
+    expect(screen.getByLabelText(/Precio calculado variante 4/i)).toHaveTextContent('$4200')
+    expect(screen.getByLabelText(/Precio calculado variante 3/i)).toHaveTextContent('$2100')
+    expect(screen.getByLabelText(/Precio calculado variante 2/i)).toHaveTextContent('$1050')
+    expect(screen.getByLabelText(/Precio calculado variante 1/i)).toHaveTextContent('$420')
+  })
+
+  it('keeps stock and price inputs editable for envasado and unidad variants', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    fireEvent.change(screen.getByLabelText(/Unidad variante 1/i), { target: { value: 'ml' } })
+    expect(screen.getByLabelText(/Precio variante 1/i)).toBeEnabled()
+    expect(screen.getByLabelText(/Stock variante 1/i)).toBeEnabled()
+
+    fireEvent.change(screen.getByLabelText(/Unidad variante 1/i), { target: { value: 'unidad' } })
+    expect(screen.getByLabelText(/Precio variante 1/i)).toBeEnabled()
+    expect(screen.getByLabelText(/Stock variante 1/i)).toBeEnabled()
+  })
+
   it('keeps pending state and blocks duplicate submit until create resolves', async () => {
     let resolveCreate: ((value: { id: string; name: string }) => void) | undefined
     vi.mocked(createAdminProduct).mockImplementationOnce(
@@ -168,7 +236,7 @@ describe('AdminProductsPage', () => {
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Pera' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Pera orgánica' } })
     fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: 'https://cdn.test/pera.jpg' } })
-    fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '1500' } })
+    fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '1500' } })
     const submitButton = screen.getByRole('button', { name: /Crear producto/i })
     fireEvent.click(submitButton)
     fireEvent.click(submitButton)
@@ -199,9 +267,9 @@ describe('AdminProductsPage', () => {
             {
               id: 'v-1',
               sku: 'NUEZ-250G',
-              unitType: 'WEIGHT',
-              weightGrams: 250,
-              unitLabel: '250g',
+              unitType: 'UNIT',
+              weightGrams: null,
+              unitLabel: '250ml',
               price: 2500,
               stockAvailable: 8,
               stockReserved: 1,
@@ -295,12 +363,12 @@ describe('AdminProductsPage', () => {
     await screen.findByText('Nuez')
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Yerba' } })
-    fireEvent.click(screen.getByRole('button', { name: /Preset 250g/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Preset 500ml/i }))
     fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '2100' } })
     fireEvent.change(screen.getByLabelText(/Stock variante 1/i), { target: { value: '7' } })
-    fireEvent.click(screen.getByRole('button', { name: /Preset 250g/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Preset 500ml/i }))
 
-    expect(screen.getByLabelText(/SKU variante 1/i)).toHaveValue('YERBA-250G')
+    expect(screen.getByLabelText(/SKU variante 1/i)).toHaveValue('YERBA-500ML')
     expect(screen.getByLabelText(/Precio variante 1/i)).toHaveValue(2100)
     expect(screen.getByLabelText(/Stock variante 1/i)).toHaveValue(7)
     expect(screen.queryByLabelText(/SKU variante 2/i)).not.toBeInTheDocument()
@@ -344,7 +412,7 @@ describe('AdminProductsPage', () => {
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Almendra' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Almendra natural' } })
-    fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '4200' } })
+    fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '4200' } })
     const file = new File(['image-bytes'], 'almendra.png', { type: 'image/png' })
     fireEvent.change(screen.getByLabelText(/Subir imagen principal/i), { target: { files: [file] } })
 
@@ -406,7 +474,7 @@ describe('AdminProductsPage', () => {
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Arroz' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Arroz integral' } })
     fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: 'not-a-url' } })
-    fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '1200' } })
+    fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '1200' } })
     fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
 
     expect(await screen.findByText('Imágenes: Ingresá una URL de imagen válida.')).toBeInTheDocument()
@@ -420,6 +488,7 @@ describe('AdminProductsPage', () => {
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Arroz' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Arroz integral' } })
     fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText(/Unidad variante 1/i), { target: { value: 'ml' } })
     fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '0' } })
     fireEvent.change(screen.getByLabelText(/Stock variante 1/i), { target: { value: '-1' } })
     fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
@@ -448,7 +517,7 @@ describe('AdminProductsPage', () => {
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Pera' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Pera orgánica' } })
     fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: 'https://cdn.test/pera.jpg' } })
-    fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '1500' } })
+    fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '1500' } })
     fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo guardar producto.')
@@ -467,7 +536,7 @@ describe('AdminProductsPage', () => {
     expect(screen.getByText('Categoría: Secos')).toBeInTheDocument()
     expect(screen.getByText('Estado: Activo')).toBeInTheDocument()
     expect(screen.getByText('Imagen: https://cdn.test/nuez.jpg')).toBeInTheDocument()
-    expect(screen.getByText('Variantes: 250g · $2500 · stock 8')).toBeInTheDocument()
+    expect(screen.getByText('Variantes: stock granel 6000g · 250g · $2500')).toBeInTheDocument()
     expect(screen.getByText('Estado: Inactivo')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText(/Filtrar productos por estado/i), { target: { value: 'inactive' } })

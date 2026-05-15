@@ -60,11 +60,15 @@ interface FeaturedProductCardProps {
   onAddToCart: (payload: FeaturedAddToCartPayload) => void
 }
 
-function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCardProps) {
+export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCardProps) {
   const [selectedVariantId, setSelectedVariantId] = useState<string>(product.variantId ?? '')
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const selectedVariant = product.variants.find((variant) => variant.id === selectedVariantId) ?? null
+  const isBulkWeight = product.inventoryPolicy === 'BULK_WEIGHT'
+  const hasStock = isBulkWeight
+    ? (product.stockAvailableBaseGrams ?? 0) >= 100 && product.variants.some((variant) => variant.stockAvailable > 0)
+    : product.stockAvailable > 0
 
   function handleAdd() {
     if (!selectedVariantId) {
@@ -99,8 +103,8 @@ function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCardProps)
         >
           <option value="">Seleccionar</option>
           {product.variants.map((variant) => (
-            <option key={variant.id} value={variant.id}>
-              {variant.unitLabel}
+            <option key={variant.id} value={variant.id} disabled={variant.stockAvailable <= 0}>
+              {variant.stockAvailable <= 0 ? `${variant.unitLabel} - sin stock` : variant.unitLabel}
             </option>
           ))}
         </select>
@@ -116,14 +120,15 @@ function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCardProps)
         />
       </label>
       <p className="product-unit">{selectedVariant?.unitLabel ?? product.unitLabel}</p>
+      {!hasStock ? <p className="product-validation-error">Sin stock para esta presentación.</p> : null}
       {error ? <p className="product-validation-error">{error}</p> : null}
       <button
         type="button"
         className="btn btn-secondary"
-        disabled={product.stockAvailable <= 0}
+        disabled={!hasStock}
         onClick={handleAdd}
       >
-        {product.stockAvailable <= 0 ? 'Sin stock' : 'Agregar'}
+        {!hasStock ? 'Sin stock' : 'Agregar'}
       </button>
     </article>
   )

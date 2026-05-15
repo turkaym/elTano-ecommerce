@@ -18,6 +18,8 @@ export interface CatalogCardVariantOption {
   unitLabel: string
   price: number
   stockAvailable: number
+  stockReserved?: number
+  weightGrams?: number | null
 }
 
 export interface CatalogProduct {
@@ -30,6 +32,8 @@ export interface CatalogProduct {
   productType: ProductType
   inventoryPolicy: InventoryPolicy
   stockBaseGrams: number | null
+  stockReservedBaseGrams?: number | null
+  stockAvailableBaseGrams?: number | null
   variants: CatalogVariant[]
 }
 
@@ -40,6 +44,7 @@ export interface FeaturedProduct {
   categoryName: string
   productType: ProductType
   inventoryPolicy: InventoryPolicy
+  stockAvailableBaseGrams?: number | null
   variants: CatalogCardVariantOption[]
   isMultiVariant: boolean
   minPrice: number

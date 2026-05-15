@@ -1,8 +1,15 @@
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useCartStore } from '../../cart/state/cartStore'
 import { CatalogProductGrid } from '../components/CatalogProductGrid'
+import type { FeaturedAddToCartPayload } from '../components/FeaturedProductsSection'
 import { useCatalogQuery } from '../hooks/useCatalogQuery'
 import type { CatalogSort, CatalogStockFilter } from '../../../shared/types/catalog'
+import type { CartItem } from '../../../shared/types/checkout'
+
+interface ProductsPageProps {
+  onAddCartItem?: (item: CartItem) => void
+}
 
 const defaultQuery = {
   q: '',
@@ -34,8 +41,9 @@ function normalizeSort(value: string | null): CatalogSort {
   }
 }
 
-export function ProductsPage() {
+export function ProductsPage({ onAddCartItem }: ProductsPageProps) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const cart = useCartStore()
   const { items, categories, isLoading } = useCatalogQuery(
     useMemo(
       () => ({
@@ -84,6 +92,24 @@ export function ProductsPage() {
     }
 
     setSearchParams(nextParams)
+  }
+
+  function handleAddToCart(payload: FeaturedAddToCartPayload) {
+    const selectedProduct = items.find((product) => product.id === payload.productId)
+    const selectedVariant = selectedProduct?.variants.find((variant) => variant.id === payload.variantId)
+    if (!selectedProduct || !selectedVariant) {
+      return
+    }
+
+    const addItem = onAddCartItem ?? cart.addItem
+    addItem({
+      variantId: selectedVariant.id,
+      productName: selectedProduct.name,
+      unitLabel: selectedVariant.unitLabel,
+      price: selectedVariant.price,
+      stockAvailable: selectedVariant.stockAvailable,
+      quantity: payload.quantity,
+    })
   }
 
   return (
@@ -149,6 +175,7 @@ export function ProductsPage() {
           isLoading={isLoading}
           emptyTitle="Sin resultados"
           emptyDescription="No encontramos productos para mostrar en este momento."
+          onAddToCart={handleAddToCart}
         />
       </section>
     </main>

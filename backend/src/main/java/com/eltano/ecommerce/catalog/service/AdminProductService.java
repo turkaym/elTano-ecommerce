@@ -360,6 +360,7 @@ public class AdminProductService {
                 product.getProductType(),
                 product.getInventoryPolicy(),
                 product.getStockBaseGrams(),
+                product.getStockReservedBaseGrams(),
                 variants,
                 images,
                 product.getDeletedAt(),
