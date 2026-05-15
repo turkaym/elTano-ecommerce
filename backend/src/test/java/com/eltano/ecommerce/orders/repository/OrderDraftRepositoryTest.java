@@ -10,7 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.test.util.ReflectionTestUtils;
+
+import jakarta.persistence.EntityManager;
 
 import com.eltano.ecommerce.orders.domain.OrderDraft;
 import com.eltano.ecommerce.orders.domain.OrderDraftStatus;
@@ -20,6 +21,9 @@ class OrderDraftRepositoryTest {
 
     @Autowired
     private OrderDraftRepository orderDraftRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     void searchAdminQueryMatchesCustomerPartialCaseInsensitive() {
@@ -107,8 +111,18 @@ class OrderDraftRepositoryTest {
         draft.setSubtotal(new BigDecimal("1000.00"));
         draft.setTotal(new BigDecimal("1000.00"));
         OrderDraft saved = orderDraftRepository.saveAndFlush(draft);
-        ReflectionTestUtils.setField(saved, "createdAt", Instant.parse(createdAt));
-        ReflectionTestUtils.setField(saved, "updatedAt", Instant.parse(createdAt));
-        return orderDraftRepository.saveAndFlush(saved);
+        Instant timestamp = Instant.parse(createdAt);
+        entityManager.createNativeQuery("""
+                update order_drafts
+                set created_at = :createdAt,
+                    updated_at = :updatedAt
+                where id = :id
+                """)
+                .setParameter("createdAt", timestamp)
+                .setParameter("updatedAt", timestamp)
+                .setParameter("id", saved.getId())
+                .executeUpdate();
+        entityManager.clear();
+        return saved;
     }
 }
