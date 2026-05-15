@@ -100,6 +100,30 @@ describe('AdminDashboardPage', () => {
     expect(within(alerts).getByRole('link', { name: /Revisar pedido ET-1000/i })).toHaveAttribute('href', '/admin/pedidos')
   })
 
+  it('uses shared GRANEL availability semantics for all-reserved dashboard stock alerts', async () => {
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([
+      {
+        id: 'p-reserved',
+        name: 'Pistachos',
+        productType: 'GRANEL',
+        inventoryPolicy: 'BULK_WEIGHT',
+        stockBaseGrams: 5_000,
+        stockReservedBaseGrams: 5_000,
+        active: true,
+        variants: [{ id: 'v-reserved', unitLabel: '100g', price: 1200, stockAvailable: 0 }],
+      },
+    ])
+
+    render(<AdminDashboardPage />, { wrapper: MemoryRouter })
+
+    const alerts = await screen.findByRole('region', { name: /Alertas y atención/i })
+    const reservedAlert = within(alerts).getByRole('article', { name: /Alerta stock Pistachos/i })
+    expect(reservedAlert).toHaveTextContent('Sin stock')
+    expect(reservedAlert).toHaveTextContent('0 g disponibles · 5 kg reservados')
+    expect(screen.getByRole('article', { name: /Productos sin stock/i })).toHaveTextContent('1')
+    expect(screen.getByRole('article', { name: /Productos con stock bajo/i })).toHaveTextContent('0')
+  })
+
   it('lists recent orders with details and order-page link', async () => {
     render(<AdminDashboardPage />, { wrapper: MemoryRouter })
 

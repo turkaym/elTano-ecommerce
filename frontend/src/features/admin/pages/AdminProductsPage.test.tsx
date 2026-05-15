@@ -24,6 +24,7 @@ vi.mock('../services/adminOperationsService', () => ({
       productType: 'GRANEL',
       inventoryPolicy: 'BULK_WEIGHT',
       stockBaseGrams: 6000,
+      stockReservedBaseGrams: 1500,
       active: true,
       variants: [
         {
@@ -79,7 +80,8 @@ describe('AdminProductsPage', () => {
     expect(within(filters).getByLabelText(/Filtrar productos por stock/i)).toBeInTheDocument()
 
     expect(screen.getByRole('article', { name: /Producto Nuez/i })).toHaveTextContent('Estado: Activo')
-    expect(screen.getByRole('article', { name: /Producto Nuez/i })).toHaveTextContent('stock granel 6000g')
+    expect(screen.getByRole('article', { name: /Producto Nuez/i })).toHaveTextContent('Stock bajo')
+    expect(screen.getByRole('article', { name: /Producto Nuez/i })).toHaveTextContent('4,5 kg disponibles · 1,5 kg reservados')
     expect(screen.getByRole('button', { name: /Desactivar producto Nuez/i })).toBeInTheDocument()
   })
 
@@ -536,7 +538,7 @@ describe('AdminProductsPage', () => {
     expect(screen.getByText('Categoría: Secos')).toBeInTheDocument()
     expect(screen.getByText('Estado: Activo')).toBeInTheDocument()
     expect(screen.getByText('Imagen: https://cdn.test/nuez.jpg')).toBeInTheDocument()
-    expect(screen.getByText('Variantes: stock granel 6000g · 250g · $2500')).toBeInTheDocument()
+    expect(screen.getByText('Variantes: 4,5 kg disponibles · 1,5 kg reservados · 250g · $2500')).toBeInTheDocument()
     expect(screen.getByText('Estado: Inactivo')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText(/Filtrar productos por estado/i), { target: { value: 'inactive' } })
@@ -593,6 +595,69 @@ describe('AdminProductsPage', () => {
     expect(screen.getByText('Aceite')).toBeInTheDocument()
     expect(screen.getByText('Harina')).toBeInTheDocument()
     expect(screen.queryByText('Café')).not.toBeInTheDocument()
+  })
+
+  it('uses shared GRANEL available/reserved stock semantics for badges and stock filters', async () => {
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([
+      {
+        id: 'p-granel-out',
+        name: 'Pistachos',
+        slug: 'pistachos',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        productType: 'GRANEL',
+        inventoryPolicy: 'BULK_WEIGHT',
+        stockBaseGrams: 5_000,
+        stockReservedBaseGrams: 5_000,
+        active: true,
+        variants: [{ id: 'v-generated', unitLabel: '100g', price: 1200, stockAvailable: 12, active: true }],
+      },
+      {
+        id: 'p-granel-low',
+        name: 'Almendras',
+        slug: 'almendras',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        productType: 'GRANEL',
+        inventoryPolicy: 'BULK_WEIGHT',
+        stockBaseGrams: 5_000,
+        stockReservedBaseGrams: 500,
+        active: true,
+        variants: [{ id: 'v-generated-low', unitLabel: '250g', price: 2500, stockAvailable: 0, active: true }],
+      },
+      {
+        id: 'p-granel-ok',
+        name: 'Castañas',
+        slug: 'castanas',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        productType: 'GRANEL',
+        inventoryPolicy: 'BULK_WEIGHT',
+        stockBaseGrams: 12_000,
+        stockReservedBaseGrams: 0,
+        active: true,
+        variants: [{ id: 'v-generated-ok', unitLabel: '500g', price: 4200, stockAvailable: 0, active: true }],
+      },
+    ])
+
+    render(<AdminProductsPage />)
+    await screen.findByText('Pistachos')
+
+    expect(screen.getByRole('article', { name: /Producto Pistachos/i })).toHaveTextContent('Sin stock')
+    expect(screen.getByRole('article', { name: /Producto Pistachos/i })).toHaveTextContent('0 g disponibles · 5 kg reservados')
+    expect(screen.getByRole('article', { name: /Producto Almendras/i })).toHaveTextContent('Stock bajo')
+    expect(screen.getByRole('article', { name: /Producto Almendras/i })).toHaveTextContent('4,5 kg disponibles · 500 g reservados')
+    expect(screen.getByRole('article', { name: /Producto Castañas/i })).toHaveTextContent('12 kg disponibles · 0 g reservados')
+
+    fireEvent.change(screen.getByLabelText(/Filtrar productos por stock/i), { target: { value: 'out' } })
+    expect(screen.getByText('Pistachos')).toBeInTheDocument()
+    expect(screen.queryByText('Almendras')).not.toBeInTheDocument()
+    expect(screen.queryByText('Castañas')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText(/Filtrar productos por stock/i), { target: { value: 'low' } })
+    expect(screen.getByText('Pistachos')).toBeInTheDocument()
+    expect(screen.getByText('Almendras')).toBeInTheDocument()
+    expect(screen.queryByText('Castañas')).not.toBeInTheDocument()
   })
 
   it('confirms and deactivates active products, then refreshes list', async () => {

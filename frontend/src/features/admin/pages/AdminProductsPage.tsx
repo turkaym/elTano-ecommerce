@@ -11,6 +11,7 @@ import {
   type AdminProductDto,
   uploadAdminProductImage,
 } from '../services/adminOperationsService'
+import { getAdminStockState } from '../stock/adminStockState'
 import { AdminEmptyState, AdminErrorState, AdminLoadingState, AdminWriteStateBanner } from './AdminPageStates'
 import { useAdminWriteState } from './adminWriteState'
 
@@ -40,8 +41,6 @@ const DEFAULT_VARIANT: ProductVariantFormRow = {
   stockReserved: 0,
   active: true,
 }
-
-const LOW_STOCK_THRESHOLD = 5
 
 const VARIANT_PRESETS: { label: string; amount: string; unit: VariantUnit }[] = [
   { label: '100g', amount: '100', unit: 'g' },
@@ -525,6 +524,7 @@ export function AdminProductsPage() {
             <strong>{item.name}</strong>
             <span>Categoría: {resolveCategoryName(item, categories)}</span>
             <span className={`admin-badge ${isProductActive(item) ? 'admin-badge-success' : 'admin-badge-muted'}`}>Estado: {isProductActive(item) ? 'Activo' : 'Inactivo'}</span>
+            <span className="admin-badge admin-badge-muted">Stock: {getAdminStockState(item).badgeLabel}</span>
             <span>Imagen: {primaryImageUrl(item)}</span>
             <span>Variantes: {variantSummary(item)}</span>
             </div>
@@ -624,8 +624,9 @@ function visibleProducts(
     if (categoryFilter !== 'all' && item.categoryId !== categoryFilter) return false
     if (statusFilter === 'active' && !isProductActive(item)) return false
     if (statusFilter === 'inactive' && isProductActive(item)) return false
-    if (stockFilter === 'out') return hasOutOfStockVariant(item)
-    if (stockFilter === 'low') return hasLowStockVariant(item)
+    const stockState = getAdminStockState(item).state
+    if (stockFilter === 'out') return stockState === 'no-stock'
+    if (stockFilter === 'low') return stockState !== 'available'
     return true
   })
 }
@@ -639,18 +640,17 @@ function primaryImageUrl(item: AdminProductDto): string {
 }
 
 function variantSummary(item: AdminProductDto): string {
+  const stockState = getAdminStockState(item)
   if (item.inventoryPolicy === 'BULK_WEIGHT' || item.productType === 'GRANEL') {
-    const stock = item.stockBaseGrams ?? 0
-    const stockLabel = stockStatusLabel(stock >= 1000 ? stock / 1000 : stock)
     const variants = item.variants?.map((variant) => `${variant.unitLabel || `${variant.weightGrams}g`} · $${variant.price ?? 0}`).join(' | ') || 'Sin presentaciones'
-    return `stock granel ${stock}g${stockLabel ? ` · ${stockLabel}` : ''} · ${variants}`
+    return `${stockState.summaryLabel} · ${variants}`
   }
   if (!item.variants?.length) return 'Sin variantes'
   return item.variants
     .map((variant) => {
       const label = variant.unitLabel || (variant.weightGrams ? `${variant.weightGrams}g` : 'unidad')
       const stock = variant.stockAvailable ?? 0
-      const stockLabel = stockStatusLabel(stock)
+      const stockLabel = stockStatusLabelForVariant(stock)
       return `${label} · $${variant.price ?? 0} · stock ${stock}${stockLabel ? ` · ${stockLabel}` : ''}`
     })
     .join(' | ')
@@ -790,20 +790,9 @@ function isBlankVariantPresetTarget(variant: ProductVariantFormRow): boolean {
   return !variant.id && !variant.sku.trim() && !variant.price.trim() && variant.stock === DEFAULT_VARIANT.stock
 }
 
-function stockStatusLabel(stock: number): string {
-  if (stock <= 0) return 'Sin stock'
-  if (stock <= LOW_STOCK_THRESHOLD) return 'Stock bajo'
-  return ''
-}
-
-function hasOutOfStockVariant(item: AdminProductDto): boolean {
-  if (item.inventoryPolicy === 'BULK_WEIGHT' || item.productType === 'GRANEL') return (item.stockBaseGrams ?? 0) < 100
-  return item.variants?.some((variant) => (variant.stockAvailable ?? 0) <= 0) ?? false
-}
-
-function hasLowStockVariant(item: AdminProductDto): boolean {
-  if (item.inventoryPolicy === 'BULK_WEIGHT' || item.productType === 'GRANEL') return (item.stockBaseGrams ?? 0) <= LOW_STOCK_THRESHOLD * 1000
-  return item.variants?.some((variant) => (variant.stockAvailable ?? 0) <= LOW_STOCK_THRESHOLD) ?? false
+function stockStatusLabelForVariant(stock: number): string {
+  const stockState = getAdminStockState({ id: 'variant-summary', name: 'Variant summary', variants: [{ stockAvailable: stock }] })
+  return stockState.state === 'available' ? '' : stockState.badgeLabel
 }
 
 function toWeightGrams(amount: number, unit: VariantUnit): number | null {

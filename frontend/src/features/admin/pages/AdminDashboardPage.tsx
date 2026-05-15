@@ -6,11 +6,10 @@ import {
   type AdminOrderSummary,
   type AdminProductDto,
 } from '../services/adminOperationsService'
+import { getAdminStockState } from '../stock/adminStockState'
 import { AdminEmptyState, AdminErrorState, AdminLoadingState } from './AdminPageStates'
 
 const RECENT_ORDERS_SIZE = 8
-const LOW_STOCK_UNITS_THRESHOLD = 5
-const LOW_STOCK_GRAMS_THRESHOLD = 5_000
 const CLOSED_ORDER_STATUSES = new Set(['CANCELLED', 'EXPIRED', 'FAILED', 'DELIVERED'])
 
 interface StockAlert {
@@ -171,25 +170,15 @@ function buildDashboardSummary(orders: AdminOrderSummary[], products: AdminProdu
 function buildStockAlerts(product: AdminProductDto): StockAlert[] {
   if (product.active === false || product.deletedAt) return []
 
-  if (product.inventoryPolicy === 'BULK_WEIGHT' || product.productType === 'GRANEL') {
-    const availableGrams = Math.max(0, (product.stockBaseGrams ?? 0) - (product.stockReservedBaseGrams ?? 0))
-    if (availableGrams <= 0) return [{ productId: product.id, productName: product.name, severity: 'out', label: 'Sin stock granel disponible' }]
-    if (availableGrams <= LOW_STOCK_GRAMS_THRESHOLD) {
-      return [{ productId: product.id, productName: product.name, severity: 'low', label: `${formatWeight(availableGrams)} disponibles` }]
-    }
-    return []
-  }
+  const stockState = getAdminStockState(product)
+  if (stockState.state === 'available') return []
 
-  const variants = product.variants ?? []
-  const outVariant = variants.find((variant) => (variant.stockAvailable ?? 0) <= 0)
-  if (outVariant) {
-    return [{ productId: product.id, productName: product.name, severity: 'out', label: `${outVariant.unitLabel || 'Variante'} · Sin stock` }]
-  }
-  const lowVariant = variants.find((variant) => (variant.stockAvailable ?? 0) <= LOW_STOCK_UNITS_THRESHOLD)
-  if (lowVariant) {
-    return [{ productId: product.id, productName: product.name, severity: 'low', label: `${lowVariant.unitLabel || 'Variante'} · ${lowVariant.stockAvailable ?? 0} disponibles` }]
-  }
-  return []
+  return [{
+    productId: product.id,
+    productName: product.name,
+    severity: stockState.state === 'no-stock' ? 'out' : 'low',
+    label: stockState.summaryLabel,
+  }]
 }
 
 function isPendingPaymentOrder(order: AdminOrderSummary): boolean {
@@ -220,14 +209,6 @@ function formatMoney(value: number | string): string {
   const numeric = toNumber(value)
   if (!Number.isFinite(numeric)) return String(value)
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(numeric)
-}
-
-function formatWeight(grams: number): string {
-  if (grams >= 1000) {
-    const kg = grams / 1000
-    return `${new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(kg)} kg`
-  }
-  return `${new Intl.NumberFormat('es-AR').format(grams)} g`
 }
 
 function toNumber(value: number | string): number {
