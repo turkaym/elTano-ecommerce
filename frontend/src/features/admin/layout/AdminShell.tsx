@@ -18,14 +18,17 @@ export function AdminShell() {
   }
 
   return (
-    <main className="main-content admin-main" aria-labelledby="admin-title">
-      <section className="section admin-hero-card">
-        <div className="admin-hero-copy">
-          <p className="admin-eyebrow">Backoffice</p>
-          <h1 id="admin-title">Panel admin</h1>
-          <p>Gestiona catálogo y operaciones internas desde este espacio protegido.</p>
+    <main className="admin-shell" aria-label="Panel admin">
+      <aside className="admin-sidebar" aria-label="Admin sidebar">
+        <div className="admin-brand" aria-label="El Tano admin">
+          <span className="admin-brand-mark" aria-hidden="true">ET</span>
+          <div>
+            <strong>El Tano</strong>
+            <span>Admin</span>
+          </div>
         </div>
         <nav className="admin-nav" aria-label="Admin workflows">
+          <p className="admin-nav-section">Menu</p>
           <ul>
             {adminNavItems.map((item) => (
               <li key={item.to}>
@@ -36,11 +39,13 @@ export function AdminShell() {
             ))}
           </ul>
         </nav>
-        <button className="btn btn-secondary admin-logout" type="button" onClick={handleLogout}>
-          Cerrar sesión admin
+        <button className="admin-logout" type="button" onClick={handleLogout}>
+          Cerrar sesión
         </button>
+      </aside>
+      <section className="admin-content" aria-label="Admin content">
+        <Outlet />
       </section>
-      <Outlet />
     </main>
   )
 }
