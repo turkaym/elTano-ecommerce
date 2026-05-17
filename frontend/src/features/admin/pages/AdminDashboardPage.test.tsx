@@ -88,6 +88,49 @@ describe('AdminDashboardPage', () => {
     expect(screen.getByRole('article', { name: /Productos con stock bajo/i })).toHaveTextContent('2')
   })
 
+  it('counts only paid orders that have not started fulfillment as orders to prepare', async () => {
+    vi.mocked(listAdminOrders).mockResolvedValueOnce({
+      items: [
+        {
+          id: 'o-paid',
+          reference: 'ET-PAID',
+          customer: 'Ana Pérez',
+          status: 'PAID',
+          paymentStatus: 'manual_paid',
+          total: 12000,
+          createdAt: '2026-05-13T12:20:00-03:00',
+        },
+        {
+          id: 'o-preparing',
+          reference: 'ET-PREPARING',
+          customer: 'Luis Gómez',
+          status: 'PREPARING',
+          paymentStatus: 'manual_paid',
+          total: 3500,
+          createdAt: '2026-05-13T13:00:00-03:00',
+        },
+        {
+          id: 'o-ready',
+          reference: 'ET-READY',
+          customer: 'Marcela',
+          status: 'READY',
+          paymentStatus: 'manual_paid',
+          total: 48000,
+          createdAt: '2026-05-13T14:00:00-03:00',
+        },
+      ],
+      page: 0,
+      size: 8,
+      totalElements: 3,
+      totalPages: 1,
+    })
+
+    render(<AdminDashboardPage />, { wrapper: MemoryRouter })
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard admin' })).toBeInTheDocument()
+    expect(screen.getByRole('article', { name: /Pedidos para preparar/i })).toHaveTextContent('1')
+  })
+
   it('shows stock and pending-payment alerts with granel stock formatted as kg and grams', async () => {
     render(<AdminDashboardPage />, { wrapper: MemoryRouter })
 

@@ -189,7 +189,7 @@ function isPendingPaymentOrder(order: AdminOrderSummary): boolean {
 }
 
 function isOrderToPrepare(order: AdminOrderSummary): boolean {
-  return !CLOSED_ORDER_STATUSES.has(order.status) && (order.status === 'PAID' || isPaymentConfirmed(order))
+  return order.status === 'PAID'
 }
 
 function isPaymentConfirmed(order: AdminOrderSummary): boolean {

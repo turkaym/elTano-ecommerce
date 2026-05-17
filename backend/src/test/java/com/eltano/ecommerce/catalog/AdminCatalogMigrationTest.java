@@ -58,6 +58,18 @@ class AdminCatalogMigrationTest {
     }
 
     @Test
+    void migrationV111ReplacesLegacyOrderDraftStatusConstraintName() throws Exception {
+        String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_11__fix_order_draft_status_constraint_name.sql"));
+
+        assertTrue(migration.contains("drop constraint if exists order_drafts_status_check"));
+        assertTrue(migration.contains("drop constraint if exists chk_order_drafts_status"));
+        assertTrue(migration.contains("add constraint chk_order_drafts_status"));
+        assertTrue(migration.contains("'PREPARING'"));
+        assertTrue(migration.contains("'READY'"));
+        assertTrue(migration.contains("'DELIVERED'"));
+    }
+
+    @Test
     void productReservedStockMappingAllowsHibernateUpdateToCreateBackfilledColumn() throws Exception {
         Column reservedStockColumn = Product.class.getDeclaredField("stockReservedBaseGrams").getAnnotation(Column.class);
 
