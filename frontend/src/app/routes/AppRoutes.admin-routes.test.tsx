@@ -156,11 +156,44 @@ describe('AppRoutes admin nested routes', () => {
     expect(await screen.findByRole('heading', { name: 'Storefront' })).toBeInTheDocument()
   })
 
+  it('defaults the admin shell to dark mode and lets admins switch to light mode', async () => {
+    const user = userEvent.setup()
+    await renderReadyAdminRoute('/admin', 'Dashboard admin')
+
+    const shell = screen.getByRole('main', { name: 'Panel admin' })
+    expect(shell).toHaveAttribute('data-admin-theme', 'dark')
+
+    await user.click(screen.getByRole('button', { name: /modo claro/i }))
+
+    expect(shell).toHaveAttribute('data-admin-theme', 'light')
+    expect(screen.getByRole('button', { name: /modo oscuro/i })).toBeInTheDocument()
+    expect(window.localStorage.getItem('eltano-admin-theme')).toBe('light')
+  })
+
+  it('restores a persisted light admin theme choice', async () => {
+    window.localStorage.setItem('eltano-admin-theme', 'light')
+
+    await renderReadyAdminRoute('/admin/pedidos', 'Pedidos')
+
+    expect(screen.getByRole('main', { name: 'Panel admin' })).toHaveAttribute('data-admin-theme', 'light')
+    expect(screen.getByRole('button', { name: /modo oscuro/i })).toBeInTheDocument()
+  })
+
+  it('falls back to dark mode when the persisted admin theme value is invalid', async () => {
+    window.localStorage.setItem('eltano-admin-theme', 'sepia')
+
+    await renderReadyAdminRoute('/admin', 'Dashboard admin')
+
+    expect(screen.getByRole('main', { name: 'Panel admin' })).toHaveAttribute('data-admin-theme', 'dark')
+    expect(screen.getByRole('button', { name: /modo claro/i })).toBeInTheDocument()
+  })
+
   it('does not render the admin sidebar on storefront routes', () => {
     renderRoutes('/')
 
     expect(screen.getByRole('heading', { name: 'Storefront' })).toBeInTheDocument()
     expect(screen.queryByRole('complementary', { name: 'Admin sidebar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Admin workflows' })).not.toBeInTheDocument()
+    expect(document.querySelector('[data-admin-theme]')).not.toBeInTheDocument()
   })
 })
