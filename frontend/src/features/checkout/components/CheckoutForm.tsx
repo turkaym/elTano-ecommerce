@@ -115,7 +115,6 @@ export function CheckoutForm({
 
         <div className="checkout-feedback-stack" aria-live="polite">
           {errors.cart ? <p className="form-error" role="alert">{errors.cart}</p> : null}
-          {isSubmitBlocked && blockedSubmitMessage ? <p className="form-error" role="alert">{blockedSubmitMessage}</p> : null}
           {errors.checkout && !isSubmitBlocked ? <p className="form-error" role="alert">{errors.checkout}</p> : null}
           {submitError ? <p className="form-error" role="alert">{submitError}</p> : null}
         </div>

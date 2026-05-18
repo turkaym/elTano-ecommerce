@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { CART_STORAGE_KEY } from '../storage/cartStorage'
 import { useCartStore } from './cartStore'
 
@@ -13,6 +13,10 @@ const baseItem = {
 }
 
 describe('useCartStore', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
   it('handles add/update/remove actions and keeps totals consistent', () => {
     const { result } = renderHook(() => useCartStore())
 
@@ -80,5 +84,63 @@ describe('useCartStore', () => {
 
     expect(result.current.items).toHaveLength(1)
     expect(result.current.items[0]?.quantity).toBe(3)
+  })
+
+  it('preserves cart metadata while plus/minus-style quantity updates clamp subtotals', () => {
+    const { result } = renderHook(() => useCartStore())
+
+    act(() => {
+      result.current.addItem({
+        ...baseItem,
+        categoryName: 'Frutos secos',
+        imageUrl: '/uploads/nuez.jpg',
+        imageAltText: 'Nuez mariposa premium',
+        quantity: 2,
+      })
+    })
+
+    act(() => {
+      result.current.setQty(baseItem.variantId, result.current.items[0]!.quantity + 1)
+    })
+
+    expect(result.current.items[0]).toMatchObject({
+      quantity: 2,
+      categoryName: 'Frutos secos',
+      imageUrl: '/uploads/nuez.jpg',
+      imageAltText: 'Nuez mariposa premium',
+    })
+    expect(result.current.totals.subtotal).toBe(15200)
+
+    act(() => {
+      result.current.setQty(baseItem.variantId, result.current.items[0]!.quantity - 1)
+    })
+
+    expect(result.current.items[0]?.quantity).toBe(1)
+    expect(result.current.totals.subtotal).toBe(7600)
+  })
+
+  it('refreshes optional metadata when re-adding an existing variant from redesigned cards', () => {
+    const { result } = renderHook(() => useCartStore())
+
+    act(() => {
+      result.current.addItem(baseItem)
+    })
+
+    act(() => {
+      result.current.addItem({
+        ...baseItem,
+        categoryName: 'Frutos secos',
+        imageUrl: '/uploads/nuez-actualizada.jpg',
+        imageAltText: 'Nuez mariposa actualizada',
+      })
+    })
+
+    expect(result.current.items).toHaveLength(1)
+    expect(result.current.items[0]).toMatchObject({
+      quantity: 2,
+      categoryName: 'Frutos secos',
+      imageUrl: '/uploads/nuez-actualizada.jpg',
+      imageAltText: 'Nuez mariposa actualizada',
+    })
   })
 })

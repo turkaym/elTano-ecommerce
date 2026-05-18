@@ -61,11 +61,21 @@ export function ProductsPage({ onAddCartItem }: ProductsPageProps) {
   const selectedSort = normalizeSort(searchParams.get('sort'))
 
   function updateQueryParams(updates: {
+    q?: string
     category?: string
     stock?: CatalogStockFilter
     sort?: CatalogSort
   }) {
     const nextParams = new URLSearchParams(searchParams)
+
+    if (updates.q !== undefined) {
+      const trimmedQuery = updates.q.trim()
+      if (trimmedQuery) {
+        nextParams.set('q', trimmedQuery)
+      } else {
+        nextParams.delete('q')
+      }
+    }
 
     if (updates.category !== undefined) {
       if (updates.category) {
@@ -109,6 +119,10 @@ export function ProductsPage({ onAddCartItem }: ProductsPageProps) {
       price: selectedVariant.price,
       stockAvailable: selectedVariant.stockAvailable,
       quantity: payload.quantity,
+      productId: selectedProduct.id,
+      categoryName: selectedProduct.categoryName,
+      imageUrl: selectedProduct.primaryImageUrl ?? undefined,
+      imageAltText: selectedProduct.primaryImageAltText,
     })
   }
 
@@ -122,6 +136,37 @@ export function ProductsPage({ onAddCartItem }: ProductsPageProps) {
 
         <div className="products-controls" aria-label="Filtros de productos">
           <p className="products-controls-title">Filtrar y ordenar</p>
+
+          <label className="products-control-field products-search-field">
+            <span className="products-control-label">Filtrar productos</span>
+            <input
+              aria-label="Filtrar productos"
+              type="search"
+              defaultValue=""
+              onChange={(event) => updateQueryParams({ q: event.target.value })}
+              placeholder="Buscar por nombre, descripcion o categoria"
+            />
+          </label>
+
+          <nav className="products-category-sidebar" aria-label="Categorías del catálogo">
+            <button
+              type="button"
+              className={selectedCategory ? 'category-pill' : 'category-pill category-pill-active'}
+              onClick={() => updateQueryParams({ category: '' })}
+            >
+              Todos los productos ({categories.reduce((total, category) => total + category.count, 0)})
+            </button>
+            {categories.map((category) => (
+              <button
+                key={category.slug}
+                type="button"
+                className={selectedCategory === category.slug ? 'category-pill category-pill-active' : 'category-pill'}
+                onClick={() => updateQueryParams({ category: category.slug })}
+              >
+                {category.name} ({category.count})
+              </button>
+            ))}
+          </nav>
 
           <div className="products-controls-grid">
             <label className="products-control-field">

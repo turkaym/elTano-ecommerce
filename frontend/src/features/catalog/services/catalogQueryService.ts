@@ -2,6 +2,7 @@ import { getJson } from '../../../shared/api/httpClient'
 import type { CatalogListItem, CatalogProduct, CatalogQueryResult, FeaturedProduct } from '../../../shared/types/catalog'
 import { mockFeaturedProducts } from '../data/mockProducts'
 import { normalizeCategorySlug } from '../utils/catalogQuery'
+import { toFeaturedProduct } from './catalogProductMapper'
 
 export interface CatalogItemsResponse {
   source: CatalogQueryResult['source']
@@ -9,42 +10,15 @@ export interface CatalogItemsResponse {
 }
 
 function toCatalogListItem(product: CatalogProduct): CatalogListItem | null {
-  const variants = product.variants.map((variant) => ({
-    id: variant.id,
-    unitLabel: variant.unitLabel,
-    price: Number(variant.price),
-    stockAvailable: variant.stockAvailable,
-    stockReserved: variant.stockReserved,
-    weightGrams: variant.weightGrams,
-  }))
+  const featuredProduct = toFeaturedProduct(product)
 
-  if (!variants.length) {
+  if (!featuredProduct) {
     return null
   }
 
-  const minPrice = variants.reduce((lowest, variant) => Math.min(lowest, variant.price), variants[0].price)
-  const defaultVariant = variants.find((variant) => variant.stockAvailable > 0) ?? variants[0]
-  const stockAvailable = product.inventoryPolicy === 'BULK_WEIGHT'
-    ? Math.max(0, product.stockAvailableBaseGrams ?? 0)
-    : variants.reduce((total, variant) => total + variant.stockAvailable, 0)
-  const isMultiVariant = variants.length > 1
-
   return {
-    id: product.id,
-    name: product.name,
-    description: product.description,
-    categoryName: product.categoryName,
+    ...featuredProduct,
     categorySlug: product.categorySlug,
-    productType: product.productType,
-    inventoryPolicy: product.inventoryPolicy,
-    stockAvailableBaseGrams: product.stockAvailableBaseGrams,
-    variants,
-    isMultiVariant,
-    minPrice,
-    stockAvailable,
-    variantId: isMultiVariant ? null : defaultVariant.id,
-    unitLabel: isMultiVariant ? 'Seleccionar presentación' : defaultVariant.unitLabel,
-    price: isMultiVariant ? minPrice : defaultVariant.price,
   }
 }
 

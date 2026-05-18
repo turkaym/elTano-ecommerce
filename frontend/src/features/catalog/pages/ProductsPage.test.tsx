@@ -28,6 +28,8 @@ const catalogItems: CatalogListItem[] = [
     unitLabel: 'bolsa 500 g',
     price: 6800,
     stockAvailable: 10,
+    primaryImageUrl: 'https://cdn.example.test/almendra.jpg',
+    primaryImageAltText: 'Almendra tostada en bolsa',
   },
   {
     id: 'prod-2',
@@ -44,6 +46,8 @@ const catalogItems: CatalogListItem[] = [
     unitLabel: 'bolsa 500 g',
     price: 5200,
     stockAvailable: 0,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
   {
     id: 'prod-3',
@@ -60,6 +64,8 @@ const catalogItems: CatalogListItem[] = [
     unitLabel: 'bolsa 500 g',
     price: 7600,
     stockAvailable: 6,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
 ]
 
@@ -117,6 +123,45 @@ describe('ProductsPage', () => {
       'Almendra tostada',
     ])
     expect(screen.queryByText('Harina de coco')).not.toBeInTheDocument()
+  })
+
+  it('filters from all products with sidebar categories and restores the full list', async () => {
+    const user = userEvent.setup()
+
+    renderProductsAt('/productos')
+    await screen.findByText('Almendra tostada')
+
+    await user.click(screen.getByRole('button', { name: 'Harinas (1)' }))
+
+    await waitFor(() => expect(window.location.search).toContain('category=harinas'))
+    expect(screen.getByText('Harina de coco')).toBeInTheDocument()
+    expect(screen.queryByText('Almendra tostada')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Todos los productos (3)' }))
+
+    await waitFor(() => expect(window.location.search).not.toContain('category='))
+    expect(screen.getByText('Almendra tostada')).toBeInTheDocument()
+    expect(screen.getByText('Nuez mariposa')).toBeInTheDocument()
+  })
+
+  it('updates URL-backed search results in real time while preserving the category filter', async () => {
+    const user = userEvent.setup()
+
+    renderProductsAt('/productos?category=frutos-secos')
+    await screen.findByText('Almendra tostada')
+
+    await user.type(screen.getByLabelText('Filtrar productos'), 'nuez')
+
+    await waitFor(() => expect(window.location.search).toContain('q=nuez'))
+    expect(screen.getByText('Nuez mariposa')).toBeInTheDocument()
+    expect(screen.queryByText('Almendra tostada')).not.toBeInTheDocument()
+    expect(screen.queryByText('Harina de coco')).not.toBeInTheDocument()
+
+    await user.clear(screen.getByLabelText('Filtrar productos'))
+
+    await waitFor(() => expect(window.location.search).not.toContain('q='))
+    expect(screen.getByText('Almendra tostada')).toBeInTheDocument()
+    expect(screen.getByText('Nuez mariposa')).toBeInTheDocument()
   })
 
   it('reads query params from URL as source of truth for search and empty state', async () => {
@@ -180,6 +225,8 @@ describe('ProductsPage', () => {
           unitLabel: 'Seleccionar presentación',
           price: 3900,
           stockAvailable: 9,
+          primaryImageUrl: null,
+          primaryImageAltText: null,
         },
       ],
     })
@@ -205,6 +252,10 @@ describe('ProductsPage', () => {
           price: 6800,
           quantity: 1,
           stockAvailable: 10,
+          productId: 'prod-1',
+          categoryName: 'Frutos secos',
+          imageUrl: 'https://cdn.example.test/almendra.jpg',
+          imageAltText: 'Almendra tostada en bolsa',
         }),
       ])
     })
@@ -234,6 +285,8 @@ describe('ProductsPage', () => {
           unitLabel: 'Seleccionar presentación',
           price: 1200,
           stockAvailable: 3,
+          primaryImageUrl: null,
+          primaryImageAltText: null,
         },
       ],
     })

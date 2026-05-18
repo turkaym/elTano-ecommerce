@@ -5,6 +5,10 @@ export interface CartItem {
   price: number
   quantity: number
   stockAvailable: number
+  productId?: string
+  categoryName?: string
+  imageUrl?: string
+  imageAltText?: string | null
 }
 
 export interface CartTotals {

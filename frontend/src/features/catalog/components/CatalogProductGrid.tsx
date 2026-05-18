@@ -1,5 +1,5 @@
 import type { CatalogListItem } from '../../../shared/types/catalog'
-import { FeaturedProductCard, type FeaturedAddToCartPayload } from './FeaturedProductsSection'
+import { FeaturedProductCard, ProductCardMedia, type FeaturedAddToCartPayload } from './FeaturedProductsSection'
 
 interface CatalogEmptyStateProps {
   title: string
@@ -65,6 +65,7 @@ const currencyFormatter = new Intl.NumberFormat('es-AR', {
 function CatalogReadOnlyProductCard({ product }: { product: CatalogListItem }) {
   return (
     <article className="product-card">
+      <ProductCardMedia product={product} />
       <p className="product-category">{product.categoryName}</p>
       <h3 className="product-name">{product.name}</h3>
       <p className="product-description">{product.description}</p>

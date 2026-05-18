@@ -108,6 +108,8 @@ describe('Storefront non-regression smoke', () => {
 
     expect(screen.getByRole('navigation', { name: 'Categorías' })).toBeInTheDocument()
     expect(screen.getByRole('search')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Productos naturales El Tano' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Por que nos eligen' })).not.toBeInTheDocument()
     expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Carrito' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Finalizar pedido' })).toBeInTheDocument()

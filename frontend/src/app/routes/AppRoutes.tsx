@@ -26,7 +26,7 @@ export function AppRoutes({ homeContent, checkoutReturnContent, onCatalogAddToCa
       <Route path="/" element={homeContent} />
       <Route path="/checkout/return" element={checkoutReturnContent} />
       <Route path="/categorias" element={<CategoriesPage />} />
-      <Route path="/categorias/:slug" element={<CategoryDetailPage />} />
+      <Route path="/categorias/:slug" element={<CategoryDetailPage onAddCartItem={onCatalogAddToCart} />} />
       <Route path="/productos" element={<ProductsPage onAddCartItem={onCatalogAddToCart} />} />
       {adminDashboardEnabled ? (
         <Route element={<AdminGuard />}>

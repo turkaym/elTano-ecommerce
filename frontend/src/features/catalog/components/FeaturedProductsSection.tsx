@@ -65,6 +65,7 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState<string | null>(null)
   const selectedVariant = product.variants.find((variant) => variant.id === selectedVariantId) ?? null
+  const maxQuantity = Math.max(1, selectedVariant?.stockAvailable ?? product.stockAvailable)
   const isBulkWeight = product.inventoryPolicy === 'BULK_WEIGHT'
   const hasStock = isBulkWeight
     ? (product.stockAvailableBaseGrams ?? 0) >= 100 && product.variants.some((variant) => variant.stockAvailable > 0)
@@ -80,12 +81,13 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
     onAddToCart({
       productId: product.id,
       variantId: selectedVariantId,
-      quantity,
+      quantity: Math.min(quantity, maxQuantity),
     })
   }
 
   return (
     <article className="product-card">
+      <ProductCardMedia product={product} />
       <p className="product-category">{product.categoryName}</p>
       <h3 className="product-name">{product.name}</h3>
       <p className="product-description">{product.description}</p>
@@ -94,42 +96,67 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
           {product.isMultiVariant ? `Desde ${currencyFormatter.format(product.minPrice)}` : currencyFormatter.format(product.price)}
         </strong>
       </div>
-      <label className="product-field">
-        <span>Presentacion</span>
-        <select
-          aria-label={`Presentacion para ${product.name}`}
-          value={selectedVariantId}
-          onChange={(event) => setSelectedVariantId(event.target.value)}
+      <div className="product-card-actions">
+        <label className="product-field">
+          <span>Presentacion</span>
+          <select
+            aria-label={`Presentacion para ${product.name}`}
+            value={selectedVariantId}
+            onChange={(event) => setSelectedVariantId(event.target.value)}
+          >
+            <option value="">Seleccionar</option>
+            {product.variants.map((variant) => (
+              <option key={variant.id} value={variant.id} disabled={variant.stockAvailable <= 0}>
+                {variant.stockAvailable <= 0 ? `${variant.unitLabel} - sin stock` : variant.unitLabel}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="product-field">
+          <span>Cantidad</span>
+          <input
+            aria-label={`Cantidad para ${product.name}`}
+            type="number"
+            min={1}
+            max={maxQuantity}
+            value={quantity}
+            onChange={(event) => setQuantity(Math.min(maxQuantity, Math.max(1, Number(event.target.value) || 1)))}
+          />
+        </label>
+        <p className="product-unit">{selectedVariant?.unitLabel ?? product.unitLabel}</p>
+        <div className="product-card-messages" aria-live="polite">
+          {!hasStock ? <p className="product-validation-error">Sin stock para esta presentación.</p> : null}
+          {error ? <p className="product-validation-error">{error}</p> : null}
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={!hasStock}
+          onClick={handleAdd}
         >
-          <option value="">Seleccionar</option>
-          {product.variants.map((variant) => (
-            <option key={variant.id} value={variant.id} disabled={variant.stockAvailable <= 0}>
-              {variant.stockAvailable <= 0 ? `${variant.unitLabel} - sin stock` : variant.unitLabel}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="product-field">
-        <span>Cantidad</span>
-        <input
-          aria-label={`Cantidad para ${product.name}`}
-          type="number"
-          min={1}
-          value={quantity}
-          onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
-        />
-      </label>
-      <p className="product-unit">{selectedVariant?.unitLabel ?? product.unitLabel}</p>
-      {!hasStock ? <p className="product-validation-error">Sin stock para esta presentación.</p> : null}
-      {error ? <p className="product-validation-error">{error}</p> : null}
-      <button
-        type="button"
-        className="btn btn-secondary"
-        disabled={!hasStock}
-        onClick={handleAdd}
-      >
-        {!hasStock ? 'Sin stock' : 'Agregar'}
-      </button>
+          {!hasStock ? 'Sin stock' : 'Agregar'}
+        </button>
+      </div>
     </article>
+  )
+}
+
+export function ProductCardMedia({ product }: { product: FeaturedProduct }) {
+  if (product.primaryImageUrl) {
+    return (
+      <div className="product-media">
+        <img
+          src={product.primaryImageUrl}
+          alt={product.primaryImageAltText ?? product.name}
+          loading="lazy"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="product-media product-media-placeholder" aria-label={`Imagen no disponible para ${product.name}`}>
+      <span>Sin imagen</span>
+    </div>
   )
 }

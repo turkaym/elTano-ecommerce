@@ -35,4 +35,22 @@ describe('CheckoutForm', () => {
       note: 'Sin sal',
     })
   })
+
+  it('omits shopper-facing unavailable checkout warnings while preserving blocked submission', () => {
+    const onSubmitDraft = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <CheckoutForm
+        isCartEmpty={false}
+        isSubmitBlocked
+        blockedSubmitMessage="No podemos finalizar el pedido con productos de muestra."
+        submitError={null}
+        onSubmitDraft={onSubmitDraft}
+      />,
+    )
+
+    expect(screen.queryByText('No podemos finalizar el pedido con productos de muestra.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' })).toBeDisabled()
+    expect(onSubmitDraft).not.toHaveBeenCalled()
+  })
 })

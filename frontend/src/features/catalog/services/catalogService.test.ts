@@ -10,6 +10,7 @@ import { getJson } from '../../../shared/api/httpClient'
 describe('catalogService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('computes Desde price for multi-variant products', async () => {
@@ -95,6 +96,84 @@ describe('catalogService', () => {
       price: 3900,
       isMultiVariant: false,
       variantId: 'var-1',
+    })
+  })
+
+  it('maps the primary uploaded image from dashboard payloads', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://api.eltano.test/')
+    vi.mocked(getJson).mockResolvedValueOnce([
+      {
+        id: 'prod-3',
+        name: 'Pistacho',
+        slug: 'pistacho',
+        description: 'Tostado',
+        categoryName: 'Frutos secos',
+        categorySlug: 'frutos-secos',
+        productType: 'ENVASADO',
+        inventoryPolicy: 'PER_VARIANT',
+        stockBaseGrams: null,
+        images: [
+          { id: 'img-secondary', url: '/uploads/pistacho-back.jpg', altText: 'Pistacho detalle', sortOrder: 2, primary: false },
+          { id: 'img-primary', url: '/uploads/pistacho-front.jpg', altText: 'Pistacho principal', sortOrder: 1, primary: true },
+        ],
+        variants: [
+          {
+            id: 'var-3',
+            sku: 'P-1',
+            unitType: 'BAG',
+            weightGrams: 250,
+            unitLabel: 'bolsa 250 g',
+            price: 6900,
+            stockAvailable: 5,
+            stockReserved: 0,
+            attributesJson: null,
+          },
+        ],
+      },
+    ])
+
+    const result = await getFeaturedProducts(6)
+
+    expect(result.products[0]).toMatchObject({
+      primaryImageUrl: 'https://api.eltano.test/uploads/pistacho-front.jpg',
+      primaryImageAltText: 'Pistacho principal',
+    })
+  })
+
+  it('keeps placeholder image metadata when a product has no uploaded image', async () => {
+    vi.mocked(getJson).mockResolvedValueOnce([
+      {
+        id: 'prod-4',
+        name: 'Quinoa',
+        slug: 'quinoa',
+        description: 'Organica',
+        categoryName: 'Cereales',
+        categorySlug: 'cereales',
+        productType: 'ENVASADO',
+        inventoryPolicy: 'PER_VARIANT',
+        stockBaseGrams: null,
+        images: [],
+        variants: [
+          {
+            id: 'var-4',
+            sku: 'Q-1',
+            unitType: 'BAG',
+            weightGrams: 500,
+            unitLabel: 'bolsa 500 g',
+            price: 4100,
+            stockAvailable: 7,
+            stockReserved: 0,
+            attributesJson: null,
+          },
+        ],
+      },
+    ])
+
+    const result = await getFeaturedProducts(6)
+
+    expect(result.products[0]).toMatchObject({
+      primaryImageUrl: null,
+      primaryImageAltText: null,
     })
   })
 })

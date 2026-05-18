@@ -15,6 +15,8 @@ const multiVariantProduct: FeaturedProduct = {
   unitLabel: 'Seleccionar variante',
   price: 0,
   stockAvailable: 10,
+  primaryImageUrl: 'https://cdn.example.test/almendra.jpg',
+  primaryImageAltText: 'Almendra tostada en bolsa',
   minPrice: 4200,
   isMultiVariant: true,
   variants: [
@@ -49,6 +51,8 @@ const granelProduct: FeaturedProduct = {
   unitLabel: 'Seleccionar presentación',
   price: 1200,
   stockAvailable: 3,
+  primaryImageUrl: null,
+  primaryImageAltText: null,
   minPrice: 1200,
   isMultiVariant: true,
   variants: [
@@ -59,6 +63,45 @@ const granelProduct: FeaturedProduct = {
 }
 
 describe('FeaturedProductsSection', () => {
+  it('renders uploaded product images and accessible placeholders in the same card media area', () => {
+    render(
+      <FeaturedProductsSection
+        products={[multiVariantProduct, granelProduct]}
+        isLoading={false}
+        source="api"
+        onAddToCart={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('img', { name: 'Almendra tostada en bolsa' })).toHaveAttribute(
+      'src',
+      'https://cdn.example.test/almendra.jpg',
+    )
+    expect(screen.getByLabelText('Imagen no disponible para Castañas de cajú')).toHaveTextContent(
+      'Sin imagen',
+    )
+  })
+
+  it('keeps product card actions in a dedicated alignment region after the reserved media area', () => {
+    const { container } = render(
+      <FeaturedProductsSection
+        products={[multiVariantProduct, granelProduct]}
+        isLoading={false}
+        source="api"
+        onAddToCart={vi.fn()}
+      />,
+    )
+
+    const cards = Array.from(container.querySelectorAll('.product-card'))
+    expect(cards).toHaveLength(2)
+
+    for (const card of cards) {
+      expect(card.querySelector('.product-media')).toBeInTheDocument()
+      expect(card.querySelector('.product-card-actions')).toBeInTheDocument()
+      expect(card.querySelector('.product-card-actions .btn')).toBeInTheDocument()
+    }
+  })
+
   it('shows "Desde" price label for multi-variant product cards', () => {
     render(
       <FeaturedProductsSection
@@ -114,6 +157,32 @@ describe('FeaturedProductsSection', () => {
       productId: 'prod-1',
       variantId: 'var-500',
       quantity: 3,
+    })
+  })
+
+  it('clamps quantity to the selected presentation stock before adding to cart', async () => {
+    const user = userEvent.setup()
+    const onAddToCart = vi.fn()
+
+    render(
+      <FeaturedProductsSection
+        products={[multiVariantProduct]}
+        isLoading={false}
+        source="api"
+        onAddToCart={onAddToCart}
+      />,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Almendra premium'), 'var-500')
+    fireEvent.change(screen.getByLabelText('Cantidad para Almendra premium'), {
+      target: { value: '9' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    expect(onAddToCart).toHaveBeenCalledWith({
+      productId: 'prod-1',
+      variantId: 'var-500',
+      quantity: 4,
     })
   })
 

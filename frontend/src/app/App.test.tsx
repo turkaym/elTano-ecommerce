@@ -122,15 +122,12 @@ describe('App checkout MVP flow', () => {
 
     expect(screen.getByRole('navigation', { name: 'Categorías' })).toBeInTheDocument()
     expect(screen.getByRole('search')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'Productos naturales El Tano' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Comprar ahora' })).toHaveAttribute(
-      'href',
-      '#productos-destacados-title',
-    )
+    expect(screen.queryByRole('img', { name: 'Productos naturales El Tano' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Comprar ahora' })).not.toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Calidad real para todos los dias, a precio justo.' }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Por que nos eligen' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Por que nos eligen' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Carrito' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Finalizar pedido' })).toBeInTheDocument()
 
@@ -180,7 +177,7 @@ describe('App checkout MVP flow', () => {
     expect(within(iconContainer).queryByLabelText(/cuenta/i)).not.toBeInTheDocument()
   })
 
-  it('shows logo in header with graceful fallback text and keeps hero CTA target', async () => {
+  it('shows logo in header with graceful fallback text and keeps product navigation reachable', async () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
@@ -191,8 +188,7 @@ describe('App checkout MVP flow', () => {
     fireEvent.error(brandLogo)
     expect(screen.getByText('El Tano Frutos Secos')).toBeInTheDocument()
 
-    const buyNowLink = screen.getByRole('link', { name: 'Comprar ahora' })
-    expect(buyNowLink).toHaveAttribute('href', '#productos-destacados-title')
+    expect(screen.getByRole('link', { name: 'Productos' })).toHaveAttribute('href', '/productos')
 
     expect(await screen.findByRole('heading', { name: 'Productos destacados' })).toHaveAttribute(
       'id',
@@ -223,6 +219,24 @@ describe('App checkout MVP flow', () => {
     expect(await screen.findByDisplayValue('frutos secos')).toBeInTheDocument()
     expect(screen.getByText('Almendra natural premium')).toBeInTheDocument()
     expect(screen.queryByText('Harina de coco organica')).not.toBeInTheDocument()
+  })
+
+  it('runs global search from non-product pages by navigating to filtered product results', async () => {
+    const user = userEvent.setup()
+
+    renderAppAt('/categorias')
+
+    expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Buscar productos'), 'harina')
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/productos')
+      expect(window.location.search).toContain('q=harina')
+    })
+
+    expect(await screen.findByText('Harina de coco organica')).toBeInTheDocument()
+    expect(screen.queryByText('Almendra natural premium')).not.toBeInTheDocument()
   })
 
   it('requires variant selection and sends selected variant + quantity to checkout draft', async () => {
@@ -286,6 +300,42 @@ describe('App checkout MVP flow', () => {
     })
   })
 
+  it('renders home cart cards with metadata and preserves checkout draft item payload shape', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getFeaturedProducts).mockResolvedValueOnce({
+      source: 'api',
+      products: [
+        {
+          ...featuredProduct,
+          primaryImageUrl: '/uploads/almendra.jpg',
+          primaryImageAltText: 'Almendra premium en bolsa',
+        },
+      ],
+    })
+
+    renderAppAt()
+
+    await screen.findByText('Almendra natural premium')
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    const cartItem = screen.getByRole('listitem', { name: /Almendra natural premium/i })
+    expect(within(cartItem).getByRole('img', { name: 'Almendra premium en bolsa' })).toBeInTheDocument()
+    expect(within(cartItem).getByText('Frutos secos')).toBeInTheDocument()
+    expect(within(cartItem).getByText('bolsa 500 g')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
+    await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
+
+    await waitFor(() => {
+      expect(createOrderDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ variantId: '11111111-1111-4111-8111-111111111111', quantity: 1 }],
+        }),
+      )
+    })
+  })
+
   it('updates the shared cart badge when adding from productos cards', async () => {
     const user = userEvent.setup()
 
@@ -304,6 +354,22 @@ describe('App checkout MVP flow', () => {
       expect(
         screen.getByRole('link', { name: 'Ver carrito, 2 items' }),
       ).toHaveTextContent('2')
+    })
+  })
+
+  it('updates the shared cart badge when adding from a category detail card', async () => {
+    const user = userEvent.setup()
+
+    renderAppAt('/categorias/frutos-secos')
+
+    await screen.findByRole('heading', { name: 'Categoria: Frutos secos' })
+    const productCard = screen.getByRole('heading', { name: 'Almendra natural premium' }).closest('article')
+    expect(productCard).not.toBeNull()
+
+    await user.click(within(productCard!).getByRole('button', { name: 'Agregar' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Ver carrito, 1 item' })).toHaveTextContent('1')
     })
   })
 
@@ -424,10 +490,10 @@ describe('App checkout MVP flow', () => {
 
     expect(vi.mocked(createOrderDraft)).not.toHaveBeenCalled()
     expect(
-      screen.getByText(
+      screen.queryByText(
         'No podemos finalizar el pedido con productos de muestra. Espera a que cargue el catalogo real del backend.',
       ),
-    ).toBeInTheDocument()
+    ).not.toBeInTheDocument()
   })
 
   it('redirects to WhatsApp with encoded payload on successful draft creation', async () => {
@@ -509,7 +575,8 @@ describe('App checkout MVP flow', () => {
     expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('link', { name: 'Inicio' }))
-    expect(screen.getByRole('heading', { name: 'Por que nos eligen' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Por que nos eligen' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Productos destacados' })).toBeInTheDocument()
 
     view.unmount()
     renderAppAt('/categorias/frutos-secos')

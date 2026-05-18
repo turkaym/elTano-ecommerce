@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { AppRoutes } from './routes/AppRoutes'
 import { PaymentReturnStatus } from '../features/checkout/components/PaymentReturnStatus'
 import { CartPanel } from '../features/cart/components/CartPanel'
@@ -25,21 +25,6 @@ const whatsappPhone = '5492966659577'
 const paymentDraftMessageStorageKey = 'checkout-payment-draft-messages'
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-const benefits = [
-  {
-    title: 'Envio local rapido',
-    description: 'Coordinamos entregas en el dia dentro de la zona para que recibas todo fresco.',
-  },
-  {
-    title: 'Retiro por el local',
-    description: 'Hace tu pedido y pasa a buscarlo sin espera en el horario que te quede comodo.',
-  },
-  {
-    title: 'Productos saludables',
-    description: 'Seleccion de frutos secos, semillas y harinas para sumar nutricion a tu rutina.',
-  },
-]
-
 function createWhatsappLink(message: string) {
   const encodedMessage = encodeURIComponent(message)
   return `https://wa.me/${whatsappPhone}?text=${encodedMessage}`
@@ -51,6 +36,7 @@ function isUuid(value: string) {
 
 export function App() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [showBrandLogo, setShowBrandLogo] = useState(true)
   const [products, setProducts] = useState<FeaturedProduct[]>([])
@@ -81,7 +67,12 @@ export function App() {
       nextParams.delete('q')
     }
 
-    setSearchParams(nextParams)
+    if (location.pathname === '/productos') {
+      setSearchParams(nextParams)
+      return
+    }
+
+    navigate({ pathname: '/productos', search: nextParams.toString() })
   }
 
   useEffect(() => {
@@ -137,6 +128,10 @@ export function App() {
       price: selectedVariant.price,
       stockAvailable: selectedVariant.stockAvailable,
       quantity: payload.quantity,
+      productId: selectedProduct.id,
+      categoryName: selectedProduct.categoryName,
+      imageUrl: selectedProduct.primaryImageUrl ?? undefined,
+      imageAltText: selectedProduct.primaryImageAltText,
     })
   }
 
@@ -216,33 +211,7 @@ export function App() {
 
   const homeContent = (
     <>
-      <header className="hero">
-        <img className="hero-image" src="/heroimage.png" alt="Productos naturales El Tano" />
-        <div className="hero-content">
-          <div className="hero-actions">
-            <a className="btn btn-primary" href="#productos-destacados-title">
-              Comprar ahora
-            </a>
-          </div>
-        </div>
-      </header>
-
       <main className="main-content">
-        <section className="section" aria-labelledby="beneficios-title">
-          <div className="section-header">
-            <h2 id="beneficios-title">Por que nos eligen</h2>
-            <p>Compra simple, entrega comoda y productos pensados para alimentarte mejor.</p>
-          </div>
-          <div className="benefits-grid">
-            {benefits.map((benefit) => (
-              <article key={benefit.title} className="benefit-card">
-                <h3>{benefit.title}</h3>
-                <p>{benefit.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
         <FeaturedProductsSection
           products={products}
           isLoading={isLoading}
