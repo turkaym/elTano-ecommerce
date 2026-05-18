@@ -1635,6 +1635,58 @@ textarea:focus-visible,
   color: var(--admin-danger);
 }
 
+.admin-catalog-summary-card strong {
+  font-size: clamp(1rem, 1.35vw, 1.3rem);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.admin-catalog-empty-callout {
+  display: grid;
+  gap: 0.35rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  background: var(--admin-control-surface);
+}
+
+.admin-catalog-empty-callout strong {
+  color: var(--admin-text);
+  font-size: 1.05rem;
+}
+
+.admin-catalog-empty-callout span,
+.admin-field small {
+  color: var(--admin-text-muted);
+}
+
+.admin-card textarea[aria-label='Contenido CSV'] {
+  min-height: 7rem;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  line-height: 1.5;
+}
+
+.admin-catalog-row-list .admin-item-card {
+  align-items: stretch;
+}
+
+.admin-catalog-row-list .admin-item-main {
+  width: 100%;
+}
+
+.admin-catalog-row-payload {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--admin-control-surface);
+  color: var(--admin-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .admin-empty-card {
   border: 1px dashed var(--admin-border-strong);
   border-radius: 0.9rem;

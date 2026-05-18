@@ -110,7 +110,7 @@ describe('AppRoutes admin nested routes', () => {
     ['/admin/productos', 'Productos'],
     ['/admin/categorias', 'Categorías'],
     ['/admin/pedidos', 'Pedidos'],
-    ['/admin/catalog-jobs', 'Sin jobs'],
+    ['/admin/catalog-jobs', 'Sin jobs todavía'],
   ])('shows the persistent sidebar links on %s', async (initialEntry, readyText) => {
     await renderReadyAdminRoute(initialEntry, readyText)
 

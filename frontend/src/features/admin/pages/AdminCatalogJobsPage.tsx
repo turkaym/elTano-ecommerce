@@ -93,45 +93,102 @@ export function AdminCatalogJobsPage() {
 
   if (status === 'loading') return <AdminLoadingState label="Cargando jobs de catálogo…" />
   if (status === 'error') return <AdminErrorState message="No se pudo cargar jobs de catálogo." />
-  if (!report) {
-    return (
-      <AdminEmptyState
-        title="Sin jobs"
-        action={
-          <div>
-            <textarea aria-label="Contenido CSV" value={csvPayload} onChange={(e) => setCsvPayload(e.target.value)} />
-            <button type="button" onClick={onUpload} disabled={write.isPending}>
-              Subir CSV
-            </button>
-            <AdminWriteStateBanner feedback={write.feedback} onDismiss={write.reset} onRetry={write.reset} />
-          </div>
-        }
-      />
-    )
-  }
 
   return (
-    <section aria-label="Diagnóstico de catalog jobs">
-      <h2>Catalog Jobs</h2>
-      <p>{report.summary}</p>
-      <p>Filas fallidas: {report.failedRows}</p>
-      <p>{adminGuardMessages.cancelUnsupported}</p>
-      <button type="button" disabled>
-        Cancelar job (no soportado)
-      </button>
-      <textarea aria-label="Contenido CSV" value={csvPayload} onChange={(e) => setCsvPayload(e.target.value)} />
-      <button type="button" onClick={onUpload} disabled={write.isPending}>
-        Subir CSV
-      </button>
-      {progress ? <p>Estado: {progress}</p> : null}
+    <section className="admin-page" aria-label="Diagnóstico de catalog jobs">
+      <div className="admin-page-header">
+        <p className="admin-eyebrow">Operaciones</p>
+        <h2>Catalog Jobs</h2>
+        <p>Subí CSV de catálogo y revisá el diagnóstico del último proceso importado.</p>
+      </div>
+
+      <section className="admin-card" aria-labelledby="catalog-upload-title">
+        <div className="admin-card-header">
+          <h3 id="catalog-upload-title">Importar catálogo</h3>
+          <p>{report ? 'Pegá el contenido CSV para encolar un nuevo job de importación.' : 'Importá tu primer CSV para generar un diagnóstico de catálogo.'}</p>
+        </div>
+        {!report ? (
+          <div className="admin-catalog-empty-callout" aria-label="Estado inicial catalog jobs">
+            <strong>Sin jobs todavía</strong>
+            <span>Cuando subas un CSV, vas a ver el resumen del proceso y los errores por fila en esta pantalla.</span>
+          </div>
+        ) : null}
+        <form
+          className="admin-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void onUpload()
+          }}
+        >
+          <label className="admin-field admin-field-wide">
+            <span>Contenido CSV</span>
+            <textarea
+              aria-label="Contenido CSV"
+              value={csvPayload}
+              onChange={(e) => setCsvPayload(e.target.value)}
+              placeholder={'name,slug\nPera,pera'}
+            />
+            <small>Formato esperado: encabezados en la primera fila y valores separados por coma.</small>
+          </label>
+          <div className="admin-form-actions">
+            <button className="btn btn-secondary" type="button" disabled aria-describedby="catalog-cancel-help">
+              Cancelar job (no soportado)
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={write.isPending}>
+              Subir CSV
+            </button>
+          </div>
+        </form>
+        <p id="catalog-cancel-help" className="admin-card-help">{adminGuardMessages.cancelUnsupported}</p>
+      </section>
+
+      {progress ? <p className="admin-feedback admin-feedback-pending">Estado: {progress}</p> : null}
       <AdminWriteStateBanner feedback={write.feedback} onDismiss={write.reset} onRetry={write.reset} />
-      <ul aria-label="Errores por fila">
-        {rows.map((row) => (
-          <li key={`${row.rowNumber}-${row.outcome}`}>
-            Fila {row.rowNumber}: {row.errorMessage ?? 'Sin errores'}
-          </li>
-        ))}
-      </ul>
+
+      {report ? (
+        <>
+          <section className="admin-dashboard-metrics" aria-label="Resumen del último job">
+            <article className="admin-card admin-metric-card admin-catalog-summary-card">
+              <span>Resumen</span>
+              <strong>{report.summary}</strong>
+              <small>Último reporte disponible</small>
+            </article>
+            <article className="admin-card admin-metric-card">
+              <span>Filas fallidas</span>
+              <strong>{report.failedRows}</strong>
+              <small>Registros que requieren revisión</small>
+            </article>
+          </section>
+
+          <section className="admin-card" aria-labelledby="catalog-row-errors-title">
+            <div className="admin-card-header">
+              <h3 id="catalog-row-errors-title">Errores por fila</h3>
+              <p>Detalle de resultados por registro para corregir y volver a importar.</p>
+            </div>
+            {!rows.length ? (
+              <AdminEmptyState title="Sin errores por fila" action={<p>No hay filas para revisar en el último reporte.</p>} />
+            ) : (
+              <ul className="admin-list admin-catalog-row-list" aria-label="Errores por fila">
+                {rows.map((row) => (
+                  <li className="admin-list-item" key={`${row.rowNumber}-${row.outcome}-${row.errorCode ?? 'ok'}`}>
+                    <article className="admin-item-card" aria-label={`Fila ${row.rowNumber}`}>
+                      <div className="admin-item-main">
+                        <strong>Fila {row.rowNumber}</strong>
+                        <span className={`admin-badge ${row.outcome === 'FAILED' ? 'admin-badge-danger' : 'admin-badge-success'}`}>
+                          {row.outcome}
+                        </span>
+                        {row.errorCode ? <span>Código: {row.errorCode}</span> : null}
+                        <span>{row.errorMessage ?? 'Sin errores'}</span>
+                        {row.payload ? <code className="admin-catalog-row-payload">{row.payload}</code> : null}
+                      </div>
+                    </article>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      ) : null}
     </section>
   )
 }

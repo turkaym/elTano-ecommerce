@@ -38,9 +38,23 @@ describe('AdminCatalogJobsPage', () => {
 
     expect(await screen.findByText(/Cancelación no disponible/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Cancelar job/i })).toBeDisabled()
+    expect(screen.getByText(/INVALID_SKU/i)).toBeInTheDocument()
     expect(screen.getByText(/SKU inválido/i)).toBeInTheDocument()
+    expect(screen.getByText('{"sku":""}')).toBeInTheDocument()
     expect(vi.mocked(getAdminCatalogJobRows)).toHaveBeenCalledWith('job-1')
     expect(vi.mocked(getAdminCatalogJobReport)).toHaveBeenCalledWith('job-1')
+  })
+
+  it('keeps csv upload available when there are no previous jobs', async () => {
+    vi.mocked(listAdminCatalogJobs).mockResolvedValueOnce([])
+
+    render(<AdminCatalogJobsPage />)
+
+    expect(await screen.findByText(/Sin jobs todavía/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Contenido CSV/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Subir CSV/i })).toBeEnabled()
+    expect(screen.getByText(/vas a ver el resumen del proceso/i)).toBeInTheDocument()
+    expect(screen.getByText(/Formato esperado/i)).toBeInTheDocument()
   })
 
   it('uploads csv and polls until completed refresh', async () => {
