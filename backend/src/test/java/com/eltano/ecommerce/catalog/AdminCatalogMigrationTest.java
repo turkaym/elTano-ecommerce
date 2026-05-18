@@ -34,6 +34,16 @@ class AdminCatalogMigrationTest {
     private CategoryRepository categoryRepository;
 
     @Test
+    void migrationV10CreatesCatalogCoreTablesBeforeOrderDraftForeignKeys() throws Exception {
+        String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_0__create_catalog_core.sql"));
+
+        assertTrue(migration.contains("create table if not exists categories"));
+        assertTrue(migration.contains("create table if not exists products"));
+        assertTrue(migration.contains("create table if not exists product_variants"));
+        assertTrue(migration.contains("constraint uk_product_variants_sku unique"));
+    }
+
+    @Test
     void migrationV15DefinesSoftDeleteAndImageConstraints() throws Exception {
         String migration = Files.readString(Path.of("src/main/resources/db/migration/V1_5__admin_catalog_core.sql"));
 
