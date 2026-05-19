@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,10 @@ import { App } from './App'
 
 vi.mock('../features/catalog/services/catalogService', () => ({
   getFeaturedProducts: vi.fn(),
+}))
+
+vi.mock('../features/catalog/services/catalogQueryService', () => ({
+  getCatalogListItems: vi.fn(),
 }))
 
 vi.mock('../features/checkout/services/checkoutService', () => ({
@@ -26,6 +30,7 @@ vi.mock('../shared/config/flags', async (importOriginal) => {
 })
 
 import { getFeaturedProducts } from '../features/catalog/services/catalogService'
+import { getCatalogListItems } from '../features/catalog/services/catalogQueryService'
 import {
   createOrderDraft,
   getDraftPaymentStatus,
@@ -64,11 +69,21 @@ function renderAppAt(pathname = '/') {
   )
 }
 
+function getProductCard(productName: string) {
+  const productCard = screen.getByRole('heading', { name: productName }).closest('article')
+  expect(productCard).not.toBeNull()
+  return productCard as HTMLElement
+}
+
 describe('App Mercado Pago flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
     vi.mocked(getFeaturedProducts).mockResolvedValue({ products: [featuredProduct], source: 'api' })
+    vi.mocked(getCatalogListItems).mockResolvedValue({
+      items: [{ ...featuredProduct, categorySlug: 'frutos-secos' }],
+      source: 'api',
+    })
     vi.mocked(createOrderDraft).mockResolvedValue({
       draftId: 'draft-1',
       reference: 'ET-2026-0001',
@@ -99,7 +114,8 @@ describe('App Mercado Pago flow', () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(getProductCard('Almendra natural premium')).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Ana Lopez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491198765432')
     await user.click(screen.getByRole('button', { name: 'Iniciar pago online' }))
@@ -113,11 +129,12 @@ describe('App Mercado Pago flow', () => {
 
   it('keeps checkout compatibility with variant-first cart lines', async () => {
     const user = userEvent.setup()
-    vi.mocked(getFeaturedProducts).mockResolvedValueOnce({
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
       source: 'api',
-      products: [
+      items: [
         {
           ...featuredProduct,
+          categorySlug: 'frutos-secos',
           variantId: null,
           unitLabel: 'Seleccionar presentación',
           isMultiVariant: true,
@@ -142,14 +159,16 @@ describe('App Mercado Pago flow', () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
+    const productCard = getProductCard('Almendra natural premium')
     await user.selectOptions(
-      screen.getByLabelText('Presentacion para Almendra natural premium'),
+      within(productCard).getByLabelText('Presentacion para Almendra natural premium'),
       '22222222-2222-4222-8222-222222222222',
     )
-    fireEvent.change(screen.getByLabelText('Cantidad para Almendra natural premium'), {
+    fireEvent.change(within(productCard).getByLabelText('Cantidad para Almendra natural premium'), {
       target: { value: '2' },
     })
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(productCard).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 2 items' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Ana Lopez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491198765432')
     await user.click(screen.getByRole('button', { name: 'Iniciar pago online' }))

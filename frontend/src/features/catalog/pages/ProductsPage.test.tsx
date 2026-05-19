@@ -107,7 +107,7 @@ describe('ProductsPage', () => {
     renderProductsAt('/productos')
     await screen.findByText('Almendra tostada')
 
-    await user.selectOptions(screen.getByLabelText('Categorías'), 'frutos-secos')
+    await user.click(screen.getByRole('button', { name: /Frutos secos/i }))
     await user.selectOptions(screen.getByLabelText('Stock'), 'in-stock')
     await user.selectOptions(screen.getByLabelText('Ordenar'), 'price-desc')
 

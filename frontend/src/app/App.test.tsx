@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeaturedProduct } from '../shared/types/catalog'
 import { App } from './App'
+import { CART_STORAGE_KEY } from '../features/cart/storage/cartStorage'
 
 vi.mock('../features/catalog/services/catalogService', () => ({
   getFeaturedProducts: vi.fn(),
@@ -53,6 +54,12 @@ function renderAppAt(pathname = '/') {
   )
 }
 
+function getProductCard(productName: string) {
+  const productCard = screen.getByRole('heading', { name: productName }).closest('article')
+  expect(productCard).not.toBeNull()
+  return productCard as HTMLElement
+}
+
 describe('App checkout MVP flow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -84,11 +91,11 @@ describe('App checkout MVP flow', () => {
           productType: 'ENVASADO',
           inventoryPolicy: 'PER_VARIANT',
           variants: [
-            { id: 'var-1', unitLabel: 'bolsa 500 g', price: 6400, stockAvailable: 10 },
+            { id: '11111111-1111-4111-8111-111111111111', unitLabel: 'bolsa 500 g', price: 6400, stockAvailable: 10 },
           ],
           isMultiVariant: false,
           minPrice: 6400,
-          variantId: 'var-1',
+          variantId: '11111111-1111-4111-8111-111111111111',
           unitLabel: 'bolsa 500 g',
           price: 6400,
           stockAvailable: 10,
@@ -102,11 +109,11 @@ describe('App checkout MVP flow', () => {
           productType: 'ENVASADO',
           inventoryPolicy: 'PER_VARIANT',
           variants: [
-            { id: 'var-2', unitLabel: 'bolsa 500 g', price: 5300, stockAvailable: 8 },
+            { id: '22222222-2222-4222-8222-222222222222', unitLabel: 'bolsa 500 g', price: 5300, stockAvailable: 8 },
           ],
           isMultiVariant: false,
           minPrice: 5300,
-          variantId: 'var-2',
+          variantId: '22222222-2222-4222-8222-222222222222',
           unitLabel: 'bolsa 500 g',
           price: 5300,
           stockAvailable: 8,
@@ -121,17 +128,18 @@ describe('App checkout MVP flow', () => {
     renderAppAt()
 
     expect(screen.getByRole('navigation', { name: 'Categorías' })).toBeInTheDocument()
-    expect(screen.getByRole('search')).toBeInTheDocument()
+    expect(screen.queryByRole('search')).not.toBeInTheDocument()
     expect(screen.queryByRole('img', { name: 'Productos naturales El Tano' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Comprar ahora' })).not.toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Calidad real para todos los dias, a precio justo.' }),
     ).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Por que nos eligen' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Carrito' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Finalizar pedido' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Carrito' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Finalizar pedido' })).not.toBeInTheDocument()
 
     expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
+    expect(screen.getByText('Harina de coco organica')).toBeInTheDocument()
   })
 
   it('keeps required shell sections visible across viewport resize changes', async () => {
@@ -145,8 +153,8 @@ describe('App checkout MVP flow', () => {
     })
     window.dispatchEvent(new Event('resize'))
 
-    expect(screen.getByRole('search')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Productos destacados' })).toBeInTheDocument()
+    expect(screen.queryByRole('search')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -155,8 +163,7 @@ describe('App checkout MVP flow', () => {
     })
     window.dispatchEvent(new Event('resize'))
 
-    expect(screen.getByRole('heading', { name: 'Carrito' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Finalizar pedido' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
   })
 
   it('does not expose customer-facing stock counters in featured cards', async () => {
@@ -177,7 +184,7 @@ describe('App checkout MVP flow', () => {
     expect(within(iconContainer).queryByLabelText(/cuenta/i)).not.toBeInTheDocument()
   })
 
-  it('shows logo in header with graceful fallback text and keeps product navigation reachable', async () => {
+  it('shows logo and icon actions while removing old central nav links', async () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
@@ -188,65 +195,88 @@ describe('App checkout MVP flow', () => {
     fireEvent.error(brandLogo)
     expect(screen.getByText('El Tano Frutos Secos')).toBeInTheDocument()
 
-    expect(screen.getByRole('link', { name: 'Productos' })).toHaveAttribute('href', '/productos')
+    expect(screen.queryByRole('link', { name: 'Inicio' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Categorías' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Productos' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Accesos de cuenta y carrito')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver carrito, 0 items' })).toHaveAttribute('href', '/carrito')
 
-    expect(await screen.findByRole('heading', { name: 'Productos destacados' })).toHaveAttribute(
+    expect(await screen.findByRole('heading', { name: 'Productos' })).toHaveAttribute(
       'id',
-      'productos-destacados-title',
+      'productos-title',
     )
   })
 
-  it('persists search query in URL and restores it when revisiting productos', async () => {
+  it('renders the full catalog and sidebar categories on the home route', async () => {
+    renderAppAt('/')
+
+    expect(await screen.findByRole('heading', { name: 'Productos' })).toBeInTheDocument()
+    const sidebar = screen.getByRole('navigation', { name: 'Categorías' })
+    expect(within(sidebar).getByRole('button', { name: /Todos los productos/i })).toHaveAttribute('aria-current', 'page')
+    expect(within(sidebar).getByRole('button', { name: /Frutos secos/i })).toBeInTheDocument()
+    expect(within(sidebar).getByRole('button', { name: /Harinas/i })).toBeInTheDocument()
+    expect(screen.getByText('Almendra natural premium')).toBeInTheDocument()
+    expect(screen.getByText('Harina de coco organica')).toBeInTheDocument()
+  })
+
+  it('filters home catalog products from the category sidebar', async () => {
     const user = userEvent.setup()
+    renderAppAt('/')
 
-    const view = renderAppAt('/productos')
+    expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
+    const sidebar = screen.getByRole('navigation', { name: 'Categorías' })
 
-    await screen.findByText('Almendra natural premium')
-
-    const searchInput = screen.getByLabelText('Buscar productos')
-    await user.type(searchInput, 'harina')
-
-    await waitFor(() => {
-      expect(window.location.search).toContain('q=harina')
-    })
+    await user.click(within(sidebar).getByRole('button', { name: /Harinas/i }))
 
     expect(await screen.findByText('Harina de coco organica')).toBeInTheDocument()
     expect(screen.queryByText('Almendra natural premium')).not.toBeInTheDocument()
+    expect(within(sidebar).getByRole('button', { name: /Harinas/i })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('restores product filter query when revisiting productos', async () => {
+    const view = renderAppAt('/productos')
+
+    await screen.findByText('Almendra natural premium')
+    expect(screen.queryByLabelText('Buscar productos')).not.toBeInTheDocument()
 
     view.unmount()
     renderAppAt('/productos?q=frutos%20secos')
 
-    expect(await screen.findByDisplayValue('frutos secos')).toBeInTheDocument()
-    expect(screen.getByText('Almendra natural premium')).toBeInTheDocument()
+    expect(screen.getByLabelText('Filtrar productos')).toHaveValue('frutos secos')
+    expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
     expect(screen.queryByText('Harina de coco organica')).not.toBeInTheDocument()
   })
 
-  it('runs global search from non-product pages by navigating to filtered product results', async () => {
+  it('keeps multi-word product filter text while typing', async () => {
     const user = userEvent.setup()
 
+    renderAppAt('/productos')
+
+    await screen.findByText('Almendra natural premium')
+    const filterInput = screen.getByLabelText('Filtrar productos')
+
+    await user.type(filterInput, 'frutos secos')
+
+    expect(filterInput).toHaveValue('frutos secos')
+    expect(window.location.search).toContain('q=frutos+secos')
+  })
+
+  it('does not render the removed navbar search on non-product pages', () => {
     renderAppAt('/categorias')
 
     expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
-
-    await user.type(screen.getByLabelText('Buscar productos'), 'harina')
-
-    await waitFor(() => {
-      expect(window.location.pathname).toBe('/productos')
-      expect(window.location.search).toContain('q=harina')
-    })
-
-    expect(await screen.findByText('Harina de coco organica')).toBeInTheDocument()
-    expect(screen.queryByText('Almendra natural premium')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Buscar productos')).not.toBeInTheDocument()
   })
 
   it('requires variant selection and sends selected variant + quantity to checkout draft', async () => {
     const user = userEvent.setup()
 
-    vi.mocked(getFeaturedProducts).mockResolvedValueOnce({
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
       source: 'api',
-      products: [
+      items: [
         {
           ...featuredProduct,
+          categorySlug: 'frutos-secos',
           variantId: null,
           unitLabel: 'Seleccionar presentación',
           isMultiVariant: true,
@@ -274,18 +304,20 @@ describe('App checkout MVP flow', () => {
     renderAppAt()
 
     expect(await screen.findByText(/Desde\s*\$\s*6.400/i)).toBeInTheDocument()
+    const productCard = getProductCard('Almendra natural premium')
 
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(productCard).getByRole('button', { name: 'Agregar' }))
     expect(screen.getByText('Selecciona una variante para continuar.')).toBeInTheDocument()
 
     await user.selectOptions(
-      screen.getByLabelText('Presentacion para Almendra natural premium'),
+      within(productCard).getByLabelText('Presentacion para Almendra natural premium'),
       '22222222-2222-4222-8222-222222222222',
     )
-    fireEvent.change(screen.getByLabelText('Cantidad para Almendra natural premium'), {
+    fireEvent.change(within(productCard).getByLabelText('Cantidad para Almendra natural premium'), {
       target: { value: '3' },
     })
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(productCard).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 3 items' }))
 
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
@@ -300,13 +332,14 @@ describe('App checkout MVP flow', () => {
     })
   })
 
-  it('renders home cart cards with metadata and preserves checkout draft item payload shape', async () => {
+  it('renders cart page cards with metadata and preserves checkout draft item payload shape', async () => {
     const user = userEvent.setup()
-    vi.mocked(getFeaturedProducts).mockResolvedValueOnce({
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
       source: 'api',
-      products: [
+      items: [
         {
           ...featuredProduct,
+          categorySlug: 'frutos-secos',
           primaryImageUrl: '/uploads/almendra.jpg',
           primaryImageAltText: 'Almendra premium en bolsa',
         },
@@ -316,7 +349,8 @@ describe('App checkout MVP flow', () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(getProductCard('Almendra natural premium')).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
 
     const cartItem = screen.getByRole('listitem', { name: /Almendra natural premium/i })
     expect(within(cartItem).getByRole('img', { name: 'Almendra premium en bolsa' })).toBeInTheDocument()
@@ -336,14 +370,46 @@ describe('App checkout MVP flow', () => {
     })
   })
 
+  it('allows checkout from a directly opened persisted cart with valid backend variant ids', async () => {
+    const user = userEvent.setup()
+    window.localStorage.setItem(
+      CART_STORAGE_KEY,
+      JSON.stringify([
+        {
+          variantId: '11111111-1111-4111-8111-111111111111',
+          productName: 'Almendra natural premium',
+          unitLabel: 'bolsa 500 g',
+          price: 6400,
+          quantity: 1,
+          stockAvailable: 10,
+          categoryName: 'Frutos secos',
+        },
+      ]),
+    )
+
+    renderAppAt('/carrito')
+
+    expect(screen.getByRole('heading', { name: 'Mi carrito' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
+    await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
+
+    await waitFor(() => {
+      expect(createOrderDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ variantId: '11111111-1111-4111-8111-111111111111', quantity: 1 }],
+        }),
+      )
+    })
+  })
+
   it('updates the shared cart badge when adding from productos cards', async () => {
     const user = userEvent.setup()
 
     renderAppAt('/productos')
 
     await screen.findByText('Almendra natural premium')
-    const productCard = screen.getByRole('heading', { name: 'Almendra natural premium' }).closest('article')
-    expect(productCard).not.toBeNull()
+    const productCard = getProductCard('Almendra natural premium')
 
     fireEvent.change(within(productCard!).getByLabelText('Cantidad para Almendra natural premium'), {
       target: { value: '2' },
@@ -363,8 +429,7 @@ describe('App checkout MVP flow', () => {
     renderAppAt('/categorias/frutos-secos')
 
     await screen.findByRole('heading', { name: 'Categoria: Frutos secos' })
-    const productCard = screen.getByRole('heading', { name: 'Almendra natural premium' }).closest('article')
-    expect(productCard).not.toBeNull()
+    const productCard = getProductCard('Almendra natural premium')
 
     await user.click(within(productCard!).getByRole('button', { name: 'Agregar' }))
 
@@ -378,17 +443,26 @@ describe('App checkout MVP flow', () => {
 
     await screen.findByText('Almendra natural premium')
 
-    expect(screen.getByRole('link', { name: 'Ver carrito, 0 items' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver carrito, 0 items' })).toHaveAttribute('href', '/carrito')
     expect(screen.queryByText('0')).not.toBeInTheDocument()
   })
 
-  it('keeps home featured add-to-cart updating the shared cart badge', async () => {
+  it('renders the dedicated cart route with empty state and checkout disabled', async () => {
+    renderAppAt('/carrito')
+
+    expect(screen.getByRole('heading', { name: 'Mi carrito' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Tu carrito está vacío' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver productos' })).toHaveAttribute('href', '/productos')
+    expect(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' })).toBeDisabled()
+  })
+
+  it('keeps home catalog add-to-cart updating the shared cart badge', async () => {
     const user = userEvent.setup()
 
     renderAppAt('/')
 
     await screen.findByText('Almendra natural premium')
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(getProductCard('Almendra natural premium')).getByRole('button', { name: 'Agregar' }))
 
     await waitFor(() => {
       expect(
@@ -397,7 +471,7 @@ describe('App checkout MVP flow', () => {
     })
   })
 
-  it('navigates from the header cart icon to the home cart section from productos', async () => {
+  it('navigates from the header cart icon to the cart page from productos', async () => {
     const user = userEvent.setup()
 
     renderAppAt('/productos')
@@ -406,10 +480,10 @@ describe('App checkout MVP flow', () => {
     await user.click(screen.getByRole('link', { name: 'Ver carrito, 0 items' }))
 
     await waitFor(() => {
-      expect(window.location.pathname).toBe('/')
-      expect(window.location.hash).toBe('#carrito')
+      expect(window.location.pathname).toBe('/carrito')
     })
-    expect(screen.getByRole('heading', { name: 'Carrito' })).toHaveFocus()
+    expect(screen.getByRole('heading', { name: 'Mi carrito' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Tu carrito está vacío' })).toBeInTheDocument()
   })
 
   it('does not update the shared cart badge for out-of-stock productos cards', async () => {
@@ -452,7 +526,8 @@ describe('App checkout MVP flow', () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(getProductCard('Almendra natural premium')).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
 
@@ -467,13 +542,17 @@ describe('App checkout MVP flow', () => {
     ).toBeInTheDocument()
   })
 
-  it('blocks checkout submission when catalog is mock fallback', async () => {
+  it('blocks checkout submission when cart items have non-backend variant ids', async () => {
     const user = userEvent.setup()
-    vi.mocked(getFeaturedProducts).mockResolvedValueOnce({
-      products: [
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
+      items: [
         {
           ...featuredProduct,
+          categorySlug: 'frutos-secos',
           variantId: 'mock-variant-1',
+          variants: [
+            { id: 'mock-variant-1', unitLabel: 'bolsa 500 g', price: 6400, stockAvailable: 10 },
+          ],
         },
       ],
       source: 'mock',
@@ -482,7 +561,8 @@ describe('App checkout MVP flow', () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(getProductCard('Almendra natural premium')).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
 
@@ -490,10 +570,8 @@ describe('App checkout MVP flow', () => {
 
     expect(vi.mocked(createOrderDraft)).not.toHaveBeenCalled()
     expect(
-      screen.queryByText(
-        'No podemos finalizar el pedido con productos de muestra. Espera a que cargue el catalogo real del backend.',
-      ),
-    ).not.toBeInTheDocument()
+      screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }),
+    ).toBeDisabled()
   })
 
   it('redirects to WhatsApp with encoded payload on successful draft creation', async () => {
@@ -510,7 +588,8 @@ describe('App checkout MVP flow', () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
-    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(within(getProductCard('Almendra natural premium')).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Ana Lopez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491198765432')
 
@@ -527,40 +606,37 @@ describe('App checkout MVP flow', () => {
     )
   })
 
-  it('exposes navbar links Inicio, Categorías and Productos', async () => {
+  it('does not expose old navbar links Inicio, Categorías and Productos', async () => {
     renderAppAt()
 
     await screen.findByText('Almendra natural premium')
 
-    expect(screen.getByRole('link', { name: 'Inicio' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Categorías' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Productos' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Inicio' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Categorías' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Productos' })).not.toBeInTheDocument()
   })
 
-  it('marks only the current route link as active in navbar', async () => {
+  it('marks only the current sidebar category as active', async () => {
     const user = userEvent.setup()
 
     renderAppAt('/productos')
 
-    const inicioLink = screen.getByRole('link', { name: 'Inicio' })
-    const categoriasLink = screen.getByRole('link', { name: 'Categorías' })
-    const productosLink = screen.getByRole('link', { name: 'Productos' })
+    await screen.findByText('Almendra natural premium')
+    const sidebar = screen.getByRole('navigation', { name: 'Categorías' })
+    const allProductsButton = within(sidebar).getByRole('button', { name: /Todos los productos/i })
+    const harinasButton = within(sidebar).getByRole('button', { name: /Harinas/i })
 
-    expect(productosLink).toHaveAttribute('aria-current', 'page')
-    expect(inicioLink).not.toHaveAttribute('aria-current')
-    expect(categoriasLink).not.toHaveAttribute('aria-current')
+    expect(allProductsButton).toHaveAttribute('aria-current', 'page')
+    expect(harinasButton).not.toHaveAttribute('aria-current')
 
-    await user.click(categoriasLink)
+    await user.click(harinasButton)
 
-    expect(categoriasLink).toHaveAttribute('aria-current', 'page')
-    expect(inicioLink).not.toHaveAttribute('aria-current')
-    expect(productosLink).not.toHaveAttribute('aria-current')
+    expect(harinasButton).toHaveAttribute('aria-current', 'page')
+    expect(allProductsButton).not.toHaveAttribute('aria-current')
   })
 
-  it('navigates through required public routes via navbar and direct URL entry', async () => {
-    const user = userEvent.setup()
-
-    const view = renderAppAt('/categorias')
+  it('keeps required public routes available by direct URL entry', async () => {
+    let view = renderAppAt('/categorias')
 
     expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
     expect(await screen.findByRole('link', { name: /Frutos secos/i })).toHaveAttribute(
@@ -568,15 +644,15 @@ describe('App checkout MVP flow', () => {
       '/categorias/frutos-secos',
     )
 
-    await user.click(screen.getByRole('link', { name: 'Productos' }))
+    view.unmount()
+    view = renderAppAt('/productos')
     expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
+    expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('link', { name: 'Categorías' }))
-    expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
-
-    await user.click(screen.getByRole('link', { name: 'Inicio' }))
+    view.unmount()
+    view = renderAppAt('/')
     expect(screen.queryByRole('heading', { name: 'Por que nos eligen' })).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Productos destacados' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
 
     view.unmount()
     renderAppAt('/categorias/frutos-secos')
@@ -594,18 +670,10 @@ describe('App checkout MVP flow', () => {
     expect(screen.queryByText('Almendra natural premium')).not.toBeInTheDocument()
   })
 
-  it('keeps catalog navigation working after checkout return route render', async () => {
-    const user = userEvent.setup()
-
+  it('keeps checkout return route render isolated from catalog search', () => {
     renderAppAt('/checkout/return')
 
     expect(screen.getByRole('heading', { name: 'Pago online no disponible' })).toBeInTheDocument()
-
-    await user.click(screen.getByRole('link', { name: 'Productos' }))
-    expect(screen.getByRole('heading', { name: 'Productos' })).toBeInTheDocument()
-    expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('link', { name: 'Categorías' }))
-    expect(screen.getByRole('heading', { name: 'Categorias' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Buscar productos')).not.toBeInTheDocument()
   })
 })

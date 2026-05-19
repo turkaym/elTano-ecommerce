@@ -107,12 +107,12 @@ describe('Storefront non-regression smoke', () => {
     renderAppAt('/')
 
     expect(screen.getByRole('navigation', { name: 'Categorías' })).toBeInTheDocument()
-    expect(screen.getByRole('search')).toBeInTheDocument()
+    expect(screen.queryByRole('search')).not.toBeInTheDocument()
     expect(screen.queryByRole('img', { name: 'Productos naturales El Tano' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Por que nos eligen' })).not.toBeInTheDocument()
     expect(await screen.findByText('Almendra natural premium')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Carrito' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Finalizar pedido' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Ver carrito, 0 items' })).toHaveAttribute('href', '/carrito')
+    expect(screen.queryByRole('heading', { name: 'Carrito' })).not.toBeInTheDocument()
   })
 
   it('preserves checkout-by-whatsapp baseline flow', async () => {
@@ -125,6 +125,7 @@ describe('Storefront non-regression smoke', () => {
       '11111111-1111-4111-8111-111111111111',
     )
     await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
     await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))

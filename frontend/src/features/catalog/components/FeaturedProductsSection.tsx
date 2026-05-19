@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FeaturedProduct } from '../../../shared/types/catalog'
 
 export interface FeaturedAddToCartPayload {
@@ -61,15 +61,31 @@ interface FeaturedProductCardProps {
 }
 
 export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCardProps) {
-  const [selectedVariantId, setSelectedVariantId] = useState<string>(product.variantId ?? '')
+  const initialVariantId = product.variantId && product.variants.some((variant) => variant.id === product.variantId)
+    ? product.variantId
+    : product.variantId
+      ? product.variants.find((variant) => variant.stockAvailable > 0)?.id ?? ''
+      : ''
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(initialVariantId)
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState<string | null>(null)
+  const [recentlyAdded, setRecentlyAdded] = useState(false)
+  const [feedbackId, setFeedbackId] = useState(0)
+  const feedbackTimeoutRef = useRef<number | null>(null)
   const selectedVariant = product.variants.find((variant) => variant.id === selectedVariantId) ?? null
   const maxQuantity = Math.max(1, selectedVariant?.stockAvailable ?? product.stockAvailable)
   const isBulkWeight = product.inventoryPolicy === 'BULK_WEIGHT'
   const hasStock = isBulkWeight
     ? (product.stockAvailableBaseGrams ?? 0) >= 100 && product.variants.some((variant) => variant.stockAvailable > 0)
     : product.stockAvailable > 0
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimeoutRef.current !== null) {
+        window.clearTimeout(feedbackTimeoutRef.current)
+      }
+    }
+  }, [])
 
   function handleAdd() {
     if (!selectedVariantId) {
@@ -83,6 +99,15 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
       variantId: selectedVariantId,
       quantity: Math.min(quantity, maxQuantity),
     })
+    setRecentlyAdded(true)
+    setFeedbackId((current) => current + 1)
+    if (feedbackTimeoutRef.current !== null) {
+      window.clearTimeout(feedbackTimeoutRef.current)
+    }
+    feedbackTimeoutRef.current = window.setTimeout(() => {
+      setRecentlyAdded(false)
+      feedbackTimeoutRef.current = null
+    }, 1800)
   }
 
   return (
@@ -127,14 +152,15 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
         <div className="product-card-messages" aria-live="polite">
           {!hasStock ? <p className="product-validation-error">Sin stock para esta presentación.</p> : null}
           {error ? <p className="product-validation-error">{error}</p> : null}
+          {recentlyAdded ? <span key={feedbackId} className="product-added-feedback" role="status">Producto agregado</span> : null}
         </div>
         <button
           type="button"
-          className="btn btn-secondary"
+          className="btn btn-primary product-add-button"
           disabled={!hasStock}
           onClick={handleAdd}
         >
-          {!hasStock ? 'Sin stock' : 'Agregar'}
+          {!hasStock ? 'Sin stock' : recentlyAdded ? 'Agregado' : 'Agregar'}
         </button>
       </div>
     </article>

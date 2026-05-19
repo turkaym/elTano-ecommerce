@@ -8,6 +8,7 @@ interface CartPanelProps {
   onSetQty: (variantId: string, quantity: number) => void
   onRemove: (variantId: string) => void
   onClear: () => void
+  showSummary?: boolean
 }
 
 const currencyFormatter = new Intl.NumberFormat('es-AR', {
@@ -24,11 +25,12 @@ export function CartPanel({
   onSetQty,
   onRemove,
   onClear,
+  showSummary = true,
 }: CartPanelProps) {
   return (
-    <section id="carrito" className="section" aria-labelledby="carrito-title">
+    <section id="carrito" className="section" aria-labelledby="carrito-panel-title">
       <div className="section-header section-header-inline">
-        <h2 id="carrito-title" tabIndex={-1}>Carrito</h2>
+        <h2 id="carrito-panel-title" tabIndex={-1}>Carrito</h2>
         <span className="cart-count">{totals.itemCount} item(s)</span>
       </div>
 
@@ -96,16 +98,18 @@ export function CartPanel({
             ))}
           </ul>
 
-          <div className="cart-summary">
-            <p className="cart-summary-row">
-              <span>Subtotal</span>
-              <strong>{currencyFormatter.format(totals.subtotal)}</strong>
-            </p>
-            <p className="cart-summary-row cart-summary-total">
-              <span>Total</span>
-              <strong>{currencyFormatter.format(totals.total)}</strong>
-            </p>
-          </div>
+          {showSummary ? (
+            <div className="cart-summary">
+              <p className="cart-summary-row">
+                <span>Subtotal</span>
+                <strong>{currencyFormatter.format(totals.subtotal)}</strong>
+              </p>
+              <p className="cart-summary-row cart-summary-total">
+                <span>Total</span>
+                <strong>{currencyFormatter.format(totals.total)}</strong>
+              </p>
+            </div>
+          ) : null}
 
           <button type="button" className="btn btn-secondary" onClick={onClear}>
             Vaciar carrito

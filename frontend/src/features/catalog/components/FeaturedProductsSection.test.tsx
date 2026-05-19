@@ -160,6 +160,46 @@ describe('FeaturedProductsSection', () => {
     })
   })
 
+  it('shows accessible added feedback after adding a product', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <FeaturedProductsSection
+        products={[multiVariantProduct]}
+        isLoading={false}
+        source="api"
+        onAddToCart={vi.fn()}
+      />,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Almendra premium'), 'var-250')
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    expect(screen.getByRole('button', { name: 'Agregado' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Producto agregado')
+  })
+
+  it('keeps feedback available when adding the same product repeatedly', async () => {
+    const user = userEvent.setup()
+    const onAddToCart = vi.fn()
+
+    render(
+      <FeaturedProductsSection
+        products={[multiVariantProduct]}
+        isLoading={false}
+        source="api"
+        onAddToCart={onAddToCart}
+      />,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Almendra premium'), 'var-250')
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('button', { name: 'Agregado' }))
+
+    expect(onAddToCart).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('status')).toHaveTextContent('Producto agregado')
+  })
+
   it('clamps quantity to the selected presentation stock before adding to cart', async () => {
     const user = userEvent.setup()
     const onAddToCart = vi.fn()

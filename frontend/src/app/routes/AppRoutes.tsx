@@ -16,18 +16,28 @@ import type { CartItem } from '../../shared/types/checkout'
 
 interface AppRoutesProps {
   homeContent: ReactNode
+  cartContent?: ReactNode
   checkoutReturnContent: ReactNode
   onCatalogAddToCart?: (item: CartItem) => void
 }
 
-export function AppRoutes({ homeContent, checkoutReturnContent, onCatalogAddToCart }: AppRoutesProps) {
+export function AppRoutes({
+  homeContent,
+  cartContent,
+  checkoutReturnContent,
+  onCatalogAddToCart,
+}: AppRoutesProps) {
   return (
     <Routes>
       <Route path="/" element={homeContent} />
+      <Route path="/carrito" element={cartContent} />
       <Route path="/checkout/return" element={checkoutReturnContent} />
       <Route path="/categorias" element={<CategoriesPage />} />
       <Route path="/categorias/:slug" element={<CategoryDetailPage onAddCartItem={onCatalogAddToCart} />} />
-      <Route path="/productos" element={<ProductsPage onAddCartItem={onCatalogAddToCart} />} />
+      <Route
+        path="/productos"
+        element={<ProductsPage onAddCartItem={onCatalogAddToCart} />}
+      />
       {adminDashboardEnabled ? (
         <Route element={<AdminGuard />}>
           <Route path="/admin" element={<AdminShell />}>
