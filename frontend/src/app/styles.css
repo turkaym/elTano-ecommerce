@@ -2153,17 +2153,18 @@ textarea:focus-visible,
 
   .top-shell-brand {
     justify-content: center;
-    min-height: 3rem;
+    min-height: clamp(7.5rem, 36vw, 10rem);
   }
 
   .brand-logo {
-    max-width: min(72vw, 14rem);
-    height: clamp(3rem, 17vw, 4.5rem);
+    max-width: min(86vw, 22rem);
+    height: clamp(6.5rem, 34vw, 9rem);
   }
 
   .top-shell-right {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     width: 100%;
     min-width: 0;
     gap: var(--space-3);
@@ -2182,8 +2183,7 @@ textarea:focus-visible,
   }
 
   .top-shell-icons {
-    grid-column: 2;
-    justify-self: end;
+    justify-content: center;
   }
 
   .category-pill {
