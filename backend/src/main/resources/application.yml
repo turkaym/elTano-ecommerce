@@ -25,6 +25,9 @@ server:
 app:
   admin:
     enabled: ${ADMIN_ENABLED:true}
+  cors:
+    admin-allowed-origins: ${CORS_ADMIN_ALLOWED_ORIGINS:http://localhost:5173}
+    storefront-allowed-origins: ${CORS_STOREFRONT_ALLOWED_ORIGINS:http://localhost:5173}
   security:
     jwt-secret: ${JWT_SECRET:change-me-in-env}
     admin-user: ${ADMIN_BASIC_USER:}

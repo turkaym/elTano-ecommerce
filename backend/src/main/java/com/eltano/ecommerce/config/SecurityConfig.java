@@ -20,6 +20,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -31,6 +32,12 @@ public class SecurityConfig {
 
     @Value("${app.uploads.product-images.public-path:/uploads/product-images}")
     private String productImagesPublicPath;
+
+    @Value("${app.cors.admin-allowed-origins:http://localhost:5173}")
+    private String adminAllowedOrigins;
+
+    @Value("${app.cors.storefront-allowed-origins:http://localhost:5173}")
+    private String storefrontAllowedOrigins;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -76,13 +83,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration adminConfig = new CorsConfiguration();
-        adminConfig.setAllowedOrigins(List.of("http://localhost:5173"));
+        adminConfig.setAllowedOrigins(parseAllowedOrigins(adminAllowedOrigins));
         adminConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         adminConfig.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-XSRF-TOKEN"));
         adminConfig.setAllowCredentials(true);
 
         CorsConfiguration storefrontConfig = new CorsConfiguration();
-        storefrontConfig.setAllowedOrigins(List.of("http://localhost:5173"));
+        storefrontConfig.setAllowedOrigins(parseAllowedOrigins(storefrontAllowedOrigins));
         storefrontConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         storefrontConfig.setAllowedHeaders(List.of("*"));
         storefrontConfig.setAllowCredentials(false);
@@ -91,6 +98,17 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/api/admin/**", adminConfig);
         source.registerCorsConfiguration("/**", storefrontConfig);
         return source;
+    }
+
+    private static List<String> parseAllowedOrigins(String origins) {
+        if (origins == null || origins.isBlank()) {
+            return List.of("http://localhost:5173");
+        }
+
+        return Arrays.stream(origins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isBlank())
+                .toList();
     }
 
     @Bean

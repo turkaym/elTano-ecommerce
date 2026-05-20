@@ -96,6 +96,38 @@ Si falta alguno de los prerrequisitos, la verificacion fallara de forma inmediat
 - `EXPIRED_ADMIN_BASIC_PASS`: password del usuario admin expirado.
 - `MP_ACCESS_TOKEN`: access token de Mercado Pago.
 
+## Despliegue de produccion
+
+El scaffold de produccion asume que el VPS ya tiene Nginx para otros sitios. Este repo solo aporta un site config aislado para `frutoseltano.com.ar` y `www.frutoseltano.com.ar`.
+
+1. En el VPS, clonar la rama/revision deseada en `/home/deploy/apps/eltano/app`.
+2. Copiar el template de entorno y completar secretos reales:
+   ```bash
+   cp deploy/.env.production.example .env
+   ```
+3. Construir y levantar los servicios:
+   ```bash
+   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+   ```
+4. Instalar el site config sin tocar otros sitios:
+   ```bash
+   sudo cp deploy/nginx/eltano.conf /etc/nginx/sites-available/eltano.conf
+   sudo ln -s /etc/nginx/sites-available/eltano.conf /etc/nginx/sites-enabled/eltano.conf
+   sudo nginx -t
+   sudo systemctl reload nginx
+   ```
+5. Emitir TLS con Certbot para ambos dominios y volver a validar Nginx:
+   ```bash
+   sudo certbot --nginx -d frutoseltano.com.ar -d www.frutoseltano.com.ar
+   sudo nginx -t
+   ```
+
+Notas importantes:
+
+- `backend` y `frontend` quedan publicados solo en `127.0.0.1` para que el Nginx del VPS sea el unico punto de entrada publico.
+- Las imagenes subidas persisten en el volumen Docker `product-images`, montado en `/app/uploads/product-images` y configurado con `PRODUCT_IMAGE_UPLOAD_DIR`.
+- No pongas `VITE_ADMIN_BASIC_USER` ni `VITE_ADMIN_BASIC_PASS` en produccion salvo que sea estrictamente necesario: Vite los inserta en assets publicos del navegador. Es una deuda de seguridad conocida hasta redisenar la autenticacion admin.
+
 ## Arquitectura inicial
 
 ### Estructura del monorepo

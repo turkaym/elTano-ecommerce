@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eltano
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ${COMPOSE_ENV_FILE:-.env}
+    environment:
+      DB_URL: ${DB_URL:?DB_URL is required}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      PRODUCT_IMAGE_UPLOAD_DIR: ${PRODUCT_IMAGE_UPLOAD_DIR:-/app/uploads/product-images}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - product-images:${PRODUCT_IMAGE_UPLOAD_DIR:-/app/uploads/product-images}
+    networks:
+      - eltano
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_CHECKOUT_MVP_ENABLED: ${VITE_CHECKOUT_MVP_ENABLED:-true}
+        VITE_CHECKOUT_PAYMENT_ENABLED: ${VITE_CHECKOUT_PAYMENT_ENABLED:-false}
+        VITE_STOREFRONT_VARIANT_FLOW_ENABLED: ${VITE_STOREFRONT_VARIANT_FLOW_ENABLED:-true}
+        VITE_ADMIN_ENABLED: ${VITE_ADMIN_ENABLED:-true}
+        VITE_ADMIN_BASIC_USER: ${VITE_ADMIN_BASIC_USER:-}
+        VITE_ADMIN_BASIC_PASS: ${VITE_ADMIN_BASIC_PASS:-}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:80"
+    networks:
+      - eltano
+
+networks:
+  eltano:
+
+volumes:
+  postgres-data:
+  product-images:
