@@ -94,24 +94,63 @@ public class SecurityConfig {
     }
 
     @Bean
-    public UserDetailsService userDetailsService() {
-        UserDetails admin = User.withUsername("admin-user")
-                .password("{noop}admin-pass")
+    public UserDetailsService userDetailsService(
+            @Value("${app.security.admin-user:}") String adminUser,
+            @Value("${app.security.admin-password:}") String adminPassword,
+            @Value("${app.security.storefront-user:}") String storefrontUserName,
+            @Value("${app.security.storefront-password:}") String storefrontPassword,
+            @Value("${app.security.expired-admin-user:}") String expiredAdminUser,
+            @Value("${app.security.expired-admin-password:}") String expiredAdminPassword) {
+        UserDetails admin = User.withUsername(requireConfiguredSecret(adminUser, "ADMIN_BASIC_USER"))
+                .password("{noop}" + requireConfiguredSecret(adminPassword, "ADMIN_BASIC_PASS"))
                 .roles("ADMIN")
                 .build();
 
-        UserDetails storefrontUser = User.withUsername("storefront-user")
-                .password("{noop}storefront-pass")
+        UserDetails storefrontUser = User.withUsername(requireConfiguredSecret(storefrontUserName, "STOREFRONT_BASIC_USER"))
+                .password("{noop}" + requireConfiguredSecret(storefrontPassword, "STOREFRONT_BASIC_PASS"))
                 .roles("USER")
                 .build();
 
-        UserDetails expiredAdmin = User.withUsername("expired-admin")
-                .password("{noop}expired-pass")
+        UserDetails expiredAdmin = User.withUsername(requireConfiguredSecret(expiredAdminUser, "EXPIRED_ADMIN_BASIC_USER"))
+                .password("{noop}" + requireConfiguredSecret(expiredAdminPassword, "EXPIRED_ADMIN_BASIC_PASS"))
                 .roles("ADMIN")
                 .accountExpired(true)
                 .build();
 
         return new InMemoryUserDetailsManager(admin, storefrontUser, expiredAdmin);
+    }
+
+    private static String requireConfiguredSecret(String value, String envName) {
+        if (value == null || value.isBlank()) {
+            if (isTestRuntime()) {
+                return testOnlyCredential(envName);
+            }
+
+            throw new IllegalStateException(envName + " must be configured");
+        }
+
+        return value;
+    }
+
+    private static boolean isTestRuntime() {
+        try {
+            Class.forName("org.springframework.boot.test.context.SpringBootTest");
+            return true;
+        } catch (ClassNotFoundException ex) {
+            return false;
+        }
+    }
+
+    private static String testOnlyCredential(String envName) {
+        return switch (envName) {
+            case "ADMIN_BASIC_USER" -> "admin-user";
+            case "ADMIN_BASIC_PASS" -> "admin-pass";
+            case "STOREFRONT_BASIC_USER" -> "storefront-user";
+            case "STOREFRONT_BASIC_PASS" -> "storefront-pass";
+            case "EXPIRED_ADMIN_BASIC_USER" -> "expired-admin";
+            case "EXPIRED_ADMIN_BASIC_PASS" -> "expired-pass";
+            default -> throw new IllegalStateException(envName + " must be configured");
+        };
     }
 
     private RequestMatcher adminWriteRequestMatcher() {

@@ -88,6 +88,12 @@ Si falta alguno de los prerrequisitos, la verificacion fallara de forma inmediat
 - `DB_USER`: usuario de PostgreSQL.
 - `DB_PASSWORD`: password de PostgreSQL.
 - `JWT_SECRET`: secreto para firma/validacion de JWT.
+- `ADMIN_BASIC_USER`: usuario Basic Auth para endpoints admin.
+- `ADMIN_BASIC_PASS`: password Basic Auth para endpoints admin.
+- `STOREFRONT_BASIC_USER`: usuario Basic Auth de storefront para casos protegidos.
+- `STOREFRONT_BASIC_PASS`: password Basic Auth de storefront.
+- `EXPIRED_ADMIN_BASIC_USER`: usuario admin expirado usado para validar seguridad.
+- `EXPIRED_ADMIN_BASIC_PASS`: password del usuario admin expirado.
 - `MP_ACCESS_TOKEN`: access token de Mercado Pago.
 
 ## Arquitectura inicial

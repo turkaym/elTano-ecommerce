@@ -27,6 +27,12 @@ app:
     enabled: ${ADMIN_ENABLED:true}
   security:
     jwt-secret: ${JWT_SECRET:change-me-in-env}
+    admin-user: ${ADMIN_BASIC_USER:}
+    admin-password: ${ADMIN_BASIC_PASS:}
+    storefront-user: ${STOREFRONT_BASIC_USER:}
+    storefront-password: ${STOREFRONT_BASIC_PASS:}
+    expired-admin-user: ${EXPIRED_ADMIN_BASIC_USER:}
+    expired-admin-password: ${EXPIRED_ADMIN_BASIC_PASS:}
   catalog:
     seed-on-empty: ${CATALOG_SEED_ON_EMPTY:true}
     jobs:
