@@ -1,44 +1,22 @@
-import { useEffect, useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { AppRoutes } from './routes/AppRoutes'
 import { PaymentReturnStatus } from '../features/checkout/components/PaymentReturnStatus'
-import { CartPanel } from '../features/cart/components/CartPanel'
+import { CartPage } from '../features/cart/pages/CartPage'
 import { useCartStore } from '../features/cart/state/cartStore'
-import {
-  FeaturedProductsSection,
-  type FeaturedAddToCartPayload,
-} from '../features/catalog/components/FeaturedProductsSection'
-import { getFeaturedProducts } from '../features/catalog/services/catalogService'
+import { ProductsPage } from '../features/catalog/pages/ProductsPage'
 import { CheckoutForm, type CheckoutFormValues } from '../features/checkout/components/CheckoutForm'
 import { createOrderDraft, startDraftPayment } from '../features/checkout/services/checkoutService'
-import { StorefrontNav } from '../features/navigation/components/StorefrontNav'
-import { SearchBar } from '../features/search/components/SearchBar'
 import { ApiClientError } from '../shared/api/httpClient'
 import {
   checkoutMvpEnabled,
   checkoutPaymentEnabled,
 } from '../shared/config/flags'
-import type { FeaturedProduct } from '../shared/types/catalog'
 import type { CreateOrderDraftRequest } from '../shared/types/checkout'
 
-const whatsappPhone = '5491123456789'
+const whatsappPhone = '5492966659577'
 const paymentDraftMessageStorageKey = 'checkout-payment-draft-messages'
 const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
-const benefits = [
-  {
-    title: 'Envio local rapido',
-    description: 'Coordinamos entregas en el dia dentro de la zona para que recibas todo fresco.',
-  },
-  {
-    title: 'Retiro por el local',
-    description: 'Hace tu pedido y pasa a buscarlo sin espera en el horario que te quede comodo.',
-  },
-  {
-    title: 'Productos saludables',
-    description: 'Seleccion de frutos secos, semillas y harinas para sumar nutricion a tu rutina.',
-  },
-]
 
 function createWhatsappLink(message: string) {
   const encodedMessage = encodeURIComponent(message)
@@ -51,79 +29,19 @@ function isUuid(value: string) {
 
 export function App() {
   const location = useLocation()
-  const [searchParams, setSearchParams] = useSearchParams()
   const [showBrandLogo, setShowBrandLogo] = useState(true)
-  const [products, setProducts] = useState<FeaturedProduct[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [source, setSource] = useState<'api' | 'mock'>('mock')
   const [submitError, setSubmitError] = useState<string | null>(null)
   const cart = useCartStore()
   const hasInvalidVariantIds = cart.items.some((item) => !isUuid(item.variantId))
-  const usingMockCatalog = source === 'mock'
-  const checkoutBlockedMessage = usingMockCatalog
-    ? 'No podemos finalizar el pedido con productos de muestra. Espera a que cargue el catalogo real del backend.'
-    : hasInvalidVariantIds
+  const checkoutBlockedMessage = hasInvalidVariantIds
       ? 'Tu carrito contiene productos incompatibles con el backend. Vacialo y vuelve a agregar productos del catalogo real.'
       : null
 
   const returnParams = new URLSearchParams(location.search)
   const returnDraftId = returnParams.get('draftId')
   const providerStatusHint = returnParams.get('status') ?? returnParams.get('result')
-  const searchValue = searchParams.get('q') ?? ''
-
-  function handleSearchChange(nextValue: string) {
-    const nextParams = new URLSearchParams(searchParams)
-    if (nextValue.trim()) {
-      nextParams.set('q', nextValue)
-    } else {
-      nextParams.delete('q')
-    }
-
-    setSearchParams(nextParams)
-  }
-
-  useEffect(() => {
-    let isMounted = true
-
-    async function loadFeaturedProducts() {
-      try {
-        const result = await getFeaturedProducts(6)
-        if (!isMounted) {
-          return
-        }
-
-        setProducts(result.products)
-        setSource(result.source)
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    void loadFeaturedProducts()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  function handleAddToCart(payload: FeaturedAddToCartPayload) {
-    const selectedProduct = products.find((product) => product.id === payload.productId)
-    const selectedVariant = selectedProduct?.variants.find((variant) => variant.id === payload.variantId)
-    if (!selectedProduct || !selectedVariant) {
-      return
-    }
-
-    cart.addItem({
-      variantId: selectedVariant.id,
-      productName: selectedProduct.name,
-      unitLabel: selectedVariant.unitLabel,
-      price: selectedVariant.price,
-      stockAvailable: selectedVariant.stockAvailable,
-      quantity: payload.quantity,
-    })
-  }
+  const isAdminRoute = location.pathname.startsWith('/admin')
+  const cartItemLabel = cart.totals.itemCount === 1 ? 'item' : 'items'
 
   async function handleSubmitDraft(values: CheckoutFormValues) {
     if (checkoutBlockedMessage) {
@@ -135,6 +53,9 @@ export function App() {
       customerName: values.customerName,
       phone: values.phone,
       note: values.note.trim() ? values.note : undefined,
+      fulfillmentMethod: values.fulfillmentMethod,
+      deliveryAddress: values.fulfillmentMethod === 'DELIVERY' ? values.deliveryAddress : undefined,
+      pickupTime: values.fulfillmentMethod === 'PICKUP' ? values.pickupTime : undefined,
       items: cart.items.map((item) => ({
         variantId: item.variantId,
         quantity: item.quantity,
@@ -142,8 +63,8 @@ export function App() {
     }
 
     try {
-      const response = await createOrderDraft(payload)
       setSubmitError(null)
+      const response = await createOrderDraft(payload)
       if (checkoutPaymentEnabled) {
         const payment = await startDraftPayment(response.draftId)
         const existing = window.sessionStorage.getItem(paymentDraftMessageStorageKey)
@@ -158,10 +79,7 @@ export function App() {
       }
 
       cart.clear()
-      const popup = window.open(createWhatsappLink(response.whatsappMessage), '_blank', 'noopener,noreferrer')
-      if (!popup) {
-        setSubmitError('No pudimos abrir WhatsApp automaticamente. Habilita popups e intenta de nuevo.')
-      }
+      window.open(createWhatsappLink(response.whatsappMessage), '_blank', 'noopener,noreferrer')
     } catch (error) {
       if (error instanceof ApiClientError) {
         if (error.status === 409) {
@@ -199,78 +117,43 @@ export function App() {
     }
   }
 
-  const homeContent = (
-    <>
-      <header className="hero">
-        <img className="hero-image" src="/heroimage.png" alt="Productos naturales El Tano" />
-        <div className="hero-content">
-          <div className="hero-actions">
-            <a className="btn btn-primary" href="#productos-destacados-title">
-              Comprar ahora
-            </a>
-          </div>
-        </div>
-      </header>
+  const homeContent = <ProductsPage onAddCartItem={cart.addItem} />
 
-      <main className="main-content">
-        <section className="section" aria-labelledby="beneficios-title">
-          <div className="section-header">
-            <h2 id="beneficios-title">Por que nos eligen</h2>
-            <p>Compra simple, entrega comoda y productos pensados para alimentarte mejor.</p>
-          </div>
-          <div className="benefits-grid">
-            {benefits.map((benefit) => (
-              <article key={benefit.title} className="benefit-card">
-                <h3>{benefit.title}</h3>
-                <p>{benefit.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
+  const checkoutContent = checkoutMvpEnabled ? (
+    <CheckoutForm
+      isCartEmpty={!cart.items.length}
+      isSubmitBlocked={Boolean(checkoutBlockedMessage)}
+      blockedSubmitMessage={checkoutBlockedMessage ?? undefined}
+      submitError={submitError}
+      submitLabel={checkoutPaymentEnabled ? 'Iniciar pago online' : undefined}
+      onSubmitDraft={handleSubmitDraft}
+    />
+  ) : (
+    <section className="section checkout-notice" aria-labelledby="compra-title">
+      <h2 id="compra-title">Confirma tu compra por WhatsApp</h2>
+      <p>Checkout MVP deshabilitado temporalmente. Contactanos por WhatsApp para confirmar.</p>
+      <a
+        className="btn btn-primary"
+        href={createWhatsappLink('Hola! Quiero confirmar una compra en El Tano Frutos Secos.')}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Confirmar compra por WhatsApp
+      </a>
+    </section>
+  )
 
-        <FeaturedProductsSection
-          products={products}
-          isLoading={isLoading}
-          source={source}
-          onAddToCart={handleAddToCart}
-        />
-
-        {checkoutMvpEnabled ? (
-          <div className="checkout-grid">
-            <CartPanel
-              items={cart.items}
-              totals={cart.totals}
-              warning={cart.warning}
-              onDismissWarning={cart.dismissWarning}
-              onSetQty={cart.setQty}
-              onRemove={cart.removeItem}
-              onClear={cart.clear}
-            />
-            <CheckoutForm
-              isCartEmpty={!cart.items.length}
-              isSubmitBlocked={Boolean(checkoutBlockedMessage)}
-              blockedSubmitMessage={checkoutBlockedMessage ?? undefined}
-              submitError={submitError}
-              submitLabel={checkoutPaymentEnabled ? 'Iniciar pago online' : undefined}
-              onSubmitDraft={handleSubmitDraft}
-            />
-          </div>
-        ) : (
-          <section className="section checkout-notice" aria-labelledby="compra-title">
-            <h2 id="compra-title">Confirma tu compra por WhatsApp</h2>
-            <p>Checkout MVP deshabilitado temporalmente. Contactanos por WhatsApp para confirmar.</p>
-            <a
-              className="btn btn-primary"
-              href={createWhatsappLink('Hola! Quiero confirmar una compra en El Tano Frutos Secos.')}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Confirmar compra por WhatsApp
-            </a>
-          </section>
-        )}
-      </main>
-    </>
+  const cartContent = (
+    <CartPage
+      items={cart.items}
+      totals={cart.totals}
+      warning={cart.warning}
+      checkoutContent={checkoutContent}
+      onDismissWarning={cart.dismissWarning}
+      onSetQty={cart.setQty}
+      onRemove={cart.removeItem}
+      onClear={cart.clear}
+    />
   )
 
   const checkoutReturnContent = checkoutPaymentEnabled ? (
@@ -302,35 +185,49 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <div className="app-chrome">
-        <header className="top-shell">
-          <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
-            {showBrandLogo ? (
-              <img
-                className="brand-logo"
-                src="/logo-el-tano.png"
-                alt="El Tano Frutos Secos"
-                onError={() => setShowBrandLogo(false)}
-              />
-            ) : (
-              <p className="hero-kicker">El Tano Frutos Secos</p>
-            )}
-          </div>
-
-          <div className="top-shell-right">
-            <StorefrontNav />
-
-            <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
-              <span aria-hidden="true">👤</span>
-              <span aria-hidden="true">🛒</span>
+      {!isAdminRoute ? (
+        <div className="app-chrome">
+          <header className="top-shell">
+            <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
+              {showBrandLogo ? (
+                <img
+                  className="brand-logo"
+                  src="/elTanoLogo.png"
+                  alt="El Tano Frutos Secos"
+                  onError={() => setShowBrandLogo(false)}
+                />
+              ) : (
+                <p className="hero-kicker">El Tano Frutos Secos</p>
+              )}
             </div>
-          </div>
-        </header>
 
-        <SearchBar value={searchValue} onChange={handleSearchChange} />
-      </div>
+            <div className="top-shell-right">
+              <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
+                <span aria-hidden="true">👤</span>
+                <Link
+                  className="cart-icon-link cart-icon-with-badge"
+                  to="/carrito"
+                  aria-label={`Ver carrito, ${cart.totals.itemCount} ${cartItemLabel}`}
+                >
+                  <span aria-hidden="true">🛒</span>
+                  {cart.totals.itemCount > 0 ? (
+                    <span className="cart-icon-badge" aria-hidden="true">
+                      {cart.totals.itemCount}
+                    </span>
+                  ) : null}
+                </Link>
+              </div>
+            </div>
+          </header>
+        </div>
+      ) : null}
 
-      <AppRoutes homeContent={homeContent} checkoutReturnContent={checkoutReturnContent} />
+      <AppRoutes
+        homeContent={homeContent}
+        cartContent={cartContent}
+        checkoutReturnContent={checkoutReturnContent}
+        onCatalogAddToCart={cart.addItem}
+      />
     </div>
   )
 }

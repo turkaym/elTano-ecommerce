@@ -32,9 +32,9 @@ public class MercadoPagoHttpClient implements MercadoPagoClient {
             RestClient.Builder restClientBuilder,
             @Value("${app.mercadopago.api-base-url:https://api.mercadopago.com}") String apiBaseUrl,
             @Value("${app.mercadopago.access-token:}") String accessToken,
-            @Value("${app.mercadopago.checkout-success-url}") String checkoutSuccessUrl,
-            @Value("${app.mercadopago.checkout-failure-url}") String checkoutFailureUrl,
-            @Value("${app.mercadopago.checkout-pending-url}") String checkoutPendingUrl,
+            @Value("${app.mercadopago.checkout-success-url:http://localhost:5173/checkout/return?result=success}") String checkoutSuccessUrl,
+            @Value("${app.mercadopago.checkout-failure-url:http://localhost:5173/checkout/return?result=failure}") String checkoutFailureUrl,
+            @Value("${app.mercadopago.checkout-pending-url:http://localhost:5173/checkout/return?result=pending}") String checkoutPendingUrl,
             @Value("${app.mercadopago.notification-url:}") String notificationUrl) {
         this.checkoutSuccessUrl = checkoutSuccessUrl;
         this.checkoutFailureUrl = checkoutFailureUrl;

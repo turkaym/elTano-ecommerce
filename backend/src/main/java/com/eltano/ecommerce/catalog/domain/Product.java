@@ -56,12 +56,27 @@ public class Product {
     @Column
     private Integer stockBaseGrams;
 
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int stockReservedBaseGrams;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProductVariant> variants = new ArrayList<>();
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProductImage> images = new ArrayList<>();
+
+    @Column
+    private Instant deletedAt;
+
+    @Column(length = 120)
+    private String deletedBy;
+
+    @Column(length = 400)
+    private String deleteReason;
 
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
@@ -131,6 +146,14 @@ public class Product {
         this.stockBaseGrams = stockBaseGrams;
     }
 
+    public int getStockReservedBaseGrams() {
+        return stockReservedBaseGrams;
+    }
+
+    public void setStockReservedBaseGrams(int stockReservedBaseGrams) {
+        this.stockReservedBaseGrams = stockReservedBaseGrams;
+    }
+
     public Category getCategory() {
         return category;
     }
@@ -161,5 +184,45 @@ public class Product {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public List<ProductImage> getImages() {
+        return images;
+    }
+
+    public void replaceImages(List<ProductImage> newImages) {
+        images.clear();
+        for (ProductImage image : newImages) {
+            addImage(image);
+        }
+    }
+
+    public void addImage(ProductImage image) {
+        image.setProduct(this);
+        images.add(image);
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public String getDeletedBy() {
+        return deletedBy;
+    }
+
+    public void setDeletedBy(String deletedBy) {
+        this.deletedBy = deletedBy;
+    }
+
+    public String getDeleteReason() {
+        return deleteReason;
+    }
+
+    public void setDeleteReason(String deleteReason) {
+        this.deleteReason = deleteReason;
     }
 }

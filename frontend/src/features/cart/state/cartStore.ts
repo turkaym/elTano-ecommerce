@@ -49,7 +49,11 @@ function cartReducer(state: CartState, action: CartAction): CartState {
 
         return {
           ...item,
-          quantity: Math.min(item.quantity + action.payload.quantity, item.stockAvailable),
+          ...action.payload,
+          quantity: Math.min(
+            item.quantity + action.payload.quantity,
+            action.payload.stockAvailable,
+          ),
         }
       }),
     }

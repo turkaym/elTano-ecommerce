@@ -17,6 +17,8 @@ export const mockFeaturedProducts: FeaturedProduct[] = [
     variantId: 'mock-variant-1',
     unitLabel: 'bolsa 500 g',
     price: 6400,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
   {
     id: 'mock-2',
@@ -34,6 +36,8 @@ export const mockFeaturedProducts: FeaturedProduct[] = [
     variantId: 'mock-variant-2',
     unitLabel: 'bolsa 350 g',
     price: 3900,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
   {
     id: 'mock-3',
@@ -51,6 +55,8 @@ export const mockFeaturedProducts: FeaturedProduct[] = [
     variantId: 'mock-variant-3',
     unitLabel: 'bolsa 1 kg',
     price: 9800,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
   {
     id: 'mock-4',
@@ -68,6 +74,8 @@ export const mockFeaturedProducts: FeaturedProduct[] = [
     variantId: 'mock-variant-4',
     unitLabel: 'botella 500 ml',
     price: 7200,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
   {
     id: 'mock-5',
@@ -85,6 +93,8 @@ export const mockFeaturedProducts: FeaturedProduct[] = [
     variantId: 'mock-variant-5',
     unitLabel: 'bolsa 500 g',
     price: 7600,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
   {
     id: 'mock-6',
@@ -102,5 +112,7 @@ export const mockFeaturedProducts: FeaturedProduct[] = [
     variantId: 'mock-variant-6',
     unitLabel: 'bolsa 500 g',
     price: 5300,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
 ]

@@ -10,10 +10,15 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import com.eltano.ecommerce.orders.domain.FulfillmentMethod;
+
 public record CreateOrderDraftRequest(
         @NotBlank @Size(max = 180) String customerName,
         @NotBlank @Size(max = 60) String phone,
         @Size(max = 1000) String note,
+        @NotNull FulfillmentMethod fulfillmentMethod,
+        @Size(max = 500) String deliveryAddress,
+        @Size(max = 120) String pickupTime,
         @NotEmpty List<@Valid Item> items) {
 
     public record Item(

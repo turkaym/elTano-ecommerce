@@ -6,6 +6,11 @@ spring:
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: "1.10"
+    locations: classpath:db/migration
   jpa:
     hibernate:
       ddl-auto: update
@@ -18,10 +23,34 @@ server:
   port: 8080
 
 app:
+  admin:
+    enabled: ${ADMIN_ENABLED:true}
+  cors:
+    admin-allowed-origins: ${CORS_ADMIN_ALLOWED_ORIGINS:http://localhost:5173}
+    storefront-allowed-origins: ${CORS_STOREFRONT_ALLOWED_ORIGINS:http://localhost:5173}
   security:
     jwt-secret: ${JWT_SECRET:change-me-in-env}
+    admin-user: ${ADMIN_BASIC_USER:}
+    admin-password: ${ADMIN_BASIC_PASS:}
+    storefront-user: ${STOREFRONT_BASIC_USER:}
+    storefront-password: ${STOREFRONT_BASIC_PASS:}
+    expired-admin-user: ${EXPIRED_ADMIN_BASIC_USER:}
+    expired-admin-password: ${EXPIRED_ADMIN_BASIC_PASS:}
   catalog:
     seed-on-empty: ${CATALOG_SEED_ON_EMPTY:true}
+    jobs:
+      worker:
+        enabled: ${CATALOG_JOBS_WORKER_ENABLED:false}
+        poll-interval: ${CATALOG_JOBS_WORKER_POLL_INTERVAL:1000ms}
+        batch-size: ${CATALOG_JOBS_WORKER_BATCH_SIZE:1}
+        max-attempts: ${CATALOG_JOBS_WORKER_MAX_ATTEMPTS:3}
+        lease-seconds: ${CATALOG_JOBS_WORKER_LEASE_SECONDS:30}
+        concurrency: ${CATALOG_JOBS_WORKER_CONCURRENCY:1}
+  uploads:
+    product-images:
+      directory: ${PRODUCT_IMAGE_UPLOAD_DIR:uploads/product-images}
+      public-path: ${PRODUCT_IMAGE_PUBLIC_PATH:/uploads/product-images}
+      max-size-bytes: ${PRODUCT_IMAGE_MAX_SIZE_BYTES:5242880}
   mercadopago:
     enabled: ${MP_ENABLED:false}
     api-base-url: ${MP_API_BASE_URL:https://api.mercadopago.com}

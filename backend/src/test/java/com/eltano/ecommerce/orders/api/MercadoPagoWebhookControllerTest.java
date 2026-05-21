@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.eltano.ecommerce.common.api.RestExceptionHandler;
 import com.eltano.ecommerce.config.SecurityConfig;
+import com.eltano.ecommerce.audit.service.AdminAuditService;
 import com.eltano.ecommerce.orders.service.payment.MercadoPagoWebhookService;
 
 @WebMvcTest(controllers = MercadoPagoWebhookController.class)
@@ -29,6 +30,9 @@ class MercadoPagoWebhookControllerTest {
 
     @MockBean
     private MercadoPagoWebhookService webhookService;
+
+    @MockBean
+    private AdminAuditService adminAuditService;
 
     @Test
     void returns403WhenSignatureHeaderMissing() throws Exception {

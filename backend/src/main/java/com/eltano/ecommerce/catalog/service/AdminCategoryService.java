@@ -9,17 +9,22 @@ import org.springframework.transaction.annotation.Transactional;
 import com.eltano.ecommerce.catalog.api.dto.AdminCategoryResponse;
 import com.eltano.ecommerce.catalog.api.dto.AdminCategoryUpsertRequest;
 import com.eltano.ecommerce.catalog.domain.Category;
+import com.eltano.ecommerce.catalog.domain.Product;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
+import com.eltano.ecommerce.catalog.repository.ProductRepository;
 import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.common.api.ResourceNotFoundException;
+import com.eltano.ecommerce.common.api.UnprocessableEntityException;
 
 @Service
 public class AdminCategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final ProductRepository productRepository;
 
-    public AdminCategoryService(CategoryRepository categoryRepository) {
+    public AdminCategoryService(CategoryRepository categoryRepository, ProductRepository productRepository) {
         this.categoryRepository = categoryRepository;
+        this.productRepository = productRepository;
     }
 
     @Transactional
@@ -42,6 +47,17 @@ public class AdminCategoryService {
 
         ensureSlugUnique(request.slug(), id);
 
+        if (!request.active() && category.isActive()) {
+            long activeProducts = productRepository.countByCategoryIdAndActiveTrueAndDeletedAtIsNull(id);
+            if (activeProducts > 0) {
+                throw new UnprocessableEntityException(
+                        "Category cannot be deactivated while active products are associated",
+                        List.of(new UnprocessableEntityException.FieldError(
+                                "active",
+                                "Deactivate or reassign active products before deactivating this category")));
+            }
+        }
+
         category.setName(request.name().trim());
         category.setSlug(request.slug().trim());
         category.setActive(request.active());
@@ -55,6 +71,29 @@ public class AdminCategoryService {
         return categoryRepository.findAll().stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Transactional
+    public void deleteWithReassignment(UUID id, UUID targetCategoryId) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+
+        List<Product> linkedProducts = productRepository.findAllByCategoryId(id);
+        if (linkedProducts.isEmpty()) {
+            categoryRepository.delete(category);
+            return;
+        }
+
+        if (targetCategoryId == null || id.equals(targetCategoryId)) {
+            throw new UnprocessableEntityException("targetCategoryId is required and must be different when category has products");
+        }
+
+        Category targetCategory = categoryRepository.findById(targetCategoryId)
+                .orElseThrow(() -> new UnprocessableEntityException("targetCategoryId is invalid"));
+
+        linkedProducts.forEach(product -> product.setCategory(targetCategory));
+        productRepository.saveAll(linkedProducts);
+        categoryRepository.delete(category);
     }
 
     private void ensureSlugUnique(String slug, UUID categoryId) {

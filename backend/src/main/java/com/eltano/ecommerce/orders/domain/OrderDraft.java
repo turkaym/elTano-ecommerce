@@ -47,6 +47,16 @@ public class OrderDraft {
     @Column(length = 1000)
     private String note;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private FulfillmentMethod fulfillmentMethod = FulfillmentMethod.PICKUP;
+
+    @Column(length = 500)
+    private String deliveryAddress;
+
+    @Column(length = 120)
+    private String pickupTime;
+
     @Column(nullable = false, length = 10)
     private String currency;
 
@@ -127,6 +137,30 @@ public class OrderDraft {
 
     public void setNote(String note) {
         this.note = note;
+    }
+
+    public FulfillmentMethod getFulfillmentMethod() {
+        return fulfillmentMethod;
+    }
+
+    public void setFulfillmentMethod(FulfillmentMethod fulfillmentMethod) {
+        this.fulfillmentMethod = fulfillmentMethod;
+    }
+
+    public String getDeliveryAddress() {
+        return deliveryAddress;
+    }
+
+    public void setDeliveryAddress(String deliveryAddress) {
+        this.deliveryAddress = deliveryAddress;
+    }
+
+    public String getPickupTime() {
+        return pickupTime;
+    }
+
+    public void setPickupTime(String pickupTime) {
+        this.pickupTime = pickupTime;
     }
 
     public String getCurrency() {

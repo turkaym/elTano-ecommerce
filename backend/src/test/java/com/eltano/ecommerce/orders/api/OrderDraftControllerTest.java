@@ -27,6 +27,7 @@ import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.common.api.MercadoPagoRequestException;
 import com.eltano.ecommerce.common.api.RestExceptionHandler;
 import com.eltano.ecommerce.config.SecurityConfig;
+import com.eltano.ecommerce.audit.service.AdminAuditService;
 import com.eltano.ecommerce.orders.service.OrderDraftService;
 
 @WebMvcTest(controllers = OrderDraftController.class, properties = "app.mercadopago.enabled=true")
@@ -38,6 +39,9 @@ class OrderDraftControllerTest {
 
     @MockBean
     private OrderDraftService orderDraftService;
+
+    @MockBean
+    private AdminAuditService adminAuditService;
 
     @Test
     void createDraftReturns201AndBody() throws Exception {
@@ -56,6 +60,8 @@ class OrderDraftControllerTest {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
                           "note": "Tocar timbre",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 2}
                           ]
@@ -93,6 +99,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 2}
                           ]
@@ -100,6 +108,27 @@ class OrderDraftControllerTest {
                         """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Insufficient stock"));
+    }
+
+    @Test
+    void createDraftReturns409ForBulkWeightBoundaryConflict() throws Exception {
+        when(orderDraftService.createDraft(any())).thenThrow(new ConflictException("Insufficient stock: requires 1000g"));
+
+        mockMvc.perform(post("/api/orders/drafts")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                          "customerName": "Juan Perez",
+                          "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
+                          "items": [
+                            {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 2}
+                          ]
+                        }
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Insufficient stock: requires 1000g"));
     }
 
     @Test
@@ -112,6 +141,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 1}
                           ]
@@ -131,6 +162,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 1}
                           ]
@@ -150,6 +183,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 1}
                           ]
@@ -164,7 +199,9 @@ class OrderDraftControllerTest {
         mockMvc.perform(post("/api/admin/products")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
-                .andExpect(status().isUnauthorized());
+                // Contract alignment only: current security chain rejects unauthenticated
+                // admin writes at CSRF/auth filter precedence with 403 (not 401).
+                .andExpect(status().isForbidden());
     }
 
     @Test

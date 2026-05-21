@@ -13,6 +13,10 @@ function isCartItem(value: unknown): value is CartItem {
   }
 
   const item = value as Record<string, unknown>
+  const hasOptionalString = (key: string) => item[key] === undefined || typeof item[key] === 'string'
+  const hasOptionalNullableString = (key: string) => (
+    item[key] === undefined || item[key] === null || typeof item[key] === 'string'
+  )
 
   return (
     typeof item.variantId === 'string' &&
@@ -25,7 +29,11 @@ function isCartItem(value: unknown): value is CartItem {
     item.quantity >= 1 &&
     typeof item.stockAvailable === 'number' &&
     Number.isInteger(item.stockAvailable) &&
-    item.stockAvailable >= 0
+    item.stockAvailable >= 0 &&
+    hasOptionalString('productId') &&
+    hasOptionalString('categoryName') &&
+    hasOptionalString('imageUrl') &&
+    hasOptionalNullableString('imageAltText')
   )
 }
 

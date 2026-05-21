@@ -1,9 +1,15 @@
 import { useState, type FormEvent } from 'react'
+import { deliverySurchargeFromAmount } from '../../../shared/config/flags'
+
+type FulfillmentMethod = 'PICKUP' | 'DELIVERY'
 
 interface CheckoutFormValues {
   customerName: string
   phone: string
   note: string
+  fulfillmentMethod: FulfillmentMethod
+  deliveryAddress: string
+  pickupTime: string
 }
 
 interface CheckoutFormProps {
@@ -26,6 +32,14 @@ function validate(values: CheckoutFormValues, isCartEmpty: boolean, isSubmitBloc
 
   if (!values.phone.trim()) {
     errors.phone = 'Ingresa un telefono de contacto.'
+  }
+
+  if (values.fulfillmentMethod === 'PICKUP' && !values.pickupTime.trim()) {
+    errors.pickupTime = 'Indica un horario aproximado de retiro.'
+  }
+
+  if (values.fulfillmentMethod === 'DELIVERY' && !values.deliveryAddress.trim()) {
+    errors.deliveryAddress = 'Ingresa una direccion completa para el envio.'
   }
 
   if (isCartEmpty) {
@@ -51,9 +65,13 @@ export function CheckoutForm({
     customerName: '',
     phone: '',
     note: '',
+    fulfillmentMethod: 'PICKUP',
+    deliveryAddress: '',
+    pickupTime: '',
   })
   const [errors, setErrors] = useState<CheckoutErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const checkoutError = errors.checkout ?? (isSubmitBlocked ? blockedSubmitMessage : null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -113,10 +131,60 @@ export function CheckoutForm({
           <small className="checkout-field-helper">Aclaraciones para preparar tu pedido.</small>
         </div>
 
+        <fieldset className="checkout-fieldset">
+          <legend>Forma de entrega *</legend>
+          <label className="checkout-radio-option">
+            <input
+              type="radio"
+              name="fulfillmentMethod"
+              value="PICKUP"
+              checked={values.fulfillmentMethod === 'PICKUP'}
+              onChange={() => setValues((prev) => ({ ...prev, fulfillmentMethod: 'PICKUP' }))}
+            />
+            <span>Retiro en el local</span>
+          </label>
+          <label className="checkout-radio-option">
+            <input
+              type="radio"
+              name="fulfillmentMethod"
+              value="DELIVERY"
+              checked={values.fulfillmentMethod === 'DELIVERY'}
+              onChange={() => setValues((prev) => ({ ...prev, fulfillmentMethod: 'DELIVERY' }))}
+            />
+            <span>Envío a domicilio</span>
+          </label>
+        </fieldset>
+
+        {values.fulfillmentMethod === 'PICKUP' ? (
+          <div className="checkout-field">
+            <label className="checkout-field-label" htmlFor="checkout-pickup-time">Horario aproximado de retiro *</label>
+            <input
+              id="checkout-pickup-time"
+              type="text"
+              value={values.pickupTime}
+              onChange={(event) => setValues((prev) => ({ ...prev, pickupTime: event.target.value }))}
+            />
+            <small className="checkout-field-helper">Ej: hoy 18:30 o mañana por la mañana.</small>
+            {errors.pickupTime ? <span className="checkout-field-error" role="alert">{errors.pickupTime}</span> : null}
+          </div>
+        ) : (
+          <div className="checkout-field">
+            <label className="checkout-field-label" htmlFor="checkout-delivery-address">Dirección completa *</label>
+            <textarea
+              id="checkout-delivery-address"
+              value={values.deliveryAddress}
+              rows={3}
+              onChange={(event) => setValues((prev) => ({ ...prev, deliveryAddress: event.target.value }))}
+            />
+            <small className="checkout-field-helper">Incluí calle, número, localidad y referencias útiles.</small>
+            {errors.deliveryAddress ? <span className="checkout-field-error" role="alert">{errors.deliveryAddress}</span> : null}
+            <p className="checkout-warning">Los envíos a domicilio tienen un recargo desde {formatMoney(deliverySurchargeFromAmount)} según la zona.</p>
+          </div>
+        )}
+
         <div className="checkout-feedback-stack" aria-live="polite">
           {errors.cart ? <p className="form-error" role="alert">{errors.cart}</p> : null}
-          {isSubmitBlocked && blockedSubmitMessage ? <p className="form-error" role="alert">{blockedSubmitMessage}</p> : null}
-          {errors.checkout && !isSubmitBlocked ? <p className="form-error" role="alert">{errors.checkout}</p> : null}
+          {checkoutError ? <p className="form-error" role="alert">{checkoutError}</p> : null}
           {submitError ? <p className="form-error" role="alert">{submitError}</p> : null}
         </div>
 
@@ -131,3 +199,7 @@ export function CheckoutForm({
 }
 
 export type { CheckoutFormValues }
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(value)
+}

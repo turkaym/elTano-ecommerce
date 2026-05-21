@@ -1,8 +1,9 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogListItem } from '../../../shared/types/catalog'
+import { CART_STORAGE_KEY } from '../../cart/storage/cartStorage'
 import { ProductsPage } from './ProductsPage'
 
 vi.mock('../services/catalogQueryService', () => ({
@@ -27,6 +28,8 @@ const catalogItems: CatalogListItem[] = [
     unitLabel: 'bolsa 500 g',
     price: 6800,
     stockAvailable: 10,
+    primaryImageUrl: 'https://cdn.example.test/almendra.jpg',
+    primaryImageAltText: 'Almendra tostada en bolsa',
   },
   {
     id: 'prod-2',
@@ -43,6 +46,8 @@ const catalogItems: CatalogListItem[] = [
     unitLabel: 'bolsa 500 g',
     price: 5200,
     stockAvailable: 0,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
   {
     id: 'prod-3',
@@ -59,6 +64,8 @@ const catalogItems: CatalogListItem[] = [
     unitLabel: 'bolsa 500 g',
     price: 7600,
     stockAvailable: 6,
+    primaryImageUrl: null,
+    primaryImageAltText: null,
   },
 ]
 
@@ -76,6 +83,7 @@ function renderProductsAt(pathname = '/productos') {
 describe('ProductsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
     vi.mocked(getCatalogListItems).mockResolvedValue({
       source: 'api',
       items: catalogItems,
@@ -99,7 +107,7 @@ describe('ProductsPage', () => {
     renderProductsAt('/productos')
     await screen.findByText('Almendra tostada')
 
-    await user.selectOptions(screen.getByLabelText('Categorías'), 'frutos-secos')
+    await user.click(screen.getByRole('button', { name: /Frutos secos/i }))
     await user.selectOptions(screen.getByLabelText('Stock'), 'in-stock')
     await user.selectOptions(screen.getByLabelText('Ordenar'), 'price-desc')
 
@@ -115,6 +123,45 @@ describe('ProductsPage', () => {
       'Almendra tostada',
     ])
     expect(screen.queryByText('Harina de coco')).not.toBeInTheDocument()
+  })
+
+  it('filters from all products with sidebar categories and restores the full list', async () => {
+    const user = userEvent.setup()
+
+    renderProductsAt('/productos')
+    await screen.findByText('Almendra tostada')
+
+    await user.click(screen.getByRole('button', { name: 'Harinas (1)' }))
+
+    await waitFor(() => expect(window.location.search).toContain('category=harinas'))
+    expect(screen.getByText('Harina de coco')).toBeInTheDocument()
+    expect(screen.queryByText('Almendra tostada')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Todos los productos (3)' }))
+
+    await waitFor(() => expect(window.location.search).not.toContain('category='))
+    expect(screen.getByText('Almendra tostada')).toBeInTheDocument()
+    expect(screen.getByText('Nuez mariposa')).toBeInTheDocument()
+  })
+
+  it('updates URL-backed search results in real time while preserving the category filter', async () => {
+    const user = userEvent.setup()
+
+    renderProductsAt('/productos?category=frutos-secos')
+    await screen.findByText('Almendra tostada')
+
+    await user.type(screen.getByLabelText('Filtrar productos'), 'nuez')
+
+    await waitFor(() => expect(window.location.search).toContain('q=nuez'))
+    expect(screen.getByText('Nuez mariposa')).toBeInTheDocument()
+    expect(screen.queryByText('Almendra tostada')).not.toBeInTheDocument()
+    expect(screen.queryByText('Harina de coco')).not.toBeInTheDocument()
+
+    await user.clear(screen.getByLabelText('Filtrar productos'))
+
+    await waitFor(() => expect(window.location.search).not.toContain('q='))
+    expect(screen.getByText('Almendra tostada')).toBeInTheDocument()
+    expect(screen.getByText('Nuez mariposa')).toBeInTheDocument()
   })
 
   it('reads query params from URL as source of truth for search and empty state', async () => {
@@ -154,5 +201,117 @@ describe('ProductsPage', () => {
       expect(screen.getByLabelText('Stock')).toHaveValue('in-stock')
     })
     expect(screen.queryByText('Harina de coco')).not.toBeInTheDocument()
+  })
+
+  it('renders multi-variant cards with the default selected presentation price', async () => {
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
+      source: 'api',
+      items: [
+        {
+          id: 'prod-desde',
+          name: 'Mix granola premium',
+          description: 'Version multi-formato',
+          categoryName: 'Granolas',
+          categorySlug: 'granolas',
+          productType: 'ENVASADO',
+          inventoryPolicy: 'PER_VARIANT',
+          variants: [
+            { id: 'var-a', unitLabel: 'bolsa 250 g', price: 3900, stockAvailable: 5 },
+            { id: 'var-b', unitLabel: 'bolsa 500 g', price: 7100, stockAvailable: 4 },
+          ],
+          isMultiVariant: true,
+          minPrice: 3900,
+          variantId: null,
+          unitLabel: 'Seleccionar presentación',
+          price: 3900,
+          stockAvailable: 9,
+          primaryImageUrl: null,
+          primaryImageAltText: null,
+        },
+      ],
+    })
+
+    renderProductsAt('/productos')
+
+    expect(await screen.findByText(/\$\s*3.900/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Desde/i)).not.toBeInTheDocument()
+  })
+
+  it('lets shoppers add an in-stock productos card to the cart', async () => {
+    const user = userEvent.setup()
+    renderProductsAt('/productos')
+
+    await screen.findByText('Almendra tostada')
+    await user.click(within(screen.getByRole('heading', { name: 'Almendra tostada' }).closest('article')!).getByRole('button', { name: 'Agregar' }))
+
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '[]')).toEqual([
+        expect.objectContaining({
+          variantId: 'var-1',
+          productName: 'Almendra tostada',
+          unitLabel: 'bolsa 500 g',
+          price: 6800,
+          quantity: 1,
+          stockAvailable: 10,
+          productId: 'prod-1',
+          categoryName: 'Frutos secos',
+          imageUrl: 'https://cdn.example.test/almendra.jpg',
+          imageAltText: 'Almendra tostada en bolsa',
+        }),
+      ])
+    })
+  })
+
+  it('supports variant and quantity selection on productos cards and keeps out-of-stock variants unavailable', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getCatalogListItems).mockResolvedValueOnce({
+      source: 'api',
+      items: [
+        {
+          id: 'prod-mix',
+          name: 'Mix semillas',
+          description: 'Multi presentación',
+          categoryName: 'Semillas',
+          categorySlug: 'semillas',
+          productType: 'GRANEL',
+          inventoryPolicy: 'BULK_WEIGHT',
+          stockAvailableBaseGrams: 300,
+          variants: [
+            { id: 'mix-100', unitLabel: '100g', price: 1200, stockAvailable: 3 },
+            { id: 'mix-500', unitLabel: '500g', price: 6000, stockAvailable: 0 },
+          ],
+          isMultiVariant: true,
+          minPrice: 1200,
+          variantId: null,
+          unitLabel: 'Seleccionar presentación',
+          price: 1200,
+          stockAvailable: 3,
+          primaryImageUrl: null,
+          primaryImageAltText: null,
+        },
+      ],
+    })
+
+    renderProductsAt('/productos')
+
+    await screen.findByText('Mix semillas')
+    expect(screen.getByRole('option', { name: '500g - sin stock' })).toBeDisabled()
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Mix semillas'), 'mix-100')
+    fireEvent.change(screen.getByLabelText('Cantidad para Mix semillas'), { target: { value: '2' } })
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(CART_STORAGE_KEY) ?? '[]')).toEqual([
+        expect.objectContaining({
+          variantId: 'mix-100',
+          productName: 'Mix semillas',
+          unitLabel: '100g',
+          price: 1200,
+          quantity: 2,
+          stockAvailable: 3,
+        }),
+      ])
+    })
   })
 })

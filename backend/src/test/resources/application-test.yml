@@ -4,7 +4,22 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  flyway:
+    enabled: false
   jpa:
     hibernate:
       ddl-auto: create-drop
     open-in-view: false
+
+logging:
+  level:
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: ERROR
+
+app:
+  security:
+    admin-user: admin-user
+    admin-password: admin-pass
+    storefront-user: storefront-user
+    storefront-password: storefront-pass
+    expired-admin-user: expired-admin
+    expired-admin-password: expired-pass

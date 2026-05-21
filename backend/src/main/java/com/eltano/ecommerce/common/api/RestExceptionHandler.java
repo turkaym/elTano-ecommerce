@@ -2,6 +2,7 @@ package com.eltano.ecommerce.common.api;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -22,18 +23,28 @@ import jakarta.validation.ConstraintViolationException;
 @RestControllerAdvice
 public class RestExceptionHandler {
 
+    private static final String ADMIN_API_PREFIX = "/api/admin/";
+
     private static final int MERCADO_PAGO_DETAIL_MAX_LENGTH = 180;
     private static final Pattern JSON_DETAIL_PATTERN = Pattern.compile(
             "\"(?:message|error_message|error|description|status_detail|cause)\"\\s*:\\s*\"([^\"]+)\"",
             Pattern.CASE_INSENSITIVE);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleValidation(
+    public ResponseEntity<?> handleValidation(
             MethodArgumentNotValidException ex,
             HttpServletRequest request) {
         List<ApiFieldError> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
                 .map(this::toFieldError)
                 .toList();
+
+        if (isAdminRequest(request)) {
+            return ResponseEntity.badRequest().body(new AdminApiError(
+                    "VALIDATION_ERROR",
+                    "Validation failed",
+                    correlationId(request),
+                    fieldErrors));
+        }
 
         ApiError body = new ApiError(
                 Instant.now(),
@@ -47,9 +58,17 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ApiError> handleConstraintViolation(
+    public ResponseEntity<?> handleConstraintViolation(
             ConstraintViolationException ex,
             HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.badRequest().body(new AdminApiError(
+                    "VALIDATION_ERROR",
+                    ex.getMessage(),
+                    correlationId(request),
+                    List.of()));
+        }
+
         ApiError body = new ApiError(
                 Instant.now(),
                 HttpStatus.BAD_REQUEST.value(),
@@ -61,9 +80,17 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiError> handleNotReadable(
+    public ResponseEntity<?> handleNotReadable(
             HttpMessageNotReadableException ex,
             HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.badRequest().body(new AdminApiError(
+                    "VALIDATION_ERROR",
+                    "Malformed request body",
+                    correlationId(request),
+                    List.of()));
+        }
+
         ApiError body = new ApiError(
                 Instant.now(),
                 HttpStatus.BAD_REQUEST.value(),
@@ -75,9 +102,17 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgument(
+    public ResponseEntity<?> handleIllegalArgument(
             IllegalArgumentException ex,
             HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.badRequest().body(new AdminApiError(
+                    "BAD_REQUEST",
+                    ex.getMessage(),
+                    correlationId(request),
+                    List.of()));
+        }
+
         ApiError body = new ApiError(
                 Instant.now(),
                 HttpStatus.BAD_REQUEST.value(),
@@ -89,9 +124,17 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<ApiError> handleIllegalState(
+    public ResponseEntity<?> handleIllegalState(
             IllegalStateException ex,
             HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.badRequest().body(new AdminApiError(
+                    "BAD_REQUEST",
+                    ex.getMessage(),
+                    correlationId(request),
+                    List.of()));
+        }
+
         ApiError body = new ApiError(
                 Instant.now(),
                 HttpStatus.BAD_REQUEST.value(),
@@ -103,9 +146,17 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiError> handleNotFound(
+    public ResponseEntity<?> handleNotFound(
             ResourceNotFoundException ex,
             HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new AdminApiError(
+                    "NOT_FOUND",
+                    ex.getMessage(),
+                    correlationId(request),
+                    List.of()));
+        }
+
         ApiError body = new ApiError(
                 Instant.now(),
                 HttpStatus.NOT_FOUND.value(),
@@ -117,9 +168,17 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(ConflictException.class)
-    public ResponseEntity<ApiError> handleConflict(
+    public ResponseEntity<?> handleConflict(
             ConflictException ex,
             HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new AdminApiError(
+                    "CONFLICT",
+                    ex.getMessage(),
+                    correlationId(request),
+                    List.of()));
+        }
+
         ApiError body = new ApiError(
                 Instant.now(),
                 HttpStatus.CONFLICT.value(),
@@ -130,8 +189,78 @@ public class RestExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
+    @ExceptionHandler(UnprocessableEntityException.class)
+    public ResponseEntity<?> handleUnprocessableEntity(
+            UnprocessableEntityException ex,
+            HttpServletRequest request) {
+        List<ApiFieldError> fieldErrors = ex.getFieldErrors().stream()
+                .map(fieldError -> new ApiFieldError(fieldError.field(), fieldError.message()))
+                .toList();
+
+        if (isAdminRequest(request)) {
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(new AdminApiError(
+                    "UNPROCESSABLE_ENTITY",
+                    ex.getMessage(),
+                    correlationId(request),
+                    fieldErrors));
+        }
+
+        ApiError body = new ApiError(
+                Instant.now(),
+                HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                HttpStatus.UNPROCESSABLE_ENTITY.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                fieldErrors);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+    }
+
+    @ExceptionHandler(FeatureNotSupportedException.class)
+    public ResponseEntity<?> handleFeatureNotSupported(
+            FeatureNotSupportedException ex,
+            HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(new AdminApiError(
+                    "NOT_SUPPORTED",
+                    ex.getMessage(),
+                    correlationId(request),
+                    List.of()));
+        }
+
+        ApiError body = new ApiError(
+                Instant.now(),
+                HttpStatus.NOT_IMPLEMENTED.value(),
+                HttpStatus.NOT_IMPLEMENTED.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(body);
+    }
+
+    @ExceptionHandler(CancellationNotSupportedException.class)
+    public ResponseEntity<?> handleCancellationNotSupported(
+            CancellationNotSupportedException ex,
+            HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(new AdminApiError(
+                    CancellationNotSupportedException.CODE,
+                    ex.getMessage(),
+                    correlationId(request),
+                    List.of()));
+        }
+
+        ApiError body = new ApiError(
+                Instant.now(),
+                HttpStatus.NOT_IMPLEMENTED.value(),
+                HttpStatus.NOT_IMPLEMENTED.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI(),
+                List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(body);
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<ApiError> handleDataIntegrity(
+    public ResponseEntity<?> handleDataIntegrity(
             DataIntegrityViolationException ex,
             HttpServletRequest request) {
         String message = "Data integrity violation";
@@ -139,6 +268,14 @@ public class RestExceptionHandler {
                 && ex.getMostSpecificCause().getMessage() != null
                 && ex.getMostSpecificCause().getMessage().toLowerCase().contains("duplicate")) {
             message = "Duplicated unique value";
+        }
+
+        if (isAdminRequest(request)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new AdminApiError(
+                    "CONFLICT",
+                    message,
+                    correlationId(request),
+                    List.of()));
         }
 
         ApiError body = new ApiError(
@@ -152,9 +289,17 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(InvalidWebhookSignatureException.class)
-    public ResponseEntity<ApiError> handleWebhookSignature(
+    public ResponseEntity<?> handleWebhookSignature(
             InvalidWebhookSignatureException ex,
             HttpServletRequest request) {
+        if (isAdminRequest(request)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new AdminApiError(
+                    "FORBIDDEN",
+                    "Invalid webhook signature",
+                    correlationId(request),
+                    List.of()));
+        }
+
         ApiError body = new ApiError(
                 Instant.now(),
                 HttpStatus.FORBIDDEN.value(),
@@ -166,7 +311,7 @@ public class RestExceptionHandler {
     }
 
     @ExceptionHandler(MercadoPagoRequestException.class)
-    public ResponseEntity<ApiError> handleMercadoPagoHttpFailure(
+    public ResponseEntity<?> handleMercadoPagoHttpFailure(
             MercadoPagoRequestException ex,
             HttpServletRequest request) {
         HttpStatus status = is4xx(ex.getUpstreamStatusCode())
@@ -179,6 +324,14 @@ public class RestExceptionHandler {
             message = message + ": " + detail;
         } else {
             message = message + " (upstream " + ex.getUpstreamStatusCode() + ")";
+        }
+
+        if (isAdminRequest(request)) {
+            return ResponseEntity.status(status).body(new AdminApiError(
+                    status == HttpStatus.BAD_REQUEST ? "BAD_REQUEST" : "UPSTREAM_ERROR",
+                    message,
+                    correlationId(request),
+                    List.of()));
         }
 
         ApiError body = new ApiError(
@@ -223,6 +376,19 @@ public class RestExceptionHandler {
         return new ApiFieldError(fieldError.getField(), fieldError.getDefaultMessage());
     }
 
+    private boolean isAdminRequest(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path != null && path.startsWith(ADMIN_API_PREFIX);
+    }
+
+    private String correlationId(HttpServletRequest request) {
+        Object value = request.getAttribute(CorrelationIdFilter.REQUEST_ATTRIBUTE);
+        if (value instanceof String text && !text.isBlank()) {
+            return text;
+        }
+        return UUID.randomUUID().toString();
+    }
+
     public record ApiError(
             Instant timestamp,
             int status,
@@ -233,5 +399,12 @@ public class RestExceptionHandler {
     }
 
     public record ApiFieldError(String field, String message) {
+    }
+
+    public record AdminApiError(
+            String code,
+            String message,
+            String correlationId,
+            List<ApiFieldError> fieldErrors) {
     }
 }

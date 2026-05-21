@@ -33,7 +33,12 @@ frontend/coverage/
 # Java / Backend
 **/target/
 backend/.mvn/wrapper/maven-wrapper.jar
+backend/uploads/
 
 # Build caches
 .cache/
 tmp/
+
+# Agent/team local infrastructure
+.atl/
+sdd/

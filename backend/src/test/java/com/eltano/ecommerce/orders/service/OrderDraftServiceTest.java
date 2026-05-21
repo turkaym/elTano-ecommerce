@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
@@ -33,6 +34,7 @@ import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.orders.domain.OrderDraft;
 import com.eltano.ecommerce.orders.domain.OrderDraftLine;
 import com.eltano.ecommerce.orders.domain.OrderDraftStatus;
+import com.eltano.ecommerce.orders.domain.FulfillmentMethod;
 import com.eltano.ecommerce.orders.payment.mercadopago.MercadoPagoClient;
 import com.eltano.ecommerce.orders.repository.OrderDraftRepository;
 
@@ -72,12 +74,20 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 "Tocar timbre",
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
                 List.of(new OrderDraftService.CommandItem(variant.getId(), 2))));
 
         assertTrue(result.reference().startsWith("ET-" + Year.now().getValue() + "-"));
         assertEquals(new BigDecimal("12000.00"), result.subtotal());
         assertEquals(new BigDecimal("12000.00"), result.total());
         assertTrue(result.whatsappMessage().contains(result.reference()));
+        assertTrue(result.whatsappMessage().contains("Cliente: Juan Perez"));
+        assertTrue(result.whatsappMessage().contains("Telefono: +5491112345678"));
+        assertTrue(result.whatsappMessage().contains("Entrega: Retiro en el local"));
+        assertTrue(result.whatsappMessage().contains("Horario aproximado de retiro: 18:30"));
+        assertTrue(result.whatsappMessage().contains("Nota: Tocar timbre"));
         assertTrue(result.whatsappMessage().contains("Almendra"));
         verify(inventoryPolicyService).reserve(variant, 2);
 
@@ -99,7 +109,75 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
                 List.of(new OrderDraftService.CommandItem(variant.getId(), 3)))));
+        verify(orderDraftRepository, never()).save(any(OrderDraft.class));
+    }
+
+    @Test
+    void createDraftRejectsBulkWeightCartWhenCombinedPresentationsExceedSharedAvailableGrams() {
+        orderDraftService = new OrderDraftService(
+                productVariantRepository,
+                orderDraftRepository,
+                mercadoPagoClient,
+                new InventoryPolicyService());
+        Product product = new Product();
+        product.setName("Almendra");
+        product.setInventoryPolicy(com.eltano.ecommerce.catalog.domain.InventoryPolicy.BULK_WEIGHT);
+        product.setProductType(com.eltano.ecommerce.catalog.domain.ProductType.GRANEL);
+        product.setStockBaseGrams(300);
+        product.setStockReservedBaseGrams(0);
+
+        ProductVariant hundredGrams = variantWith("Almendra", 1200, 0, 0);
+        hundredGrams.setProduct(product);
+        hundredGrams.setWeightGrams(100);
+        hundredGrams.setUnitLabel("100g");
+        ProductVariant twoHundredFiftyGrams = variantWith("Almendra", 3000, 0, 0);
+        twoHundredFiftyGrams.setProduct(product);
+        twoHundredFiftyGrams.setWeightGrams(250);
+        twoHundredFiftyGrams.setUnitLabel("250g");
+        when(productVariantRepository.findAllByIdInForUpdate(anyList()))
+                .thenReturn(List.of(hundredGrams, twoHundredFiftyGrams));
+
+        assertThrows(ConflictException.class, () -> orderDraftService.createDraft(new OrderDraftService.Command(
+                "Juan Perez",
+                "+5491112345678",
+                null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
+                List.of(
+                        new OrderDraftService.CommandItem(hundredGrams.getId(), 1),
+                        new OrderDraftService.CommandItem(twoHundredFiftyGrams.getId(), 1)))));
+        assertEquals(100, product.getStockReservedBaseGrams());
+        verify(orderDraftRepository, never()).save(any(OrderDraft.class));
+    }
+
+    @Test
+    void createDraftSupportsLegacyNullTypeAndPolicyProducts() {
+        stubPersistenceLayer();
+        Product product = new Product();
+        product.setName("Producto legado");
+        product.setProductType(null);
+        product.setInventoryPolicy(null);
+
+        ProductVariant variant = variantWith("Producto legado", 4700, 8, 0);
+        variant.setProduct(product);
+        when(productVariantRepository.findAllByIdInForUpdate(anyList())).thenReturn(List.of(variant));
+
+        OrderDraftService.Result result = orderDraftService.createDraft(new OrderDraftService.Command(
+                "Juan Perez",
+                "+5491112345678",
+                null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
+                List.of(new OrderDraftService.CommandItem(variant.getId(), 2))));
+
+        assertEquals(new BigDecimal("9400.00"), result.total());
+        verify(inventoryPolicyService).reserve(variant, 2);
     }
 
     @Test
@@ -111,6 +189,9 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
                 List.of(new OrderDraftService.CommandItem(missingVariantId, 1)))));
     }
 
@@ -125,11 +206,16 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 null,
+                FulfillmentMethod.DELIVERY,
+                "San Martin 123, Rio Grande",
+                null,
                 List.of(
                         new OrderDraftService.CommandItem(variantOne.getId(), 1),
                         new OrderDraftService.CommandItem(variantTwo.getId(), 2))));
 
         assertEquals(new BigDecimal("11000.00"), result.total());
+        assertTrue(result.whatsappMessage().contains("Direccion: San Martin 123, Rio Grande"));
+        assertTrue(result.whatsappMessage().contains("Total ARS 11000.00 (no incluye recargo de envio)"));
         assertTrue(result.whatsappMessage().contains("Nuez"));
         verify(inventoryPolicyService).reserve(variantOne, 1);
         verify(inventoryPolicyService).reserve(variantTwo, 2);
@@ -144,6 +230,9 @@ class OrderDraftServiceTest {
                         "Juan Perez",
                         "+5491112345678",
                         null,
+                        FulfillmentMethod.PICKUP,
+                        null,
+                        "18:30",
                         List.of(new OrderDraftService.CommandItem(null, 1)))));
 
         assertEquals("Variant selection required", ex.getMessage());

@@ -5,6 +5,10 @@ export interface CartItem {
   price: number
   quantity: number
   stockAvailable: number
+  productId?: string
+  categoryName?: string
+  imageUrl?: string
+  imageAltText?: string | null
 }
 
 export interface CartTotals {
@@ -22,6 +26,9 @@ export interface CreateOrderDraftRequest {
   customerName: string
   phone: string
   note?: string
+  fulfillmentMethod: 'PICKUP' | 'DELIVERY'
+  deliveryAddress?: string
+  pickupTime?: string
   items: CreateOrderDraftRequestItem[]
 }
 

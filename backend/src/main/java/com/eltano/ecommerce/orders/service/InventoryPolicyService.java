@@ -27,13 +27,25 @@ public class InventoryPolicyService {
         if (resolvePolicy(variant) == InventoryPolicy.BULK_WEIGHT) {
             Product product = variant.getProduct();
             int releasedGrams = requiredGrams(variant, quantity);
-            int current = product.getStockBaseGrams() == null ? 0 : product.getStockBaseGrams();
-            product.setStockBaseGrams(current + releasedGrams);
+            product.setStockReservedBaseGrams(Math.max(0, product.getStockReservedBaseGrams() - releasedGrams));
             return;
         }
 
         variant.setStockReserved(Math.max(0, variant.getStockReserved() - quantity));
         variant.setStockAvailable(variant.getStockAvailable() + quantity);
+    }
+
+    public void finalizeReservation(ProductVariant variant, int quantity) {
+        if (resolvePolicy(variant) == InventoryPolicy.BULK_WEIGHT) {
+            Product product = variant.getProduct();
+            int finalizedGrams = requiredGrams(variant, quantity);
+            int currentBase = product.getStockBaseGrams() == null ? 0 : product.getStockBaseGrams();
+            product.setStockBaseGrams(Math.max(0, currentBase - finalizedGrams));
+            product.setStockReservedBaseGrams(Math.max(0, product.getStockReservedBaseGrams() - finalizedGrams));
+            return;
+        }
+
+        variant.setStockReserved(Math.max(0, variant.getStockReserved() - quantity));
     }
 
     private void reserveBulkWeight(ProductVariant variant, int quantity) {
@@ -44,11 +56,12 @@ public class InventoryPolicyService {
         }
 
         int requiredGrams = requiredGrams(variant, quantity);
-        if (available < requiredGrams) {
+        int availableForReservation = available - product.getStockReservedBaseGrams();
+        if (availableForReservation < requiredGrams) {
             throw new ConflictException("Insufficient stock");
         }
 
-        product.setStockBaseGrams(available - requiredGrams);
+        product.setStockReservedBaseGrams(product.getStockReservedBaseGrams() + requiredGrams);
     }
 
     private int requiredGrams(ProductVariant variant, int quantity) {

@@ -10,6 +10,14 @@ export interface CatalogVariant {
   attributesJson: string | null
 }
 
+export interface CatalogProductImage {
+  id: string
+  url: string
+  altText: string | null
+  sortOrder: number
+  primary: boolean
+}
+
 export type ProductType = 'GRANEL' | 'ENVASADO' | 'UNIDAD'
 export type InventoryPolicy = 'BULK_WEIGHT' | 'PER_VARIANT'
 
@@ -18,6 +26,8 @@ export interface CatalogCardVariantOption {
   unitLabel: string
   price: number
   stockAvailable: number
+  stockReserved?: number
+  weightGrams?: number | null
 }
 
 export interface CatalogProduct {
@@ -30,6 +40,9 @@ export interface CatalogProduct {
   productType: ProductType
   inventoryPolicy: InventoryPolicy
   stockBaseGrams: number | null
+  stockReservedBaseGrams?: number | null
+  stockAvailableBaseGrams?: number | null
+  images?: CatalogProductImage[]
   variants: CatalogVariant[]
 }
 
@@ -40,6 +53,7 @@ export interface FeaturedProduct {
   categoryName: string
   productType: ProductType
   inventoryPolicy: InventoryPolicy
+  stockAvailableBaseGrams?: number | null
   variants: CatalogCardVariantOption[]
   isMultiVariant: boolean
   minPrice: number
@@ -47,6 +61,8 @@ export interface FeaturedProduct {
   variantId: string | null
   unitLabel: string
   price: number
+  primaryImageUrl?: string | null
+  primaryImageAltText?: string | null
 }
 
 export type CatalogSort = 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc'

@@ -19,6 +19,7 @@ import com.eltano.ecommerce.common.api.ResourceNotFoundException;
 import com.eltano.ecommerce.orders.domain.OrderDraft;
 import com.eltano.ecommerce.orders.domain.OrderDraftLine;
 import com.eltano.ecommerce.orders.domain.OrderDraftStatus;
+import com.eltano.ecommerce.orders.domain.FulfillmentMethod;
 import com.eltano.ecommerce.orders.payment.mercadopago.MercadoPagoClient;
 import com.eltano.ecommerce.orders.repository.OrderDraftRepository;
 
@@ -69,7 +70,12 @@ public class OrderDraftService {
         draft.setCustomerName(command.customerName().trim());
         draft.setPhone(command.phone().trim());
         draft.setNote(command.note() == null ? null : command.note().trim());
+        draft.setFulfillmentMethod(command.fulfillmentMethod());
+        draft.setDeliveryAddress(normalize(command.deliveryAddress()));
+        draft.setPickupTime(normalize(command.pickupTime()));
         draft.setCurrency(CURRENCY);
+
+        validateFulfillment(draft);
 
         BigDecimal subtotal = BigDecimal.ZERO;
         for (CommandItem commandItem : command.items()) {
@@ -126,7 +132,20 @@ public class OrderDraftService {
 
     private String buildWhatsappMessage(OrderDraft draft) {
         StringBuilder lines = new StringBuilder();
-        lines.append("Hola, confirmo el pedido ").append(draft.getReference()).append(".\n");
+        lines.append("Hola, quiero confirmar el pedido ").append(draft.getReference()).append(".\n");
+        lines.append("Cliente: ").append(draft.getCustomerName()).append("\n");
+        lines.append("Telefono: ").append(draft.getPhone()).append("\n");
+        lines.append("Entrega: ").append(fulfillmentLabel(draft.getFulfillmentMethod())).append("\n");
+        if (draft.getFulfillmentMethod() == FulfillmentMethod.DELIVERY) {
+            lines.append("Direccion: ").append(draft.getDeliveryAddress()).append("\n");
+        }
+        if (draft.getFulfillmentMethod() == FulfillmentMethod.PICKUP) {
+            lines.append("Horario aproximado de retiro: ").append(draft.getPickupTime()).append("\n");
+        }
+        if (draft.getNote() != null && !draft.getNote().isBlank()) {
+            lines.append("Nota: ").append(draft.getNote()).append("\n");
+        }
+        lines.append("Items:\n");
         for (OrderDraftLine line : draft.getLines()) {
             lines.append("- ")
                     .append(line.getProductName())
@@ -137,7 +156,33 @@ public class OrderDraftService {
                     .append(")\n");
         }
         lines.append("Total ").append(draft.getCurrency()).append(" ").append(draft.getTotal());
+        if (draft.getFulfillmentMethod() == FulfillmentMethod.DELIVERY) {
+            lines.append(" (no incluye recargo de envio)");
+        }
         return lines.toString();
+    }
+
+    private void validateFulfillment(OrderDraft draft) {
+        if (draft.getFulfillmentMethod() == null) {
+            throw new IllegalArgumentException("Fulfillment method required");
+        }
+        if (draft.getFulfillmentMethod() == FulfillmentMethod.DELIVERY && draft.getDeliveryAddress() == null) {
+            throw new IllegalArgumentException("Delivery address required");
+        }
+        if (draft.getFulfillmentMethod() == FulfillmentMethod.PICKUP && draft.getPickupTime() == null) {
+            throw new IllegalArgumentException("Pickup time required");
+        }
+    }
+
+    private String fulfillmentLabel(FulfillmentMethod method) {
+        return method == FulfillmentMethod.DELIVERY ? "Envío a domicilio" : "Retiro en el local";
+    }
+
+    private String normalize(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 
     @Transactional
@@ -247,6 +292,9 @@ public class OrderDraftService {
             String customerName,
             String phone,
             String note,
+            FulfillmentMethod fulfillmentMethod,
+            String deliveryAddress,
+            String pickupTime,
             List<CommandItem> items) {
     }
 

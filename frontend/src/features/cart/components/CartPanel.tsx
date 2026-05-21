@@ -8,6 +8,7 @@ interface CartPanelProps {
   onSetQty: (variantId: string, quantity: number) => void
   onRemove: (variantId: string) => void
   onClear: () => void
+  showSummary?: boolean
 }
 
 const currencyFormatter = new Intl.NumberFormat('es-AR', {
@@ -24,11 +25,12 @@ export function CartPanel({
   onSetQty,
   onRemove,
   onClear,
+  showSummary = true,
 }: CartPanelProps) {
   return (
-    <section className="section" aria-labelledby="carrito-title">
+    <section id="carrito" className="section" aria-labelledby="carrito-panel-title">
       <div className="section-header section-header-inline">
-        <h2 id="carrito-title">Carrito</h2>
+        <h2 id="carrito-panel-title" tabIndex={-1}>Carrito</h2>
         <span className="cart-count">{totals.itemCount} item(s)</span>
       </div>
 
@@ -47,25 +49,48 @@ export function CartPanel({
         <>
           <ul className="cart-list">
             {items.map((item) => (
-              <li key={item.variantId} className="cart-item">
+              <li key={item.variantId} className="cart-item" aria-label={item.productName}>
+                <div className="cart-item-media" aria-hidden={item.imageUrl ? undefined : true}>
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.imageAltText ?? item.productName} />
+                  ) : (
+                    <span className="cart-item-media-placeholder">Imagen no disponible</span>
+                  )}
+                </div>
                 <div className="cart-item-header">
+                  {item.categoryName ? <p className="cart-item-category">{item.categoryName}</p> : null}
                   <h3>{item.productName}</h3>
                   <p>{item.unitLabel}</p>
                 </div>
                 <div className="cart-item-controls">
-                  <label className="cart-item-qty">
-                    Cant.
-                    <input
-                      className="cart-item-qty-input"
-                      type="number"
-                      min={1}
-                      max={item.stockAvailable}
-                      value={item.quantity}
-                      onChange={(event) => onSetQty(item.variantId, Number(event.target.value))}
-                    />
-                  </label>
+                  <div className="cart-item-stepper" aria-label={`Cantidad de ${item.productName}`}>
+                    <button
+                      type="button"
+                      className="cart-stepper-btn"
+                      aria-label={`Restar ${item.productName}`}
+                      disabled={item.quantity <= 1}
+                      onClick={() => onSetQty(item.variantId, item.quantity - 1)}
+                    >
+                      −
+                    </button>
+                    <span className="cart-item-qty-value" aria-live="polite">{item.quantity}</span>
+                    <button
+                      type="button"
+                      className="cart-stepper-btn"
+                      aria-label={`Sumar ${item.productName}`}
+                      disabled={item.quantity >= item.stockAvailable}
+                      onClick={() => onSetQty(item.variantId, item.quantity + 1)}
+                    >
+                      +
+                    </button>
+                  </div>
                   <strong className="cart-item-line-total">{currencyFormatter.format(item.price * item.quantity)}</strong>
-                  <button type="button" className="link-btn" onClick={() => onRemove(item.variantId)}>
+                  <button
+                    type="button"
+                    className="link-btn"
+                    aria-label={`Quitar ${item.productName}`}
+                    onClick={() => onRemove(item.variantId)}
+                  >
                     Quitar
                   </button>
                 </div>
@@ -73,16 +98,18 @@ export function CartPanel({
             ))}
           </ul>
 
-          <div className="cart-summary">
-            <p className="cart-summary-row">
-              <span>Subtotal</span>
-              <strong>{currencyFormatter.format(totals.subtotal)}</strong>
-            </p>
-            <p className="cart-summary-row cart-summary-total">
-              <span>Total</span>
-              <strong>{currencyFormatter.format(totals.total)}</strong>
-            </p>
-          </div>
+          {showSummary ? (
+            <div className="cart-summary">
+              <p className="cart-summary-row">
+                <span>Subtotal</span>
+                <strong>{currencyFormatter.format(totals.subtotal)}</strong>
+              </p>
+              <p className="cart-summary-row cart-summary-total">
+                <span>Total</span>
+                <strong>{currencyFormatter.format(totals.total)}</strong>
+              </p>
+            </div>
+          ) : null}
 
           <button type="button" className="btn btn-secondary" onClick={onClear}>
             Vaciar carrito
