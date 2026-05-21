@@ -8,6 +8,20 @@ export interface FeaturedProductsResult {
   source: 'api' | 'mock'
 }
 
+function getFallbackFeaturedProducts(limit: number): FeaturedProductsResult {
+  if (import.meta.env.DEV) {
+    return {
+      products: mockFeaturedProducts.slice(0, limit),
+      source: 'mock',
+    }
+  }
+
+  return {
+    products: [],
+    source: 'api',
+  }
+}
+
 export async function getFeaturedProducts(
   limit = 6,
 ): Promise<FeaturedProductsResult> {
@@ -19,10 +33,7 @@ export async function getFeaturedProducts(
       .slice(0, limit)
 
     if (!featuredProducts.length) {
-      return {
-        products: mockFeaturedProducts.slice(0, limit),
-        source: 'mock',
-      }
+      return getFallbackFeaturedProducts(limit)
     }
 
     return {
@@ -30,9 +41,6 @@ export async function getFeaturedProducts(
       source: 'api',
     }
   } catch {
-    return {
-      products: mockFeaturedProducts.slice(0, limit),
-      source: 'mock',
-    }
+    return getFallbackFeaturedProducts(limit)
   }
 }

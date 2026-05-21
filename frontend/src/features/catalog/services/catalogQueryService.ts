@@ -33,16 +33,27 @@ function getMockCatalogItems(): CatalogListItem[] {
   return mockFeaturedProducts.map(toMockCatalogListItem)
 }
 
+function getFallbackCatalogItems(): CatalogItemsResponse {
+  if (import.meta.env.DEV) {
+    return {
+      source: 'mock',
+      items: getMockCatalogItems(),
+    }
+  }
+
+  return {
+    source: 'api',
+    items: [],
+  }
+}
+
 export async function getCatalogListItems(): Promise<CatalogItemsResponse> {
   try {
     const products = await getJson<CatalogProduct[]>('/api/catalog/products')
     const items = products.map(toCatalogListItem).filter((item): item is CatalogListItem => item !== null)
 
     if (!items.length) {
-      return {
-        source: 'mock',
-        items: getMockCatalogItems(),
-      }
+      return getFallbackCatalogItems()
     }
 
     return {
@@ -50,9 +61,6 @@ export async function getCatalogListItems(): Promise<CatalogItemsResponse> {
       items,
     }
   } catch {
-    return {
-      source: 'mock',
-      items: getMockCatalogItems(),
-    }
+    return getFallbackCatalogItems()
   }
 }
