@@ -143,11 +143,27 @@ Use the example files as the source of truth for local and production configurat
 | `VITE_CHECKOUT_PAYMENT_ENABLED` | Enables payment-related checkout behavior. |
 | `VITE_STOREFRONT_VARIANT_FLOW_ENABLED` | Enables the current storefront variant flow. |
 | `VITE_ADMIN_ENABLED` | Enables admin UI routes/features. |
+| `VITE_DELIVERY_SURCHARGE_FROM_AMOUNT` | Displays the operational delivery surcharge warning amount; it is not added to checkout totals. |
 | `VITE_ADMIN_BASIC_USER` / `VITE_ADMIN_BASIC_PASS` | Existing admin UI Basic Auth build-time credentials. Avoid setting these in production unless explicitly accepted as a temporary risk. |
 
 ## Verification
 
 Run verification from a clean working tree before release or deployment.
+
+## Verificacion completa (contrato canonico)
+
+The canonical full-suite verification contract is:
+
+```bash
+cd backend
+mvn -B clean verify
+
+cd ../frontend
+npm ci
+npm test -- --watch=false
+npm run lint
+npm run build
+```
 
 ### Backend
 

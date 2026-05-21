@@ -319,12 +319,15 @@ describe('App checkout MVP flow', () => {
 
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
     await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
 
     await waitFor(() => {
       expect(vi.mocked(createOrderDraft)).toHaveBeenCalledWith(
         expect.objectContaining({
           items: [{ variantId: '22222222-2222-4222-8222-222222222222', quantity: 3 }],
+          fulfillmentMethod: 'PICKUP',
+          pickupTime: '18:30',
         }),
       )
     })
@@ -357,12 +360,15 @@ describe('App checkout MVP flow', () => {
 
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
     await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
 
     await waitFor(() => {
       expect(createOrderDraft).toHaveBeenCalledWith(
         expect.objectContaining({
           items: [{ variantId: '11111111-1111-4111-8111-111111111111', quantity: 1 }],
+          fulfillmentMethod: 'PICKUP',
+          pickupTime: '18:30',
         }),
       )
     })
@@ -390,12 +396,15 @@ describe('App checkout MVP flow', () => {
     expect(screen.getByRole('heading', { name: 'Mi carrito' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
     await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
 
     await waitFor(() => {
       expect(createOrderDraft).toHaveBeenCalledWith(
         expect.objectContaining({
           items: [{ variantId: '11111111-1111-4111-8111-111111111111', quantity: 1 }],
+          fulfillmentMethod: 'PICKUP',
+          pickupTime: '18:30',
         }),
       )
     })
@@ -528,6 +537,7 @@ describe('App checkout MVP flow', () => {
     await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
 
     await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
 
@@ -563,6 +573,7 @@ describe('App checkout MVP flow', () => {
     await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
 
     await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
 
@@ -590,6 +601,7 @@ describe('App checkout MVP flow', () => {
     await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Ana Lopez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491198765432')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
 
     await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
 
@@ -602,6 +614,26 @@ describe('App checkout MVP flow', () => {
       '_blank',
       'noopener,noreferrer',
     )
+  })
+
+  it('does not show a false WhatsApp popup error when noopener returns null', async () => {
+    const user = userEvent.setup()
+    vi.mocked(window.open).mockReturnValueOnce(null)
+
+    renderAppAt()
+
+    await screen.findByText('Almendra natural premium')
+    await user.click(within(getProductCard('Almendra natural premium')).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
+    await user.type(screen.getByLabelText('Nombre y apellido *'), 'Ana Lopez')
+    await user.type(screen.getByLabelText('Telefono *'), '+5491198765432')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
+    await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
+
+    await waitFor(() => {
+      expect(window.open).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.queryByText('No pudimos abrir WhatsApp automaticamente. Habilita popups e intenta de nuevo.')).not.toBeInTheDocument()
   })
 
   it('does not expose old navbar links Inicio, Categorías and Productos', async () => {

@@ -26,6 +26,9 @@ export interface CreateOrderDraftRequest {
   customerName: string
   phone: string
   note?: string
+  fulfillmentMethod: 'PICKUP' | 'DELIVERY'
+  deliveryAddress?: string
+  pickupTime?: string
   items: CreateOrderDraftRequestItem[]
 }
 

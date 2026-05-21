@@ -43,6 +43,9 @@ public class OrderDraftController {
                 request.customerName(),
                 request.phone(),
                 request.note(),
+                request.fulfillmentMethod(),
+                request.deliveryAddress(),
+                request.pickupTime(),
                 request.items().stream()
                         .map(item -> new OrderDraftService.CommandItem(item.variantId(), item.quantity()))
                         .toList()));

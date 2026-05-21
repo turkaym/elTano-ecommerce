@@ -60,6 +60,8 @@ class OrderDraftControllerTest {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
                           "note": "Tocar timbre",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 2}
                           ]
@@ -97,6 +99,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 2}
                           ]
@@ -116,6 +120,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 2}
                           ]
@@ -135,6 +141,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 1}
                           ]
@@ -154,6 +162,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 1}
                           ]
@@ -173,6 +183,8 @@ class OrderDraftControllerTest {
                         {
                           "customerName": "Juan Perez",
                           "phone": "+5491112345678",
+                          "fulfillmentMethod": "PICKUP",
+                          "pickupTime": "18:30",
                           "items": [
                             {"variantId": "11111111-1111-1111-1111-111111111111", "quantity": 1}
                           ]

@@ -1089,6 +1089,29 @@ textarea:focus-visible,
   gap: 0.4rem;
 }
 
+.checkout-fieldset {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--color-cream-200);
+  border-radius: 0.75rem;
+}
+
+.checkout-fieldset legend {
+  font-weight: 700;
+}
+
+.checkout-form .checkout-radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkout-form .checkout-radio-option input {
+  width: auto;
+}
+
 .checkout-field-label {
   font-weight: 700;
 }
@@ -1125,6 +1148,16 @@ textarea:focus-visible,
 
 .checkout-field-error {
   font-weight: 600;
+}
+
+.checkout-warning {
+  margin: 0.2rem 0 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--brand-accent-soft);
+  border-radius: 0.65rem;
+  background: var(--brand-accent-soft);
+  color: var(--brand-dark-strong);
+  font-weight: 700;
 }
 
 .checkout-feedback-stack {
@@ -1828,7 +1861,7 @@ textarea:focus-visible,
 
 .admin-product-list .admin-item-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, max-content);
   align-items: center;
 }
 
@@ -1855,7 +1888,8 @@ textarea:focus-visible,
 
 .admin-product-list .admin-item-actions {
   display: grid;
-  grid-template-columns: 6.5rem minmax(17rem, 20rem);
+  grid-template-columns: repeat(2, minmax(6.5rem, 1fr));
+  min-width: 0;
 }
 
 .admin-product-list .admin-item-actions .btn {

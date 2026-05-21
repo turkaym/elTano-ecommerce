@@ -539,8 +539,13 @@ export function AdminProductsPage() {
             >
               Editar
             </button>
-            <button className={isProductActive(item) ? 'btn btn-danger-soft' : 'btn btn-secondary'} type="button" onClick={() => void toggleProduct(item)}>
-              {isProductActive(item) ? `Desactivar producto ${item.name}` : `Reactivar producto ${item.name}`}
+            <button
+              aria-label={isProductActive(item) ? `Desactivar producto ${item.name}` : `Reactivar producto ${item.name}`}
+              className={isProductActive(item) ? 'btn btn-danger-soft' : 'btn btn-secondary'}
+              type="button"
+              onClick={() => void toggleProduct(item)}
+            >
+              {isProductActive(item) ? 'Desactivar' : 'Reactivar'}
             </button>
             </div>
             </article>

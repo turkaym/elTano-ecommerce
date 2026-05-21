@@ -34,6 +34,7 @@ import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.orders.domain.OrderDraft;
 import com.eltano.ecommerce.orders.domain.OrderDraftLine;
 import com.eltano.ecommerce.orders.domain.OrderDraftStatus;
+import com.eltano.ecommerce.orders.domain.FulfillmentMethod;
 import com.eltano.ecommerce.orders.payment.mercadopago.MercadoPagoClient;
 import com.eltano.ecommerce.orders.repository.OrderDraftRepository;
 
@@ -73,12 +74,20 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 "Tocar timbre",
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
                 List.of(new OrderDraftService.CommandItem(variant.getId(), 2))));
 
         assertTrue(result.reference().startsWith("ET-" + Year.now().getValue() + "-"));
         assertEquals(new BigDecimal("12000.00"), result.subtotal());
         assertEquals(new BigDecimal("12000.00"), result.total());
         assertTrue(result.whatsappMessage().contains(result.reference()));
+        assertTrue(result.whatsappMessage().contains("Cliente: Juan Perez"));
+        assertTrue(result.whatsappMessage().contains("Telefono: +5491112345678"));
+        assertTrue(result.whatsappMessage().contains("Entrega: Retiro en el local"));
+        assertTrue(result.whatsappMessage().contains("Horario aproximado de retiro: 18:30"));
+        assertTrue(result.whatsappMessage().contains("Nota: Tocar timbre"));
         assertTrue(result.whatsappMessage().contains("Almendra"));
         verify(inventoryPolicyService).reserve(variant, 2);
 
@@ -100,6 +109,9 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
                 List.of(new OrderDraftService.CommandItem(variant.getId(), 3)))));
         verify(orderDraftRepository, never()).save(any(OrderDraft.class));
     }
@@ -133,6 +145,9 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
                 List.of(
                         new OrderDraftService.CommandItem(hundredGrams.getId(), 1),
                         new OrderDraftService.CommandItem(twoHundredFiftyGrams.getId(), 1)))));
@@ -156,6 +171,9 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
                 List.of(new OrderDraftService.CommandItem(variant.getId(), 2))));
 
         assertEquals(new BigDecimal("9400.00"), result.total());
@@ -171,6 +189,9 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
                 List.of(new OrderDraftService.CommandItem(missingVariantId, 1)))));
     }
 
@@ -185,11 +206,16 @@ class OrderDraftServiceTest {
                 "Juan Perez",
                 "+5491112345678",
                 null,
+                FulfillmentMethod.DELIVERY,
+                "San Martin 123, Rio Grande",
+                null,
                 List.of(
                         new OrderDraftService.CommandItem(variantOne.getId(), 1),
                         new OrderDraftService.CommandItem(variantTwo.getId(), 2))));
 
         assertEquals(new BigDecimal("11000.00"), result.total());
+        assertTrue(result.whatsappMessage().contains("Direccion: San Martin 123, Rio Grande"));
+        assertTrue(result.whatsappMessage().contains("Total ARS 11000.00 (no incluye recargo de envio)"));
         assertTrue(result.whatsappMessage().contains("Nuez"));
         verify(inventoryPolicyService).reserve(variantOne, 1);
         verify(inventoryPolicyService).reserve(variantTwo, 2);
@@ -204,6 +230,9 @@ class OrderDraftServiceTest {
                         "Juan Perez",
                         "+5491112345678",
                         null,
+                        FulfillmentMethod.PICKUP,
+                        null,
+                        "18:30",
                         List.of(new OrderDraftService.CommandItem(null, 1)))));
 
         assertEquals("Variant selection required", ex.getMessage());

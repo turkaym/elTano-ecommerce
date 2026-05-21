@@ -53,6 +53,9 @@ export function App() {
       customerName: values.customerName,
       phone: values.phone,
       note: values.note.trim() ? values.note : undefined,
+      fulfillmentMethod: values.fulfillmentMethod,
+      deliveryAddress: values.fulfillmentMethod === 'DELIVERY' ? values.deliveryAddress : undefined,
+      pickupTime: values.fulfillmentMethod === 'PICKUP' ? values.pickupTime : undefined,
       items: cart.items.map((item) => ({
         variantId: item.variantId,
         quantity: item.quantity,
@@ -60,8 +63,8 @@ export function App() {
     }
 
     try {
-      const response = await createOrderDraft(payload)
       setSubmitError(null)
+      const response = await createOrderDraft(payload)
       if (checkoutPaymentEnabled) {
         const payment = await startDraftPayment(response.draftId)
         const existing = window.sessionStorage.getItem(paymentDraftMessageStorageKey)
@@ -76,10 +79,7 @@ export function App() {
       }
 
       cart.clear()
-      const popup = window.open(createWhatsappLink(response.whatsappMessage), '_blank', 'noopener,noreferrer')
-      if (!popup) {
-        setSubmitError('No pudimos abrir WhatsApp automaticamente. Habilita popups e intenta de nuevo.')
-      }
+      window.open(createWhatsappLink(response.whatsappMessage), '_blank', 'noopener,noreferrer')
     } catch (error) {
       if (error instanceof ApiClientError) {
         if (error.status === 409) {

@@ -66,6 +66,9 @@ export interface AdminOrderDetailResponse {
   customer: string
   phone?: string | null
   note?: string | null
+  fulfillmentMethod?: 'PICKUP' | 'DELIVERY' | null
+  deliveryAddress?: string | null
+  pickupTime?: string | null
   currency?: string | null
   subtotal: number | string
   total: number | string

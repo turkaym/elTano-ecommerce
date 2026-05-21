@@ -128,6 +128,7 @@ describe('Storefront non-regression smoke', () => {
     await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
     await user.click(screen.getByRole('button', { name: 'Crear pedido y confirmar por WhatsApp' }))
 
     await waitFor(() => {

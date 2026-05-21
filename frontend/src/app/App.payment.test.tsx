@@ -118,6 +118,7 @@ describe('App Mercado Pago flow', () => {
     await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Ana Lopez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491198765432')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
     await user.click(screen.getByRole('button', { name: 'Iniciar pago online' }))
 
     await waitFor(() => {
@@ -171,12 +172,15 @@ describe('App Mercado Pago flow', () => {
     await user.click(screen.getByRole('link', { name: 'Ver carrito, 2 items' }))
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Ana Lopez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491198765432')
+    await user.type(screen.getByLabelText('Horario aproximado de retiro *'), '18:30')
     await user.click(screen.getByRole('button', { name: 'Iniciar pago online' }))
 
     await waitFor(() => {
       expect(createOrderDraft).toHaveBeenCalledWith(
         expect.objectContaining({
           items: [{ variantId: '22222222-2222-4222-8222-222222222222', quantity: 2 }],
+          fulfillmentMethod: 'PICKUP',
+          pickupTime: '18:30',
         }),
       )
     })

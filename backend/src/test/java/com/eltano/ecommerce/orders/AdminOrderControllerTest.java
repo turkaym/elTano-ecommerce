@@ -125,6 +125,9 @@ class AdminOrderControllerTest {
                 "Ana Gómez",
                 "11223344",
                 "Tocar timbre",
+                "DELIVERY",
+                "San Martin 123",
+                null,
                 "ARS",
                 new BigDecimal("9000.00"),
                 new BigDecimal("9500.00"),
@@ -151,6 +154,8 @@ class AdminOrderControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reference").value("ET-2026-0007"))
                 .andExpect(jsonPath("$.customer").value("Ana Gómez"))
+                .andExpect(jsonPath("$.fulfillmentMethod").value("DELIVERY"))
+                .andExpect(jsonPath("$.deliveryAddress").value("San Martin 123"))
                 .andExpect(jsonPath("$.payment.provider").value("mercadopago"))
                 .andExpect(jsonPath("$.payment.statusDetail").value("approved"))
                 .andExpect(jsonPath("$.items[0].variantId").value(variantId.toString()))
@@ -322,6 +327,9 @@ class AdminOrderControllerTest {
                 "Ana Gómez",
                 "11223344",
                 "Tocar timbre",
+                "PICKUP",
+                null,
+                "18:30",
                 "ARS",
                 new BigDecimal("9000.00"),
                 new BigDecimal("9500.00"),

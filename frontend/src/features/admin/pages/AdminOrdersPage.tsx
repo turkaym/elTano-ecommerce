@@ -286,6 +286,9 @@ function renderDetailPanel(
           <p>{detail.customer}</p>
           {detail.phone ? <p>{detail.phone}</p> : null}
           {detail.note ? <p>Nota: {detail.note}</p> : null}
+          <p>Entrega: {fulfillmentLabel(detail.fulfillmentMethod)}</p>
+          {detail.fulfillmentMethod === 'DELIVERY' && detail.deliveryAddress ? <p>Dirección: {detail.deliveryAddress}</p> : null}
+          {detail.fulfillmentMethod === 'PICKUP' && detail.pickupTime ? <p>Retiro: {detail.pickupTime}</p> : null}
         </div>
         <div>
           <h4>Pago</h4>
@@ -311,6 +314,10 @@ function renderDetailPanel(
       <p><strong>Subtotal:</strong> {formatMoney(detail.subtotal)} · <strong>Total:</strong> {formatMoney(detail.total)} {detail.currency || ''}</p>
     </section>
   )
+}
+
+function fulfillmentLabel(method?: AdminOrderDetailResponse['fulfillmentMethod']) {
+  return method === 'DELIVERY' ? 'Envío a domicilio' : 'Retiro en el local'
 }
 
 function canMarkPaid(detail: AdminOrderDetailResponse): boolean {
