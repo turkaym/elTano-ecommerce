@@ -203,7 +203,7 @@ describe('ProductsPage', () => {
     expect(screen.queryByText('Harina de coco')).not.toBeInTheDocument()
   })
 
-  it('renders multi-variant cards with "Desde" price semantics', async () => {
+  it('renders multi-variant cards with the default selected presentation price', async () => {
     vi.mocked(getCatalogListItems).mockResolvedValueOnce({
       source: 'api',
       items: [
@@ -233,7 +233,8 @@ describe('ProductsPage', () => {
 
     renderProductsAt('/productos')
 
-    expect(await screen.findByText(/Desde\s*\$\s*3.900/i)).toBeInTheDocument()
+    expect(await screen.findByText(/\$\s*3.900/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Desde/i)).not.toBeInTheDocument()
   })
 
   it('lets shoppers add an in-stock productos card to the cart', async () => {

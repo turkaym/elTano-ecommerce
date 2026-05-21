@@ -303,11 +303,9 @@ describe('App checkout MVP flow', () => {
 
     renderAppAt()
 
-    expect(await screen.findByText(/Desde\s*\$\s*6.400/i)).toBeInTheDocument()
+    expect(await screen.findByText(/\$\s*11.800/i)).toBeInTheDocument()
     const productCard = getProductCard('Almendra natural premium')
-
-    await user.click(within(productCard).getByRole('button', { name: 'Agregar' }))
-    expect(screen.getByText('Selecciona una variante para continuar.')).toBeInTheDocument()
+    expect(within(productCard).getByLabelText('Presentacion para Almendra natural premium')).toHaveDisplayValue('bolsa 1 kg')
 
     await user.selectOptions(
       within(productCard).getByLabelText('Presentacion para Almendra natural premium'),

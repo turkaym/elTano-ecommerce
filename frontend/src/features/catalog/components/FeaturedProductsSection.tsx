@@ -20,6 +20,46 @@ const currencyFormatter = new Intl.NumberFormat('es-AR', {
   maximumFractionDigits: 0,
 })
 
+function normalizeUnitLabel(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, '')
+}
+
+function findReferenceVariant(product: FeaturedProduct) {
+  const inStockVariants = product.variants.filter((variant) => variant.stockAvailable > 0)
+  const variants = inStockVariants.length ? inStockVariants : product.variants
+  if (!variants.length) {
+    return null
+  }
+
+  const oneKilogramVariant = variants.find((variant) => variant.weightGrams === 1000)
+    ?? variants.find((variant) => /(^|[^0-9])1\s*kg([^a-z]|$)/i.test(variant.unitLabel))
+  if (oneKilogramVariant) {
+    return oneKilogramVariant
+  }
+
+  const oneLiterVariant = variants.find((variant) => {
+    const label = normalizeUnitLabel(variant.unitLabel)
+    return label.includes('1l') || label.includes('1lt') || label.includes('1litro')
+  })
+  if (oneLiterVariant) {
+    return oneLiterVariant
+  }
+
+  return variants.reduce((largest, variant) => {
+    const largestWeight = largest.weightGrams ?? 0
+    const variantWeight = variant.weightGrams ?? 0
+    return variantWeight > largestWeight ? variant : largest
+  }, variants[0])
+}
+
+function resolveInitialVariantId(product: FeaturedProduct): string {
+  if (product.variantId && product.variants.some((variant) => variant.id === product.variantId)) {
+    return product.variantId
+  }
+
+  return findReferenceVariant(product)?.id ?? product.variants.find((variant) => variant.stockAvailable > 0)?.id ?? ''
+}
+
 export function FeaturedProductsSection({
   products,
   isLoading,
@@ -61,11 +101,7 @@ interface FeaturedProductCardProps {
 }
 
 export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCardProps) {
-  const initialVariantId = product.variantId && product.variants.some((variant) => variant.id === product.variantId)
-    ? product.variantId
-    : product.variantId
-      ? product.variants.find((variant) => variant.stockAvailable > 0)?.id ?? ''
-      : ''
+  const initialVariantId = resolveInitialVariantId(product)
   const [selectedVariantId, setSelectedVariantId] = useState<string>(initialVariantId)
   const [quantity, setQuantity] = useState(1)
   const [error, setError] = useState<string | null>(null)
@@ -73,6 +109,7 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
   const [feedbackId, setFeedbackId] = useState(0)
   const feedbackTimeoutRef = useRef<number | null>(null)
   const selectedVariant = product.variants.find((variant) => variant.id === selectedVariantId) ?? null
+  const visiblePrice = selectedVariant?.price ?? product.price
   const maxQuantity = Math.max(1, selectedVariant?.stockAvailable ?? product.stockAvailable)
   const isBulkWeight = product.inventoryPolicy === 'BULK_WEIGHT'
   const hasStock = isBulkWeight
@@ -118,7 +155,7 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
       <p className="product-description">{product.description}</p>
       <div className="product-footer">
         <strong className="product-price">
-          {product.isMultiVariant ? `Desde ${currencyFormatter.format(product.minPrice)}` : currencyFormatter.format(product.price)}
+          {currencyFormatter.format(visiblePrice)}
         </strong>
       </div>
       <div className="product-card-actions">

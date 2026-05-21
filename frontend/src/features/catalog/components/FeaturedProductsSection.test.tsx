@@ -102,7 +102,9 @@ describe('FeaturedProductsSection', () => {
     }
   })
 
-  it('shows "Desde" price label for multi-variant product cards', () => {
+  it('shows the selected presentation price instead of "Desde" for multi-variant product cards', async () => {
+    const user = userEvent.setup()
+
     render(
       <FeaturedProductsSection
         products={[multiVariantProduct]}
@@ -112,10 +114,15 @@ describe('FeaturedProductsSection', () => {
       />,
     )
 
-    expect(screen.getByText(/Desde\s*\$\s*4.200/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Desde/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/\$\s*7.600/i)).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Almendra premium'), 'var-250')
+
+    expect(screen.getByText(/\$\s*4.200/i)).toBeInTheDocument()
   })
 
-  it('requires selecting a variant before adding to cart', async () => {
+  it('adds the default reference presentation when the quantity input is untouched', async () => {
     const user = userEvent.setup()
     const onAddToCart = vi.fn()
 
@@ -130,8 +137,11 @@ describe('FeaturedProductsSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Agregar' }))
 
-    expect(onAddToCart).not.toHaveBeenCalled()
-    expect(screen.getByText('Selecciona una variante para continuar.')).toBeInTheDocument()
+    expect(onAddToCart).toHaveBeenCalledWith({
+      productId: 'prod-1',
+      variantId: 'var-500',
+      quantity: 1,
+    })
   })
 
   it('sends selected variant and quantity when adding to cart', async () => {
@@ -249,6 +259,52 @@ describe('FeaturedProductsSection', () => {
     })
   })
 
+  it('defaults bulk-weight products to the 1kg presentation when available', () => {
+    render(
+      <FeaturedProductsSection
+        products={[{
+          ...granelProduct,
+          stockAvailableBaseGrams: 2_000,
+          stockAvailable: 2_000,
+          variants: [
+            { id: 'gr-100', unitLabel: '100g', price: 1200, stockAvailable: 20, stockReserved: 0, weightGrams: 100 },
+            { id: 'gr-500', unitLabel: '500g', price: 6000, stockAvailable: 4, stockReserved: 0, weightGrams: 500 },
+            { id: 'gr-1kg', unitLabel: '1kg', price: 12000, stockAvailable: 2, stockReserved: 0, weightGrams: 1000 },
+          ],
+        }]}
+        isLoading={false}
+        source="api"
+        onAddToCart={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Presentacion para Castañas de cajú')).toHaveDisplayValue('1kg')
+    expect(screen.getByText(/\$\s*12.000/i)).toBeInTheDocument()
+  })
+
+  it('defaults liquid products to the 1L presentation when available', () => {
+    render(
+      <FeaturedProductsSection
+        products={[{
+          ...multiVariantProduct,
+          name: 'Aceite de oliva',
+          categoryName: 'Aceites',
+          productType: 'UNIDAD',
+          variants: [
+            { id: 'oil-500', unitLabel: '500 ml', price: 7200, stockAvailable: 5, stockReserved: 0 },
+            { id: 'oil-1l', unitLabel: '1L', price: 13500, stockAvailable: 3, stockReserved: 0 },
+          ],
+        }]}
+        isLoading={false}
+        source="api"
+        onAddToCart={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Presentacion para Aceite de oliva')).toHaveDisplayValue('1L')
+    expect(screen.getByText(/\$\s*13.500/i)).toBeInTheDocument()
+  })
+
   it('disables bulk-weight presentations that exceed shared available grams', () => {
     render(
       <FeaturedProductsSection
@@ -260,7 +316,7 @@ describe('FeaturedProductsSection', () => {
     )
 
     const presentation = screen.getByLabelText('Presentacion para Castañas de cajú')
-    expect(presentation).toHaveDisplayValue('Seleccionar')
+    expect(presentation).toHaveDisplayValue('250g')
     expect(screen.getByRole('option', { name: '100g' })).not.toBeDisabled()
     expect(screen.getByRole('option', { name: '250g' })).not.toBeDisabled()
     expect(screen.getByRole('option', { name: '500g - sin stock' })).toBeDisabled()
