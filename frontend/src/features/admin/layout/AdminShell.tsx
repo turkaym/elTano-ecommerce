@@ -64,7 +64,7 @@ export function AdminShell() {
     <main className="admin-shell" aria-label="Panel admin" data-admin-theme={adminTheme}>
       <aside className="admin-sidebar" aria-label="Admin sidebar">
         <div className="admin-brand" aria-label="El Tano admin">
-          <span className="admin-brand-mark" aria-hidden="true">ET</span>
+          <img className="admin-brand-logo" src="/logo.png" alt="" aria-hidden="true" />
           <div>
             <strong>El Tano</strong>
             <span>Admin</span>

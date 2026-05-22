@@ -14,6 +14,7 @@ pnpm-debug.log*
 # OS / Editor
 .DS_Store
 Thumbs.db
+desktop.ini
 .idea/
 .vscode/
 *.iml

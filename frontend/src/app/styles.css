@@ -1324,17 +1324,15 @@ textarea:focus-visible,
   color: var(--admin-text);
 }
 
-.admin-brand-mark {
-  display: inline-grid;
+.admin-brand-logo {
+  display: block;
   width: 2.6rem;
   height: 2.6rem;
-  place-items: center;
-  border-radius: 0.9rem;
-  background: linear-gradient(135deg, var(--admin-accent), var(--brand-secondary));
-  color: var(--admin-accent-contrast);
-  font-size: 0.85rem;
-  font-weight: 900;
-  letter-spacing: 0.04em;
+  border-radius: 999px;
+  background: var(--admin-surface-strong);
+  object-fit: contain;
+  padding: 0.15rem;
+  box-shadow: 0 0 0 1px var(--admin-border);
 }
 
 .admin-brand strong,
