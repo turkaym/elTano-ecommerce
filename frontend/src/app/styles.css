@@ -616,7 +616,7 @@ textarea:focus-visible,
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .product-media-placeholder {
