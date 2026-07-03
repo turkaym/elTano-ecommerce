@@ -124,6 +124,18 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
     }
   }, [])
 
+  function updateQuantity(nextQuantity: number) {
+    setQuantity(Math.min(maxQuantity, Math.max(1, nextQuantity)))
+  }
+
+  function handleVariantChange(nextVariantId: string) {
+    const nextVariant = product.variants.find((variant) => variant.id === nextVariantId) ?? null
+    const nextMaxQuantity = Math.max(1, nextVariant?.stockAvailable ?? product.stockAvailable)
+
+    setSelectedVariantId(nextVariantId)
+    setQuantity((currentQuantity) => Math.min(nextMaxQuantity, Math.max(1, currentQuantity)))
+  }
+
   function handleAdd() {
     if (!selectedVariantId) {
       setError('Selecciona una variante para continuar.')
@@ -164,7 +176,7 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
           <select
             aria-label={`Presentacion para ${product.name}`}
             value={selectedVariantId}
-            onChange={(event) => setSelectedVariantId(event.target.value)}
+            onChange={(event) => handleVariantChange(event.target.value)}
           >
             <option value="">Seleccionar</option>
             {product.variants.map((variant) => (
@@ -174,17 +186,38 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
             ))}
           </select>
         </label>
-        <label className="product-field">
+        <div className="product-field">
           <span>Cantidad</span>
-          <input
-            aria-label={`Cantidad para ${product.name}`}
-            type="number"
-            min={1}
-            max={maxQuantity}
-            value={quantity}
-            onChange={(event) => setQuantity(Math.min(maxQuantity, Math.max(1, Number(event.target.value) || 1)))}
-          />
-        </label>
+          <div className="product-quantity-control">
+            <button
+              type="button"
+              className="product-quantity-button"
+              aria-label={`Reducir cantidad para ${product.name}`}
+              disabled={quantity <= 1}
+              onClick={() => updateQuantity(quantity - 1)}
+            >
+              −
+            </button>
+            <input
+              aria-label={`Cantidad para ${product.name}`}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={maxQuantity}
+              value={quantity}
+              onChange={(event) => updateQuantity(Number(event.target.value) || 1)}
+            />
+            <button
+              type="button"
+              className="product-quantity-button"
+              aria-label={`Aumentar cantidad para ${product.name}`}
+              disabled={quantity >= maxQuantity}
+              onClick={() => updateQuantity(quantity + 1)}
+            >
+              +
+            </button>
+          </div>
+        </div>
         <p className="product-unit">{selectedVariant?.unitLabel ?? product.unitLabel}</p>
         <div className="product-card-messages" aria-live="polite">
           {!hasStock ? <p className="product-validation-error">Sin stock para esta presentación.</p> : null}

@@ -170,6 +170,59 @@ describe('FeaturedProductsSection', () => {
     })
   })
 
+  it('increments quantity with an accessible plus control before adding to cart', async () => {
+    const user = userEvent.setup()
+    const onAddToCart = vi.fn()
+
+    render(
+      <FeaturedProductsSection
+        products={[multiVariantProduct]}
+        isLoading={false}
+        source="api"
+        onAddToCart={onAddToCart}
+      />,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Almendra premium'), 'var-500')
+    await user.click(screen.getByRole('button', { name: 'Aumentar cantidad para Almendra premium' }))
+    await user.click(screen.getByRole('button', { name: 'Agregar' }))
+
+    expect(onAddToCart).toHaveBeenCalledWith({
+      productId: 'prod-1',
+      variantId: 'var-500',
+      quantity: 2,
+    })
+  })
+
+  it('disables quantity controls at the selected presentation limits', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <FeaturedProductsSection
+        products={[multiVariantProduct]}
+        isLoading={false}
+        source="api"
+        onAddToCart={vi.fn()}
+      />,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Presentacion para Almendra premium'), 'var-500')
+
+    const minusButton = screen.getByRole('button', { name: 'Reducir cantidad para Almendra premium' })
+    const plusButton = screen.getByRole('button', { name: 'Aumentar cantidad para Almendra premium' })
+
+    expect(minusButton).toBeDisabled()
+    expect(plusButton).not.toBeDisabled()
+
+    await user.click(plusButton)
+    await user.click(plusButton)
+    await user.click(plusButton)
+
+    expect(screen.getByLabelText('Cantidad para Almendra premium')).toHaveValue(4)
+    expect(minusButton).not.toBeDisabled()
+    expect(plusButton).toBeDisabled()
+  })
+
   it('shows accessible added feedback after adding a product', async () => {
     const user = userEvent.setup()
 

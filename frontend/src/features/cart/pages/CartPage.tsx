@@ -75,6 +75,9 @@ export function CartPage({
               <span>Total</span>
               <strong>{currencyFormatter.format(totals.total)}</strong>
             </p>
+            <Link className="btn btn-secondary" to="/productos">
+              Seguir comprando
+            </Link>
             <a className="btn btn-primary" href="#checkout-title">
               Finalizar compra
             </a>

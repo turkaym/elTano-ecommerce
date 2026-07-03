@@ -191,6 +191,7 @@ describe('App checkout MVP flow', () => {
 
     const brandLogo = screen.getByRole('img', { name: 'El Tano Frutos Secos' })
     expect(brandLogo).toHaveAttribute('src', '/elTanoLogo.png')
+    expect(screen.getByRole('link', { name: 'Ir al inicio' })).toHaveAttribute('href', '/')
 
     fireEvent.error(brandLogo)
     expect(screen.getByText('El Tano Frutos Secos')).toBeInTheDocument()
@@ -357,6 +358,7 @@ describe('App checkout MVP flow', () => {
     expect(within(cartItem).getByRole('img', { name: 'Almendra premium en bolsa' })).toBeInTheDocument()
     expect(within(cartItem).getByText('Frutos secos')).toBeInTheDocument()
     expect(within(cartItem).getByText('bolsa 500 g')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Seguir comprando' })).toHaveAttribute('href', '/productos')
 
     await user.type(screen.getByLabelText('Nombre y apellido *'), 'Juan Perez')
     await user.type(screen.getByLabelText('Telefono *'), '+5491112345678')
@@ -491,6 +493,34 @@ describe('App checkout MVP flow', () => {
     })
     expect(screen.getByRole('heading', { name: 'Mi carrito' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Tu carrito está vacío' })).toBeInTheDocument()
+  })
+
+  it('navigates back to the catalog from the header logo and cart continue-shopping action', async () => {
+    const user = userEvent.setup()
+
+    renderAppAt('/')
+
+    await screen.findByText('Almendra natural premium')
+    await user.click(within(getProductCard('Almendra natural premium')).getByRole('button', { name: 'Agregar' }))
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/carrito')
+    })
+
+    await user.click(screen.getByRole('link', { name: 'Seguir comprando' }))
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/productos')
+    })
+
+    await user.click(screen.getByRole('link', { name: 'Ver carrito, 1 item' }))
+    await screen.findByRole('heading', { name: 'Mi carrito' })
+    await user.click(screen.getByRole('link', { name: 'Ir al inicio' }))
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/')
+    })
+    expect(await screen.findByRole('heading', { name: 'Productos' })).toBeInTheDocument()
   })
 
   it('does not update the shared cart badge for out-of-stock productos cards', async () => {

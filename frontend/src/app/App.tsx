@@ -188,7 +188,7 @@ export function App() {
       {!isAdminRoute ? (
         <div className="app-chrome">
           <header className="top-shell">
-            <div className="top-shell-brand" aria-label="Marca El Tano Frutos Secos">
+            <Link className="top-shell-brand" to="/" aria-label="Ir al inicio">
               {showBrandLogo ? (
                 <img
                   className="brand-logo"
@@ -199,7 +199,7 @@ export function App() {
               ) : (
                 <p className="hero-kicker">El Tano Frutos Secos</p>
               )}
-            </div>
+            </Link>
 
             <div className="top-shell-right">
               <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">

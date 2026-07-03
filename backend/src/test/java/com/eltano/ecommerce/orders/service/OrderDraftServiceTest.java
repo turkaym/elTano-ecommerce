@@ -88,7 +88,7 @@ class OrderDraftServiceTest {
         assertTrue(result.whatsappMessage().contains("Entrega: Retiro en el local"));
         assertTrue(result.whatsappMessage().contains("Horario aproximado de retiro: 18:30"));
         assertTrue(result.whatsappMessage().contains("Nota: Tocar timbre"));
-        assertTrue(result.whatsappMessage().contains("Almendra"));
+        assertTrue(result.whatsappMessage().contains("- 2 Almendra x 500g"));
         verify(inventoryPolicyService).reserve(variant, 2);
 
         ArgumentCaptor<OrderDraft> captor = ArgumentCaptor.forClass(OrderDraft.class);
@@ -216,7 +216,7 @@ class OrderDraftServiceTest {
         assertEquals(new BigDecimal("11000.00"), result.total());
         assertTrue(result.whatsappMessage().contains("Direccion: San Martin 123, Rio Grande"));
         assertTrue(result.whatsappMessage().contains("Total ARS 11000.00 (no incluye recargo de envio)"));
-        assertTrue(result.whatsappMessage().contains("Nuez"));
+        assertTrue(result.whatsappMessage().contains("- 2 Nuez x 500g"));
         verify(inventoryPolicyService).reserve(variantOne, 1);
         verify(inventoryPolicyService).reserve(variantTwo, 2);
     }

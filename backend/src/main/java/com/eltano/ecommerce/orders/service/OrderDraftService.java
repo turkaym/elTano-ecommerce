@@ -148,18 +148,28 @@ public class OrderDraftService {
         lines.append("Items:\n");
         for (OrderDraftLine line : draft.getLines()) {
             lines.append("- ")
-                    .append(line.getProductName())
-                    .append(" x")
                     .append(line.getQuantity())
-                    .append(" (")
-                    .append(line.getUnitLabel())
-                    .append(")\n");
+                    .append(" ")
+                    .append(line.getProductName())
+                    .append(" x ")
+                    .append(formatWhatsappUnitLabel(line.getUnitLabel()))
+                    .append("\n");
         }
         lines.append("Total ").append(draft.getCurrency()).append(" ").append(draft.getTotal());
         if (draft.getFulfillmentMethod() == FulfillmentMethod.DELIVERY) {
             lines.append(" (no incluye recargo de envio)");
         }
         return lines.toString();
+    }
+
+    private String formatWhatsappUnitLabel(String unitLabel) {
+        if (unitLabel == null) {
+            return "";
+        }
+        return unitLabel
+                .replaceFirst("(?i)^(bolsa|botella|paquete|frasco)\\s+", "")
+                .replaceAll("(?i)(\\d)\\s+(kg|g|ml|l|lt|litro|litros)\\b", "$1$2")
+                .trim();
     }
 
     private void validateFulfillment(OrderDraft draft) {
