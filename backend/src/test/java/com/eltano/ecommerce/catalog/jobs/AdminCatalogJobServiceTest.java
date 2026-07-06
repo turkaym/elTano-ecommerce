@@ -58,6 +58,9 @@ class AdminCatalogJobServiceTest {
     @Mock
     private AlegraProductWorkbookParser alegraProductWorkbookParser;
 
+    @Mock
+    private AlegraProductImportProcessor alegraProductImportProcessor;
+
     private AdminCatalogJobService service;
 
     @BeforeEach
@@ -68,7 +71,8 @@ class AdminCatalogJobServiceTest {
                 jobRowRepository,
                 categoryRepository,
                 productRepository,
-                alegraProductWorkbookParser);
+                alegraProductWorkbookParser,
+                alegraProductImportProcessor);
     }
 
     @Test

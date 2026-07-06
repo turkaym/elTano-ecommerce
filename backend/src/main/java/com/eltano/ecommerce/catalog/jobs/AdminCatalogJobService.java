@@ -44,6 +44,7 @@ public class AdminCatalogJobService {
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
     private final AlegraProductWorkbookParser alegraProductWorkbookParser;
+    private final AlegraProductImportProcessor alegraProductImportProcessor;
 
     public AdminCatalogJobService(
             AdminCatalogJobRepository jobRepository,
@@ -51,13 +52,15 @@ public class AdminCatalogJobService {
             AdminCatalogJobRowRepository jobRowRepository,
             CategoryRepository categoryRepository,
             ProductRepository productRepository,
-            AlegraProductWorkbookParser alegraProductWorkbookParser) {
+            AlegraProductWorkbookParser alegraProductWorkbookParser,
+            AlegraProductImportProcessor alegraProductImportProcessor) {
         this.jobRepository = jobRepository;
         this.jobInputRepository = jobInputRepository;
         this.jobRowRepository = jobRowRepository;
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
         this.alegraProductWorkbookParser = alegraProductWorkbookParser;
+        this.alegraProductImportProcessor = alegraProductImportProcessor;
     }
 
     @Transactional
@@ -193,6 +196,10 @@ public class AdminCatalogJobService {
         AdminCatalogJobInput input = jobInputRepository.findById(jobId)
                 .orElseThrow(() -> new AdminCatalogJobRetryPolicy.RetryableJobException(
                         "Import payload missing for job " + jobId));
+
+        if (job.getSourceFormat() == AdminCatalogSourceFormat.EXCEL) {
+            return alegraProductImportProcessor.process(job, input.getPayloadText());
+        }
 
         List<String> lines = splitLines(input.getPayloadText());
         if (lines.isEmpty()) {
