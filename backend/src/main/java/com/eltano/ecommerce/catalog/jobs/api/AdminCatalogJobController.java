@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.eltano.ecommerce.catalog.jobs.AdminCatalogJobService;
 import com.eltano.ecommerce.catalog.jobs.api.dto.AdminCatalogJobResponse;
@@ -44,6 +45,14 @@ public class AdminCatalogJobController {
             Authentication authentication) {
         ensureCsvSupported(format, "Import");
         AdminCatalogJob job = adminCatalogJobService.enqueueCsvImport(actor(authentication), payload);
+        return acceptedJob(job);
+    }
+
+    @PostMapping(value = "/import/alegra", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AdminCatalogJobResponse> importAlegraExcel(
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication) {
+        AdminCatalogJob job = adminCatalogJobService.enqueueAlegraExcelImport(actor(authentication), file);
         return acceptedJob(job);
     }
 

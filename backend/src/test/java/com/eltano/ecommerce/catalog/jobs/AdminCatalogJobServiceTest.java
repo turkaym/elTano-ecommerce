@@ -3,11 +3,13 @@ package com.eltano.ecommerce.catalog.jobs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.util.Optional;
 import java.util.ArrayList;
@@ -18,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockMultipartFile;
 
 import com.eltano.ecommerce.catalog.domain.Category;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJob;
@@ -51,11 +55,20 @@ class AdminCatalogJobServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private AlegraProductWorkbookParser alegraProductWorkbookParser;
+
     private AdminCatalogJobService service;
 
     @BeforeEach
     void setUp() {
-        service = new AdminCatalogJobService(jobRepository, jobInputRepository, jobRowRepository, categoryRepository, productRepository);
+        service = new AdminCatalogJobService(
+                jobRepository,
+                jobInputRepository,
+                jobRowRepository,
+                categoryRepository,
+                productRepository,
+                alegraProductWorkbookParser);
     }
 
     @Test
@@ -114,5 +127,31 @@ class AdminCatalogJobServiceTest {
 
         verify(jobRepository, never()).save(any(AdminCatalogJob.class));
         verify(jobRowRepository, never()).save(any(AdminCatalogJobRow.class));
+    }
+
+    @Test
+    void enqueueAlegraExcelImportStoresNormalizedJsonLinesAsQueuedExcelJob() {
+        when(jobRepository.save(any(AdminCatalogJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(alegraProductWorkbookParser.parse(any())).thenReturn(new AlegraProductWorkbookParser.ParseResult(List.of(
+                new AlegraProductWorkbookParser.RowPayload(2, "Frutos Secos", "Almendra", "Almendra", "ALM-001", "Unidad", "123.45")), 0));
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "alegra-productos.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] { 1, 2, 3 });
+
+        AdminCatalogJob job = service.enqueueAlegraExcelImport("admin-user", file);
+
+        assertEquals(AdminCatalogJobType.IMPORT, job.getJobType());
+        assertEquals(AdminCatalogSourceFormat.EXCEL, job.getSourceFormat());
+        assertEquals(AdminCatalogJobStatus.QUEUED, job.getStatus());
+        assertEquals("accepted=1,invalid=0", job.getSummary());
+
+        ArgumentCaptor<com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobInput> inputCaptor =
+                ArgumentCaptor.forClass(com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJobInput.class);
+        verify(jobInputRepository).save(inputCaptor.capture());
+        assertTrue(inputCaptor.getValue().getPayloadText().contains("\"category\":\"Frutos Secos\""));
+        assertTrue(inputCaptor.getValue().getPayloadText().contains("\"description\":\"Almendra\""));
+        verifyNoInteractions(jobRowRepository, categoryRepository, productRepository);
     }
 }

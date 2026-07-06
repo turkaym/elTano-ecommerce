@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -26,6 +27,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.mock.web.MockMultipartFile;
 
 import com.eltano.ecommerce.catalog.jobs.AdminCatalogJobService;
 import com.eltano.ecommerce.catalog.jobs.domain.AdminCatalogJob;
@@ -70,6 +72,50 @@ class AdminCatalogJobControllerTest {
                 .andExpect(jsonPath("$.status").value("QUEUED"))
                 .andExpect(jsonPath("$.createdBy").value("admin-user"))
                 .andExpect(jsonPath("$.sourceFormat").value("CSV"));
+    }
+
+    @Test
+    void alegraExcelImportPostReturnsAcceptedQueuedContract() throws Exception {
+        UUID jobId = UUID.fromString("abababab-abab-abab-abab-abababababab");
+        when(adminCatalogJobService.enqueueAlegraExcelImport(eq("admin-user"), any()))
+                .thenReturn(job(jobId, AdminCatalogJobType.IMPORT, AdminCatalogJobStatus.QUEUED, null, AdminCatalogSourceFormat.EXCEL));
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "alegra-productos.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                new byte[] { 1, 2, 3 });
+
+        mockMvc.perform(multipart("/api/admin/catalog/jobs/import/alegra")
+                .file(file)
+                .with(httpBasic("admin-user", "admin-pass"))
+                .with(csrf()))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.id").value(jobId.toString()))
+                .andExpect(jsonPath("$.jobType").value("IMPORT"))
+                .andExpect(jsonPath("$.status").value("QUEUED"))
+                .andExpect(jsonPath("$.createdBy").value("admin-user"))
+                .andExpect(jsonPath("$.sourceFormat").value("EXCEL"));
+    }
+
+    @Test
+    void alegraExcelImportValidationErrorDoesNotReturnAccepted() throws Exception {
+        when(adminCatalogJobService.enqueueAlegraExcelImport(eq("admin-user"), any()))
+                .thenThrow(new UnprocessableEntityException(
+                        "Alegra workbook is missing required headers",
+                        List.of(new UnprocessableEntityException.FieldError("file", "Missing required header: Precio: General"))));
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "valuation.csv",
+                "text/csv",
+                "Categoria,Nombre,Stock,Valor".getBytes());
+
+        mockMvc.perform(multipart("/api/admin/catalog/jobs/import/alegra")
+                .file(file)
+                .with(httpBasic("admin-user", "admin-pass"))
+                .with(csrf()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("UNPROCESSABLE_ENTITY"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("file"));
     }
 
     @Test
@@ -195,10 +241,14 @@ class AdminCatalogJobControllerTest {
     }
 
     private AdminCatalogJob job(UUID id, AdminCatalogJobType type, AdminCatalogJobStatus status, String summary) {
+        return job(id, type, status, summary, AdminCatalogSourceFormat.CSV);
+    }
+
+    private AdminCatalogJob job(UUID id, AdminCatalogJobType type, AdminCatalogJobStatus status, String summary, AdminCatalogSourceFormat sourceFormat) {
         AdminCatalogJob job = new AdminCatalogJob();
         ReflectionTestUtils.setField(job, "id", id);
         job.setJobType(type);
-        job.setSourceFormat(AdminCatalogSourceFormat.CSV);
+        job.setSourceFormat(sourceFormat);
         job.setCreatedBy("admin-user");
         job.setStatus(status);
         job.setSummary(summary);

@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.eltano.ecommerce.catalog.domain.Category;
 import com.eltano.ecommerce.catalog.domain.Product;
@@ -42,18 +43,21 @@ public class AdminCatalogJobService {
     private final AdminCatalogJobRowRepository jobRowRepository;
     private final CategoryRepository categoryRepository;
     private final ProductRepository productRepository;
+    private final AlegraProductWorkbookParser alegraProductWorkbookParser;
 
     public AdminCatalogJobService(
             AdminCatalogJobRepository jobRepository,
             AdminCatalogJobInputRepository jobInputRepository,
             AdminCatalogJobRowRepository jobRowRepository,
             CategoryRepository categoryRepository,
-            ProductRepository productRepository) {
+            ProductRepository productRepository,
+            AlegraProductWorkbookParser alegraProductWorkbookParser) {
         this.jobRepository = jobRepository;
         this.jobInputRepository = jobInputRepository;
         this.jobRowRepository = jobRowRepository;
         this.categoryRepository = categoryRepository;
         this.productRepository = productRepository;
+        this.alegraProductWorkbookParser = alegraProductWorkbookParser;
     }
 
     @Transactional
@@ -70,6 +74,20 @@ public class AdminCatalogJobService {
         AdminCatalogJobInput input = new AdminCatalogJobInput();
         input.setJobId(savedJob.getId());
         input.setPayloadText(csvPayload);
+        jobInputRepository.save(input);
+        return savedJob;
+    }
+
+    @Transactional
+    public AdminCatalogJob enqueueAlegraExcelImport(String createdBy, MultipartFile file) {
+        AlegraProductWorkbookParser.ParseResult parseResult = alegraProductWorkbookParser.parse(file);
+        AdminCatalogJob job = newJob(createdBy, AdminCatalogJobType.IMPORT, AdminCatalogSourceFormat.EXCEL);
+        job.setSummary("accepted=" + parseResult.acceptedRows() + ",invalid=" + parseResult.invalidRows());
+        AdminCatalogJob savedJob = jobRepository.save(job);
+
+        AdminCatalogJobInput input = new AdminCatalogJobInput();
+        input.setJobId(savedJob.getId());
+        input.setPayloadText(parseResult.toJsonLines());
         jobInputRepository.save(input);
         return savedJob;
     }
