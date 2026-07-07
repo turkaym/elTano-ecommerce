@@ -54,6 +54,7 @@ public class AdminCatalogJobWorker {
     @Scheduled(
             fixedDelayString = "${app.catalog.jobs.worker.poll-interval:1000}",
             initialDelayString = "${app.catalog.jobs.worker.initial-delay:0}")
+    @Transactional
     public void scheduledRun() {
         runOnce();
     }
