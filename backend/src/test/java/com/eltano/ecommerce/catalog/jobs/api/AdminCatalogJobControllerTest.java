@@ -101,8 +101,10 @@ class AdminCatalogJobControllerTest {
     void alegraExcelImportValidationErrorDoesNotReturnAccepted() throws Exception {
         when(adminCatalogJobService.enqueueAlegraExcelImport(eq("admin-user"), any()))
                 .thenThrow(new UnprocessableEntityException(
-                        "Alegra workbook is missing required headers",
-                        List.of(new UnprocessableEntityException.FieldError("file", "Missing required header: Precio: General"))));
+                        "Alegra inventory valuation imports are out of scope",
+                        List.of(new UnprocessableEntityException.FieldError(
+                                "file",
+                                "This importer only accepts the Alegra Productos de venta .xlsx export. Do not upload Valor de inventario CSV files here."))));
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "valuation.csv",
@@ -115,7 +117,9 @@ class AdminCatalogJobControllerTest {
                 .with(csrf()))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("UNPROCESSABLE_ENTITY"))
-                .andExpect(jsonPath("$.fieldErrors[0].field").value("file"));
+                .andExpect(jsonPath("$.message").value("Alegra inventory valuation imports are out of scope"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("file"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("This importer only accepts the Alegra Productos de venta .xlsx export. Do not upload Valor de inventario CSV files here."));
     }
 
     @Test

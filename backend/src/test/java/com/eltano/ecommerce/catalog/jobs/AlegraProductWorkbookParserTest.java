@@ -89,6 +89,24 @@ class AlegraProductWorkbookParserTest {
         assertEquals("file", exception.getFieldErrors().getFirst().field());
     }
 
+    @Test
+    void rejectsInventoryValuationCsvWithOutOfScopeMessage() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "Valor de inventario.csv",
+                "text/csv",
+                "Categoría;Producto;Referencia;Descripción;Cantidad;Unidad;Costo promedio\nFRUTOS SECOS;ALMENDRAS NP;00010001;FRUTOS SECOS;38,027;Kilogramo;17387,24698".getBytes());
+
+        UnprocessableEntityException exception = assertThrows(
+                UnprocessableEntityException.class,
+                () -> new AlegraProductWorkbookParser().parse(file));
+
+        assertEquals("Alegra inventory valuation imports are out of scope", exception.getMessage());
+        assertEquals("file", exception.getFieldErrors().getFirst().field());
+        assertTrue(exception.getFieldErrors().getFirst().message().contains("Productos de venta .xlsx"));
+        assertTrue(exception.getFieldErrors().getFirst().message().contains("Valor de inventario"));
+    }
+
     private MockMultipartFile workbookFile(String filename, String[] headers, String[][] rows) throws Exception {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Productos");

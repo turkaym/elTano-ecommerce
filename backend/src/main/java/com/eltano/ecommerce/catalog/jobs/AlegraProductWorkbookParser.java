@@ -74,6 +74,11 @@ public class AlegraProductWorkbookParser {
             throw validationError("Alegra workbook is required", "Workbook file must not be empty");
         }
         String filename = file.getOriginalFilename() == null ? "" : file.getOriginalFilename().toLowerCase(Locale.ROOT);
+        if (filename.endsWith(".csv")) {
+            throw validationError(
+                    "Alegra inventory valuation imports are out of scope",
+                    "This importer only accepts the Alegra Productos de venta .xlsx export. Do not upload Valor de inventario CSV files here.");
+        }
         if (!filename.endsWith(".xlsx")) {
             throw validationError("Unsupported Alegra import file", "Alegra import requires a .xlsx workbook");
         }
