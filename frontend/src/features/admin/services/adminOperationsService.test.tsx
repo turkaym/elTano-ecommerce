@@ -20,6 +20,7 @@ import {
   updateAdminOrderStatus,
   updateAdminProduct,
   createAdminCategory,
+  uploadAlegraCatalogImport,
   uploadAdminProductImage,
 } from './adminOperationsService'
 
@@ -83,6 +84,57 @@ describe('admin operations service e2e-like flows', () => {
     expect(init?.body).toBeInstanceOf(FormData)
     expect((init?.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('csrf-upload-token')
     expect((init?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+  })
+
+  it('uploads Alegra catalog import workbook with FormData and admin write headers', async () => {
+    document.cookie = 'XSRF-TOKEN=csrf-alegra-token; path=/'
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'job-alegra-1', status: 'QUEUED' }), {
+        status: 202,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const file = new File(['xlsx-bytes'], 'Alegra - Productos.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const result = await uploadAlegraCatalogImport(file)
+
+    expect(result).toMatchObject({ id: 'job-alegra-1', status: 'QUEUED' })
+    const [url, init] = vi.mocked(globalThis.fetch).mock.calls[0]
+    expect(String(url)).toContain('/api/admin/catalog/jobs/import/alegra')
+    expect(init?.method).toBe('POST')
+    expect(init?.credentials).toBe('include')
+    expect(init?.body).toBeInstanceOf(FormData)
+    expect((init?.body as FormData).get('file')).toBe(file)
+    expect((init?.headers as Record<string, string>)['Accept']).toBe('application/json')
+    expect((init?.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('csrf-alegra-token')
+    expect((init?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+  })
+
+  it('maps Alegra catalog import validation errors with backend diagnostics metadata', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          code: 'INVALID_WORKBOOK',
+          message: 'Alegra import requires an .xlsx workbook',
+          correlationId: 'corr-alegra-400',
+          fieldErrors: [{ field: 'file', message: 'Only .xlsx files are supported' }],
+        }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+
+    const result = uploadAlegraCatalogImport(new File(['bad'], 'productos.csv', { type: 'text/csv' }))
+
+    await expect(result).rejects.toBeInstanceOf(ApiClientError)
+    await expect(result).rejects.toMatchObject({
+      status: 400,
+      code: 'INVALID_WORKBOOK',
+      correlationId: 'corr-alegra-400',
+      message: 'Alegra import requires an .xlsx workbook',
+      fieldErrors: [{ field: 'file', message: 'Only .xlsx files are supported' }],
+    })
   })
 
   it('propagates normalized admin upload errors with correlation metadata', async () => {

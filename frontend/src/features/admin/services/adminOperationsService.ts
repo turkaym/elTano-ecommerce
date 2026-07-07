@@ -240,6 +240,28 @@ export async function uploadAdminProductImage(file: File): Promise<AdminProductI
   return (await response.json()) as AdminProductImageUploadResult
 }
 
+export async function uploadAlegraCatalogImport(file: File): Promise<AdminImportJobStatusResponse> {
+  const path = '/api/admin/catalog/jobs/import/alegra'
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch(joinUrl(API_URL, path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...buildAdminWriteHeaders(path, 'POST', adminAuthHeader()),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    throw await mapResponseToClientError(response)
+  }
+
+  return (await response.json()) as AdminImportJobStatusResponse
+}
+
 export interface AdminOrderListParams {
   status?: string
   query?: string

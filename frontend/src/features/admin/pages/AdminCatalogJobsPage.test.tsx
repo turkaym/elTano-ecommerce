@@ -7,6 +7,7 @@ import {
   getAdminCatalogJobReport,
   getAdminCatalogJobRows,
   listAdminCatalogJobs,
+  uploadAlegraCatalogImport,
 } from '../services/adminOperationsService'
 
 vi.mock('../services/adminOperationsService', () => ({
@@ -14,6 +15,7 @@ vi.mock('../services/adminOperationsService', () => ({
   getAdminCatalogJobRows: vi.fn(async () => [{ rowNumber: 3, outcome: 'FAILED', errorCode: 'INVALID_SKU', errorMessage: 'SKU inválido', payload: '{"sku":""}' }]),
   getAdminCatalogJobReport: vi.fn(async () => ({ summary: 'processed=3,succeeded=2,failed=1', failedRows: 1, rows: [{ rowNumber: 3, outcome: 'FAILED', errorCode: 'INVALID_SKU', errorMessage: 'SKU inválido', payload: '{"sku":""}' }] })),
   createAdminImportJob: vi.fn(async () => ({ id: 'job-2', status: 'QUEUED' })),
+  uploadAlegraCatalogImport: vi.fn(async () => ({ id: 'job-alegra-1', status: 'QUEUED' })),
   awaitAdminImportTerminalStatus: vi.fn(async () => ({ id: 'job-2', status: 'COMPLETED' })),
   mapAdminWriteError: vi.fn(() => ({ message: 'Error API' })),
 }))
@@ -55,6 +57,84 @@ describe('AdminCatalogJobsPage', () => {
     expect(screen.getByRole('button', { name: /Subir CSV/i })).toBeEnabled()
     expect(screen.getByText(/vas a ver el resumen del proceso/i)).toBeInTheDocument()
     expect(screen.getByText(/Formato esperado/i)).toBeInTheDocument()
+  })
+
+  it('renders Alegra Excel upload disabled until an .xlsx file is selected', async () => {
+    vi.mocked(listAdminCatalogJobs).mockResolvedValueOnce([])
+
+    render(<AdminCatalogJobsPage />)
+
+    expect(await screen.findByText(/Importar Excel de Alegra/i)).toBeInTheDocument()
+    expect(screen.getByText(/crea catálogo, precios y presentaciones/i)).toBeInTheDocument()
+    const uploadButton = screen.getByRole('button', { name: /Subir Excel Alegra/i })
+    expect(uploadButton).toBeDisabled()
+
+    const fileInput = screen.getByLabelText(/Archivo Alegra .xlsx/i)
+    const workbook = new File(['xlsx'], 'productos.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    fireEvent.change(fileInput, { target: { files: [workbook] } })
+
+    expect(screen.getByText(/Seleccionado: productos.xlsx/i)).toBeInTheDocument()
+    expect(uploadButton).toBeEnabled()
+  })
+
+  it('uploads selected Alegra Excel file, polls the created job and refreshes diagnostics', async () => {
+    vi.mocked(awaitAdminImportTerminalStatus).mockImplementationOnce(async (_jobId, options) => {
+      options?.onProgress?.({ id: 'job-alegra-1', status: 'PROCESSING' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return { id: 'job-alegra-1', status: 'COMPLETED', summary: 'processed=4,created=4,errors=0' }
+    })
+
+    render(<AdminCatalogJobsPage />)
+    await screen.findByText(/Catalog Jobs/i)
+
+    const workbook = new File(['xlsx'], 'alegra-productos.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    fireEvent.change(screen.getByLabelText(/Archivo Alegra .xlsx/i), { target: { files: [workbook] } })
+    fireEvent.click(screen.getByRole('button', { name: /Subir Excel Alegra/i }))
+
+    expect(await screen.findByText(/Estado: QUEUED/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Estado: PROCESSING/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Estado: COMPLETED/i)).toBeInTheDocument()
+    expect(await screen.findByText('Importación Alegra completada.')).toBeInTheDocument()
+    expect(vi.mocked(uploadAlegraCatalogImport)).toHaveBeenCalledWith(workbook)
+    expect(vi.mocked(createAdminImportJob)).not.toHaveBeenCalled()
+    expect(vi.mocked(awaitAdminImportTerminalStatus)).toHaveBeenCalledWith('job-alegra-1', expect.any(Object))
+    expect(vi.mocked(listAdminCatalogJobs).mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(vi.mocked(getAdminCatalogJobReport).mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('rejects non-xlsx Alegra uploads before calling the backend', async () => {
+    render(<AdminCatalogJobsPage />)
+    await screen.findByText(/Catalog Jobs/i)
+
+    fireEvent.change(screen.getByLabelText(/Archivo Alegra .xlsx/i), {
+      target: { files: [new File(['csv'], 'productos.csv', { type: 'text/csv' })] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Subir Excel Alegra/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Seleccioná un archivo .xlsx de Alegra.')
+    expect(vi.mocked(uploadAlegraCatalogImport)).not.toHaveBeenCalled()
+    expect(vi.mocked(awaitAdminImportTerminalStatus)).not.toHaveBeenCalled()
+  })
+
+  it('shows Alegra upload backend validation errors without losing diagnostics', async () => {
+    vi.mocked(uploadAlegraCatalogImport).mockRejectedValueOnce(new Error('Alegra workbook is missing required headers'))
+
+    render(<AdminCatalogJobsPage />)
+    await screen.findByText(/Catalog Jobs/i)
+
+    fireEvent.change(screen.getByLabelText(/Archivo Alegra .xlsx/i), {
+      target: { files: [new File(['xlsx'], 'bad.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Subir Excel Alegra/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Error API')
+    expect(screen.getByText(/INVALID_SKU/i)).toBeInTheDocument()
+    expect(vi.mocked(uploadAlegraCatalogImport)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(listAdminCatalogJobs)).toHaveBeenCalledTimes(1)
   })
 
   it('uploads csv and polls until completed refresh', async () => {

@@ -9,6 +9,7 @@ import {
   mapAdminWriteError,
   type AdminCatalogJobReportDto,
   type AdminCatalogJobRowDto,
+  uploadAlegraCatalogImport,
 } from '../services/adminOperationsService'
 import { AdminEmptyState, AdminErrorState, AdminLoadingState, AdminWriteStateBanner } from './AdminPageStates'
 import { useAdminWriteState } from './adminWriteState'
@@ -18,6 +19,7 @@ export function AdminCatalogJobsPage() {
   const [report, setReport] = useState<AdminCatalogJobReportDto | null>(null)
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
   const [csvPayload, setCsvPayload] = useState('')
+  const [alegraFile, setAlegraFile] = useState<File | null>(null)
   const [progress, setProgress] = useState<string>('')
   const write = useAdminWriteState()
 
@@ -73,13 +75,7 @@ export function AdminCatalogJobsPage() {
 
     try {
       const enqueue = await createAdminImportJob(csvPayload)
-      setProgress(enqueue.status)
-      const terminal = await awaitAdminImportTerminalStatus(enqueue.id, {
-        maxAttempts: 10,
-        delayMs: 0,
-        onProgress: (next) => setProgress(next.status),
-      })
-      setProgress(terminal.status)
+      const terminal = await pollImportJob(enqueue.id, enqueue.status)
       await refreshLatestJob()
       if (terminal.status === 'FAILED') {
         write.fail({ message: terminal.lastError ?? 'El job finalizó con error.' })
@@ -91,6 +87,41 @@ export function AdminCatalogJobsPage() {
     }
   }
 
+  async function onAlegraUpload() {
+    if (write.isPending) return
+    if (!alegraFile || !isXlsxFile(alegraFile)) {
+      write.fail({ message: 'Seleccioná un archivo .xlsx de Alegra.' })
+      return
+    }
+
+    write.start()
+    setProgress('QUEUED')
+
+    try {
+      const enqueue = await uploadAlegraCatalogImport(alegraFile)
+      const terminal = await pollImportJob(enqueue.id, enqueue.status)
+      await refreshLatestJob()
+      if (terminal.status === 'FAILED') {
+        write.fail({ message: terminal.lastError ?? 'La importación Alegra finalizó con error.' })
+      } else {
+        write.succeed('Importación Alegra completada.')
+      }
+    } catch (error) {
+      write.fail(mapAdminWriteError(error))
+    }
+  }
+
+  async function pollImportJob(jobId: string, initialStatus: string) {
+    setProgress(initialStatus)
+    const terminal = await awaitAdminImportTerminalStatus(jobId, {
+      maxAttempts: 10,
+      delayMs: 0,
+      onProgress: (next) => setProgress(next.status),
+    })
+    setProgress(terminal.status)
+    return terminal
+  }
+
   if (status === 'loading') return <AdminLoadingState label="Cargando jobs de catálogo…" />
   if (status === 'error') return <AdminErrorState message="No se pudo cargar jobs de catálogo." />
 
@@ -99,8 +130,39 @@ export function AdminCatalogJobsPage() {
       <div className="admin-page-header">
         <p className="admin-eyebrow">Operaciones</p>
         <h2>Catalog Jobs</h2>
-        <p>Subí CSV de catálogo y revisá el diagnóstico del último proceso importado.</p>
+        <p>Subí Excel de Alegra o CSV de catálogo y revisá el diagnóstico del último proceso importado.</p>
       </div>
+
+      <section className="admin-card" aria-labelledby="alegra-upload-title">
+        <div className="admin-card-header">
+          <h3 id="alegra-upload-title">Importar Excel de Alegra</h3>
+          <p>Subí el exportable .xlsx de productos de venta. La importación crea catálogo, precios y presentaciones; el stock y las imágenes se cargan manualmente después.</p>
+        </div>
+        <form
+          className="admin-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void onAlegraUpload()
+          }}
+        >
+          <label className="admin-field admin-field-wide">
+            <span>Archivo Alegra .xlsx</span>
+            <input
+              aria-label="Archivo Alegra .xlsx"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              type="file"
+              onChange={(event) => setAlegraFile(event.target.files?.[0] ?? null)}
+            />
+            <small>Usá el exportable de Alegra “Productos de venta”; no importa stock ni imágenes reales.</small>
+          </label>
+          {alegraFile ? <p className="admin-card-help">Seleccionado: {alegraFile.name}</p> : null}
+          <div className="admin-form-actions">
+            <button className="btn btn-primary" type="submit" disabled={write.isPending || !alegraFile}>
+              Subir Excel Alegra
+            </button>
+          </div>
+        </form>
+      </section>
 
       <section className="admin-card" aria-labelledby="catalog-upload-title">
         <div className="admin-card-header">
@@ -191,4 +253,8 @@ export function AdminCatalogJobsPage() {
       ) : null}
     </section>
   )
+}
+
+function isXlsxFile(file: File): boolean {
+  return file.name.trim().toLowerCase().endsWith('.xlsx')
 }
