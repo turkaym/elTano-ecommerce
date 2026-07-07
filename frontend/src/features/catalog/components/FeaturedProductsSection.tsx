@@ -238,13 +238,17 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
 }
 
 export function ProductCardMedia({ product }: { product: FeaturedProduct }) {
-  if (product.primaryImageUrl) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const hasDisplayableImage = product.primaryImageUrl && !isPlaceholderImageUrl(product.primaryImageUrl) && !imageFailed
+
+  if (hasDisplayableImage) {
     return (
       <div className="product-media">
         <img
           src={product.primaryImageUrl}
           alt={product.primaryImageAltText ?? product.name}
           loading="lazy"
+          onError={() => setImageFailed(true)}
         />
       </div>
     )
@@ -252,7 +256,13 @@ export function ProductCardMedia({ product }: { product: FeaturedProduct }) {
 
   return (
     <div className="product-media product-media-placeholder" aria-label={`Imagen no disponible para ${product.name}`}>
-      <span>Sin imagen</span>
+      <span className="product-media-placeholder-icon" aria-hidden="true">✦</span>
+      <span>Imagen no disponible</span>
+      <small>Podés cargarla desde el admin</small>
     </div>
   )
+}
+
+function isPlaceholderImageUrl(value: string): boolean {
+  return value.trim().toLowerCase() === '/placeholder-product.svg'
 }

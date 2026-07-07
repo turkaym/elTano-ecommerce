@@ -78,8 +78,28 @@ describe('FeaturedProductsSection', () => {
       'https://cdn.example.test/almendra.jpg',
     )
     expect(screen.getByLabelText('Imagen no disponible para Castañas de cajú')).toHaveTextContent(
-      'Sin imagen',
+      'Imagen no disponible',
     )
+  })
+
+  it('uses the no-image placeholder for imported placeholder URLs and broken images', () => {
+    render(
+      <FeaturedProductsSection
+        products={[
+          { ...multiVariantProduct, id: 'placeholder-product', primaryImageUrl: '/placeholder-product.svg' },
+          { ...granelProduct, id: 'broken-product', name: 'Producto con imagen rota', primaryImageUrl: 'https://cdn.example.test/broken.jpg' },
+        ]}
+        isLoading={false}
+        source="api"
+        onAddToCart={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByLabelText('Imagen no disponible para Almendra premium')).toHaveTextContent('Podés cargarla desde el admin')
+
+    fireEvent.error(screen.getByRole('img', { name: 'Producto con imagen rota' }))
+
+    expect(screen.getByLabelText('Imagen no disponible para Producto con imagen rota')).toHaveTextContent('Imagen no disponible')
   })
 
   it('keeps product card actions in a dedicated alignment region after the reserved media area', () => {
