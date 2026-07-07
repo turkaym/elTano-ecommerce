@@ -239,13 +239,14 @@ export function FeaturedProductCard({ product, onAddToCart }: FeaturedProductCar
 
 export function ProductCardMedia({ product }: { product: FeaturedProduct }) {
   const [imageFailed, setImageFailed] = useState(false)
-  const hasDisplayableImage = product.primaryImageUrl && !isPlaceholderImageUrl(product.primaryImageUrl) && !imageFailed
+  const imageUrl = product.primaryImageUrl ?? undefined
+  const hasDisplayableImage = imageUrl && !isPlaceholderImageUrl(imageUrl) && !imageFailed
 
   if (hasDisplayableImage) {
     return (
       <div className="product-media">
         <img
-          src={product.primaryImageUrl}
+          src={imageUrl}
           alt={product.primaryImageAltText ?? product.name}
           loading="lazy"
           onError={() => setImageFailed(true)}
