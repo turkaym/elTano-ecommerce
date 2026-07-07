@@ -41,7 +41,8 @@ app:
     jobs:
       worker:
         enabled: ${CATALOG_JOBS_WORKER_ENABLED:false}
-        poll-interval: ${CATALOG_JOBS_WORKER_POLL_INTERVAL:1000ms}
+        poll-interval: ${CATALOG_JOBS_WORKER_POLL_INTERVAL:1000}
+        initial-delay: ${CATALOG_JOBS_WORKER_INITIAL_DELAY:0}
         batch-size: ${CATALOG_JOBS_WORKER_BATCH_SIZE:1}
         max-attempts: ${CATALOG_JOBS_WORKER_MAX_ATTEMPTS:3}
         lease-seconds: ${CATALOG_JOBS_WORKER_LEASE_SECONDS:30}

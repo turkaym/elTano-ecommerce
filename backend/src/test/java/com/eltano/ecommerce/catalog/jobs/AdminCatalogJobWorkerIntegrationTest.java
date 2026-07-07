@@ -32,7 +32,8 @@ import com.eltano.ecommerce.catalog.jobs.worker.AdminCatalogJobWorker;
 
 @SpringBootTest(properties = {
         "app.catalog.seed-on-empty=false",
-        "app.catalog.jobs.worker.enabled=true"
+        "app.catalog.jobs.worker.enabled=true",
+        "app.catalog.jobs.worker.initial-delay=3600000"
 })
 @ActiveProfiles("test")
 @ExtendWith(OutputCaptureExtension.class)

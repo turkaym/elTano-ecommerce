@@ -51,7 +51,9 @@ public class AdminCatalogJobWorker {
         this.leaseSeconds = leaseSeconds;
     }
 
-    @Scheduled(fixedDelayString = "${app.catalog.jobs.worker.poll-interval:1000ms}")
+    @Scheduled(
+            fixedDelayString = "${app.catalog.jobs.worker.poll-interval:1000}",
+            initialDelayString = "${app.catalog.jobs.worker.initial-delay:0}")
     public void scheduledRun() {
         runOnce();
     }
