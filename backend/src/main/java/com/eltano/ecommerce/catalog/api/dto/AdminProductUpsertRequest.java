@@ -23,5 +23,5 @@ public record AdminProductUpsertRequest(
         InventoryPolicy inventoryPolicy,
         @PositiveOrZero Integer stockBaseGrams,
         @NotEmpty List<@Valid AdminProductVariantUpsertRequest> variants,
-        @NotEmpty List<@Valid AdminProductImageUpsertRequest> images) {
+        List<@Valid AdminProductImageUpsertRequest> images) {
 }

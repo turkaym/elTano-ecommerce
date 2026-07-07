@@ -59,14 +59,15 @@ public class AdminProductService {
         ensureProductSlugUnique(request.slug(), null);
         ensureVariantSkusUniqueInPayload(request.variants());
         ensureVariantSkusUniqueInDb(request.variants());
-        ensureImagesValid(request.images());
+        List<AdminProductImageUpsertRequest> imageRequests = normalizeImageRequests(request.images());
+        ensureImagesValid(imageRequests);
 
         Category category = findCategory(request.categoryId());
 
         Product product = new Product();
         applyProductData(product, request, category);
         product.replaceVariants(buildVariants(product, List.of(), request.variants()));
-        product.replaceImages(buildImages(product, List.of(), request.images()));
+        product.replaceImages(buildImages(product, List.of(), imageRequests));
 
         Product saved = productRepository.save(product);
         Product loaded = productRepository.findByIdWithRelations(saved.getId())
@@ -81,14 +82,15 @@ public class AdminProductService {
 
         ensureProductSlugUnique(request.slug(), id);
         ensureVariantSkusUniqueInPayload(request.variants());
-        ensureImagesValid(request.images());
+        List<AdminProductImageUpsertRequest> imageRequests = normalizeImageRequests(request.images());
+        ensureImagesValid(imageRequests);
 
         Category category = findCategory(request.categoryId());
         applyProductData(product, request, category);
 
         List<ProductVariant> updatedVariants = buildVariants(product, product.getVariants(), request.variants());
         product.replaceVariants(updatedVariants);
-        List<ProductImage> updatedImages = buildImages(product, product.getImages(), request.images());
+        List<ProductImage> updatedImages = buildImages(product, product.getImages(), imageRequests);
         product.replaceImages(updatedImages);
 
         Product saved = productRepository.save(product);
@@ -258,6 +260,10 @@ public class AdminProductService {
         return output;
     }
 
+    private List<AdminProductImageUpsertRequest> normalizeImageRequests(List<AdminProductImageUpsertRequest> images) {
+        return images == null ? List.of() : images;
+    }
+
     private void ensureProductSlugUnique(String slug, UUID productId) {
         String normalizedSlug = slug.trim();
         boolean exists = productId == null
@@ -293,9 +299,7 @@ public class AdminProductService {
 
     private void ensureImagesValid(List<AdminProductImageUpsertRequest> images) {
         if (images == null || images.isEmpty()) {
-            throw new UnprocessableEntityException(
-                    "At least one product image is required",
-                    List.of(new UnprocessableEntityException.FieldError("images", "At least one product image is required")));
+            return;
         }
 
         Set<Integer> sortOrders = new HashSet<>();

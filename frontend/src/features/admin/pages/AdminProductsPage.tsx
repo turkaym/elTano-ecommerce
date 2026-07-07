@@ -140,6 +140,7 @@ export function AdminProductsPage() {
     const payloadVariants = shouldGenerateGranelVariants
       ? buildFixedGranelVariantPayloads(normalizedSlug, Number(pricePerKg))
       : variants.map((variant, index) => buildVariantPayload(variant, normalizedSlug, index))
+    const normalizedImageUrl = imageUrl.trim()
     const payload = {
       name: normalizedName,
       slug: normalizedSlug,
@@ -150,15 +151,17 @@ export function AdminProductsPage() {
       inventoryPolicy,
       stockBaseGrams: resolveStockBaseGrams(inventoryPolicy, payloadVariants, stockBaseGrams),
       variants: payloadVariants,
-      images: [
-        {
-          id: imageId,
-          url: imageUrl.trim(),
-          altText: imageAltText.trim() || normalizedName,
-          sortOrder: 0,
-          primary: true,
-        },
-      ],
+      images: normalizedImageUrl
+        ? [
+            {
+              id: imageId,
+              url: normalizedImageUrl,
+              altText: imageAltText.trim() || normalizedName,
+              sortOrder: 0,
+              primary: true,
+            },
+          ]
+        : [],
     }
 
     write.start()
@@ -606,7 +609,7 @@ export function AdminProductsPage() {
     setDescription(item.description?.trim() || '')
     setSelectedCategoryId(item.categoryId || categories[0]?.id || '')
     setImageId(primaryImage?.id)
-    setImageUrl(primaryImage?.url || '')
+    setImageUrl(isPlaceholderProductImage(primaryImage?.url) ? '' : primaryImage?.url || '')
     setImageAltText(primaryImage?.altText || item.name)
     setImagePreviewBroken(false)
     setVariants(item.variants?.length ? item.variants.map(variantToFormRow) : [{ ...DEFAULT_VARIANT }])
@@ -669,7 +672,6 @@ function validateProductForm(input: {
 }): { field: string; message: string }[] {
   const errors: { field: string; message: string }[] = []
   if (!input.description) errors.push({ field: 'description', message: 'Descripción es requerida.' })
-  if (!input.imageUrl) errors.push({ field: 'images', message: 'URL de imagen es requerida.' })
   if (input.imageUrl && !isValidImageUrl(input.imageUrl)) errors.push({ field: 'images', message: 'Ingresá una URL de imagen válida.' })
   if (!input.variants.length) {
     errors.push({ field: 'variants', message: 'Agregá al menos una variante.' })
@@ -768,7 +770,9 @@ function buildUnitLabel(variant: ProductVariantFormRow): string {
 }
 
 function isValidImageUrl(value: string): boolean {
-  if (value.startsWith('/') && !value.startsWith('//')) return true
+  if (value.startsWith('/') && !value.startsWith('//')) {
+    return /^\/uploads\/product-images\/[^/?#]+\.(jpe?g|png|webp)$/i.test(value)
+  }
 
   try {
     const url = new URL(value)
@@ -776,6 +780,10 @@ function isValidImageUrl(value: string): boolean {
   } catch {
     return false
   }
+}
+
+function isPlaceholderProductImage(value?: string | null): boolean {
+  return value?.trim().toLowerCase() === '/placeholder-product.svg'
 }
 
 function resolveImagePreviewSrc(value: string): string {

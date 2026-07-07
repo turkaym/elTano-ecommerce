@@ -98,6 +98,38 @@ class AdminProductControllerIntegrationTest {
     }
 
     @Test
+    void createAllowsProductWithoutImages() throws Exception {
+        Category category = createCategory();
+        ObjectNode payload = validPayload(category.getId());
+        payload.putArray("images");
+
+        mockMvc.perform(post("/api/admin/products")
+                .with(httpBasic("admin-user", "admin-pass"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload.toPrettyString()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.images").isArray())
+                .andExpect(jsonPath("$.images.length()").value(0));
+    }
+
+    @Test
+    void createAllowsProductWhenImagesAreOmitted() throws Exception {
+        Category category = createCategory();
+        ObjectNode payload = validPayload(category.getId());
+        payload.remove("images");
+
+        mockMvc.perform(post("/api/admin/products")
+                .with(httpBasic("admin-user", "admin-pass"))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(payload.toPrettyString()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.images").isArray())
+                .andExpect(jsonPath("$.images.length()").value(0));
+    }
+
+    @Test
     void uploadProductImageStoresImageAndReturnsPublicUrl() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
                 "file",

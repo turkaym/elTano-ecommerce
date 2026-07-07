@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -106,6 +107,38 @@ class AdminProductServiceTest {
         assertEquals("Product images validation failed", exception.getMessage());
         assertEquals(1, exception.getFieldErrors().size());
         assertEquals("images[0].url", exception.getFieldErrors().get(0).field());
+    }
+
+    @Test
+    void createAllowsProductsWithoutImages() {
+        UUID categoryId = UUID.randomUUID();
+        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category(categoryId)));
+        when(productRepository.existsBySlugIgnoreCase("almendra")).thenReturn(false);
+        when(productVariantRepository.existsBySkuIgnoreCase("SKU-1")).thenReturn(false);
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productRepository.findByIdWithRelations(any())).thenReturn(Optional.of(product(categoryId)));
+
+        adminProductService.create(validRequest(categoryId, List.of()));
+
+        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).save(productCaptor.capture());
+        assertTrue(productCaptor.getValue().getImages().isEmpty());
+    }
+
+    @Test
+    void createAllowsProductsWhenImagesAreOmitted() {
+        UUID categoryId = UUID.randomUUID();
+        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category(categoryId)));
+        when(productRepository.existsBySlugIgnoreCase("almendra")).thenReturn(false);
+        when(productVariantRepository.existsBySkuIgnoreCase("SKU-1")).thenReturn(false);
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(productRepository.findByIdWithRelations(any())).thenReturn(Optional.of(product(categoryId)));
+
+        adminProductService.create(validRequest(categoryId, null));
+
+        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
+        verify(productRepository).save(productCaptor.capture());
+        assertTrue(productCaptor.getValue().getImages().isEmpty());
     }
 
     @Test

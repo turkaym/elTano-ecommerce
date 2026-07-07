@@ -159,6 +159,27 @@ describe('AdminProductsPage', () => {
     expect(vi.mocked(listAdminProducts).mock.calls.length).toBeGreaterThan(1)
   })
 
+  it('creates products without requiring a primary image', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Mix especial' } })
+    fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Mix sin imagen cargada todavía' } })
+    fireEvent.change(screen.getByLabelText(/SKU variante 1/i), { target: { value: 'MIX-ESP' } })
+    fireEvent.change(screen.getByLabelText(/Unidad variante 1/i), { target: { value: 'unidad' } })
+    fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '4500' } })
+    fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
+
+    await waitFor(() =>
+      expect(vi.mocked(createAdminProduct)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Mix especial',
+          images: [],
+        }),
+      ),
+    )
+  })
+
   it('uses shared granel stock and price per kg to generate fixed calculated presentations without per-variant stock buckets', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
@@ -483,20 +504,33 @@ describe('AdminProductsPage', () => {
     expect(vi.mocked(createAdminProduct)).not.toHaveBeenCalled()
   })
 
-  it('validates image, variant count, price and stock before submit', async () => {
+  it('rejects relative product image paths outside uploaded product images', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Arroz' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Arroz integral' } })
-    fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: '/placeholder-product.svg' } })
+    fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '1200' } })
+    fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
+
+    expect(await screen.findByText('Imágenes: Ingresá una URL de imagen válida.')).toBeInTheDocument()
+    expect(vi.mocked(createAdminProduct)).not.toHaveBeenCalled()
+  })
+
+  it('validates variant count, price and stock before submit without requiring an image', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Arroz' } })
+    fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Arroz integral' } })
     fireEvent.change(screen.getByLabelText(/Unidad variante 1/i), { target: { value: 'ml' } })
     fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '0' } })
     fireEvent.change(screen.getByLabelText(/Stock variante 1/i), { target: { value: '-1' } })
     fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
 
     const alert = await screen.findByRole('alert')
-    expect(within(alert).getByText('Imágenes: URL de imagen es requerida.')).toBeInTheDocument()
+    expect(within(alert).queryByText(/Imágenes:/)).not.toBeInTheDocument()
     expect(within(alert).getByText('Variantes: El precio debe ser mayor a 0.')).toBeInTheDocument()
     expect(within(alert).getByText('Variantes: El stock no puede ser negativo.')).toBeInTheDocument()
     expect(vi.mocked(createAdminProduct)).not.toHaveBeenCalled()
