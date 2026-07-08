@@ -53,6 +53,8 @@ describe('AdminCategoriesPage', () => {
     const secosActions = within(secosCard).getByRole('group', { name: /Acciones de categoría Secos/i })
     expect(within(secosActions).getByRole('button', { name: /Editar categoría Secos/i })).toBeInTheDocument()
     expect(within(secosActions).getByRole('button', { name: /Desactivar categoría Secos/i })).toBeInTheDocument()
+    expect(within(secosActions).getByRole('button', { name: /Desactivar categoría Secos/i })).toHaveTextContent('Desactivar')
+    expect(within(secosActions).getByRole('button', { name: /Desactivar categoría Secos/i })).not.toHaveTextContent('Secos')
   })
 
   it('keeps the category create form hidden until requested and closes with a reset', async () => {

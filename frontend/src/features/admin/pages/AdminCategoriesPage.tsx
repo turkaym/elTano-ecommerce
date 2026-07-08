@@ -226,8 +226,13 @@ export function AdminCategoriesPage() {
             >
               Editar
             </button>
-            <button className={item.active === false ? 'btn btn-secondary' : 'btn btn-danger-soft'} type="button" onClick={() => void toggleCategory(item)}>
-              {item.active === false ? `Reactivar categoría ${item.name}` : `Desactivar categoría ${item.name}`}
+            <button
+              className={item.active === false ? 'btn btn-secondary' : 'btn btn-danger-soft'}
+              type="button"
+              onClick={() => void toggleCategory(item)}
+              aria-label={item.active === false ? `Reactivar categoría ${item.name}` : `Desactivar categoría ${item.name}`}
+            >
+              {item.active === false ? 'Reactivar' : 'Desactivar'}
             </button>
             </div>
             </article>

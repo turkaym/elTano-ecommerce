@@ -2098,14 +2098,16 @@ textarea:focus-visible,
 
 .admin-category-list .admin-item-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, max-content);
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
   align-items: center;
 }
 
 .admin-category-list .admin-item-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(8rem, 1fr));
+  justify-self: end;
   min-width: 0;
+  width: 100%;
 }
 
 .admin-category-list .admin-item-actions .btn {
