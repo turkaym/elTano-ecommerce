@@ -86,6 +86,42 @@ describe('AdminProductsPage', () => {
     expect(screen.getByRole('button', { name: /Desactivar producto Nuez/i })).toBeInTheDocument()
   })
 
+  it('organizes products as scannable cards with media, metadata, variants and actions', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    const productsRegion = screen.getByRole('region', { name: /Productos encontrados/i })
+    expect(productsRegion).toHaveTextContent('2 productos')
+
+    const nuezCard = within(productsRegion).getByRole('article', { name: /Producto Nuez/i })
+    expect(within(nuezCard).getByRole('img', { name: /Nuez en bolsa/i })).toHaveAttribute('src', 'https://cdn.test/nuez.jpg')
+    expect(within(nuezCard).getByRole('list', { name: /Datos clave de Nuez/i })).toHaveTextContent('Categoría: Secos')
+    expect(within(nuezCard).getByRole('list', { name: /Datos clave de Nuez/i })).toHaveTextContent('Estado: Activo')
+    expect(within(nuezCard).getByRole('list', { name: /Datos clave de Nuez/i })).toHaveTextContent('Stock: Stock bajo')
+    expect(within(nuezCard).getByRole('list', { name: /Presentaciones de Nuez/i })).toHaveTextContent('250g · $2500')
+    expect(within(nuezCard).getByRole('group', { name: /Acciones de Nuez/i })).toContainElement(within(nuezCard).getByRole('button', { name: /Editar/i }))
+    expect(within(nuezCard).getByRole('group', { name: /Acciones de Nuez/i })).toContainElement(within(nuezCard).getByRole('button', { name: /Desactivar producto Nuez/i }))
+
+    const peraCard = within(productsRegion).getByRole('article', { name: /Producto Pera/i })
+    expect(within(peraCard).getByText('Sin imagen')).toBeInTheDocument()
+    expect(within(peraCard).getByText(/Podés cargarla desde el editor/i)).toBeInTheDocument()
+    expect(within(peraCard).getByRole('button', { name: /Reactivar producto Pera/i })).toBeInTheDocument()
+  })
+
+  it('keeps filtered product results readable when no card matches', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    fireEvent.change(screen.getByLabelText(/Filtrar productos por estado/i), { target: { value: 'inactive' } })
+    fireEvent.change(screen.getByLabelText(/Filtrar productos por categoría/i), { target: { value: 'c-1' } })
+
+    const productsRegion = screen.getByRole('region', { name: /Productos encontrados/i })
+    expect(productsRegion).toHaveTextContent('0 productos')
+    expect(within(productsRegion).getByText(/No hay productos que coincidan con esos filtros/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Filtrar productos por estado/i)).toHaveValue('inactive')
+    expect(screen.getByLabelText(/Filtrar productos por categoría/i)).toHaveValue('c-1')
+  })
+
   it('shows validation error and blocks submit when name is empty', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')

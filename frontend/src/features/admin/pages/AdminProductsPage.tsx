@@ -243,6 +243,7 @@ export function AdminProductsPage() {
 
   const currentProductType = resolveProductType(variants)
   const isGranelProduct = currentProductType === 'GRANEL'
+  const filteredProducts = visibleProducts(items, statusFilter, categoryFilter, stockFilter)
 
   return (
     <section className="admin-page" aria-label="Listado de productos admin">
@@ -538,43 +539,80 @@ export function AdminProductsPage() {
         </label>
         </div>
       </section>
-      <ul className="admin-list admin-product-list" aria-label="Productos admin">
-        {visibleProducts(items, statusFilter, categoryFilter, stockFilter).map((item) => (
-          <li className="admin-list-item" key={item.id}>
-            <article className="admin-item-card" aria-label={`Producto ${item.name}`}>
-            <div className="admin-item-main">
-            <strong>{item.name}</strong>
-            <span>Categoría: {resolveCategoryName(item, categories)}</span>
-            <span className={`admin-badge ${isProductActive(item) ? 'admin-badge-success' : 'admin-badge-muted'}`}>Estado: {isProductActive(item) ? 'Activo' : 'Inactivo'}</span>
-            <span className="admin-badge admin-badge-muted">Stock: {getAdminStockState(item).badgeLabel}</span>
-            <span>Imagen: {primaryImageUrl(item)}</span>
-            <span>Variantes: {variantSummary(item)}</span>
-            </div>
-            <div className="admin-item-actions">
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={(event) => {
-                editTriggerRef.current = event.currentTarget
-                loadProductForEdit(item)
-                write.reset()
-              }}
-            >
-              Editar
-            </button>
-            <button
-              aria-label={isProductActive(item) ? `Desactivar producto ${item.name}` : `Reactivar producto ${item.name}`}
-              className={isProductActive(item) ? 'btn btn-danger-soft' : 'btn btn-secondary'}
-              type="button"
-              onClick={() => void toggleProduct(item)}
-            >
-              {isProductActive(item) ? 'Desactivar' : 'Reactivar'}
-            </button>
-            </div>
-            </article>
-          </li>
-        ))}
-      </ul>
+      <section className="admin-card admin-products-results" aria-labelledby="products-results-title">
+        <div className="admin-card-header admin-card-header-actions">
+          <div>
+            <h3 id="products-results-title">Productos encontrados</h3>
+            <p>{filteredProducts.length} productos visibles según los filtros actuales.</p>
+          </div>
+        </div>
+        <ul className="admin-list admin-product-list" aria-label="Productos admin">
+          {filteredProducts.map((item) => {
+            const imageUrl = primaryImageUrl(item)
+            const stockState = getAdminStockState(item)
+            const active = isProductActive(item)
+            return (
+              <li className="admin-list-item" key={item.id}>
+                <article className="admin-item-card admin-product-card" aria-label={`Producto ${item.name}`}>
+                  <div className="admin-product-media" aria-label={`Imagen de ${item.name}`}>
+                    {imageUrl === 'Sin imagen' ? (
+                      <div className="admin-product-media-placeholder">
+                        <strong>Sin imagen</strong>
+                        <span>Podés cargarla desde el editor.</span>
+                      </div>
+                    ) : (
+                      <img src={imageUrl} alt={item.images?.find((image) => image.primary)?.altText || item.images?.[0]?.altText || item.name} />
+                    )}
+                  </div>
+                  <div className="admin-item-main">
+                    <strong>{item.name}</strong>
+                    <ul className="admin-product-meta-list" aria-label={`Datos clave de ${item.name}`}>
+                      <li>Categoría: {resolveCategoryName(item, categories)}</li>
+                      <li>
+                        <span className={`admin-badge ${active ? 'admin-badge-success' : 'admin-badge-muted'}`}>Estado: {active ? 'Activo' : 'Inactivo'}</span>
+                      </li>
+                      <li>
+                        <span className="admin-badge admin-badge-muted">Stock: {stockState.badgeLabel}</span>
+                      </li>
+                      <li>Imagen: {imageUrl}</li>
+                    </ul>
+                    <ul className="admin-product-variant-list" aria-label={`Presentaciones de ${item.name}`}>
+                      <li>Variantes: {variantSummary(item)}</li>
+                    </ul>
+                  </div>
+                  <div className="admin-item-actions" role="group" aria-label={`Acciones de ${item.name}`}>
+                    <button
+                      className="btn btn-secondary"
+                      type="button"
+                      onClick={(event) => {
+                        editTriggerRef.current = event.currentTarget
+                        loadProductForEdit(item)
+                        write.reset()
+                      }}
+                    >
+                      Editar
+                    </button>
+                    <button
+                      aria-label={active ? `Desactivar producto ${item.name}` : `Reactivar producto ${item.name}`}
+                      className={active ? 'btn btn-danger-soft' : 'btn btn-secondary'}
+                      type="button"
+                      onClick={() => void toggleProduct(item)}
+                    >
+                      {active ? 'Desactivar' : 'Reactivar'}
+                    </button>
+                  </div>
+                </article>
+              </li>
+            )
+          })}
+        </ul>
+        {!filteredProducts.length ? (
+          <div className="admin-empty-card" role="status">
+            <h3>No hay productos que coincidan con esos filtros.</h3>
+            <p>Probá cambiar estado, categoría o stock para volver a ver productos.</p>
+          </div>
+        ) : null}
+      </section>
       {editDraft && editingProduct ? (
         <div className="admin-dialog-backdrop" role="presentation">
           <section
