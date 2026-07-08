@@ -418,6 +418,46 @@ describe('AdminProductsPage', () => {
     expect(screen.queryByText('Nuez')).not.toBeInTheDocument()
   })
 
+  it('edits granel products with shared stock, price per kg, and fixed calculated presentations', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    fireEvent.click(within(screen.getByRole('article', { name: /Producto Nuez/i })).getByRole('button', { name: /Editar/i }))
+    const dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
+
+    expect(within(dialog).getByLabelText(/Stock total granel en gramos/i)).toHaveValue(6000)
+    expect(within(dialog).getByText(/El stock granel se administra una sola vez/i)).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(/Stock variante 1/i)).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(/Precio variante 1/i)).not.toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText(/Stock total granel en gramos/i), { target: { value: '7200' } })
+    fireEvent.change(within(dialog).getByLabelText(/Precio por kg granel/i), { target: { value: '4800' } })
+
+    expect(within(dialog).getByLabelText(/Precio calculado variante 1/i)).toHaveTextContent('$480')
+    expect(within(dialog).getByLabelText(/Precio calculado variante 2/i)).toHaveTextContent('$1200')
+    expect(within(dialog).getByLabelText(/Precio calculado variante 3/i)).toHaveTextContent('$2400')
+    expect(within(dialog).getByLabelText(/Precio calculado variante 4/i)).toHaveTextContent('$4800')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Guardar cambios/i }))
+
+    await waitFor(() =>
+      expect(vi.mocked(updateAdminProduct)).toHaveBeenCalledWith(
+        'p-1',
+        expect.objectContaining({
+          productType: 'GRANEL',
+          inventoryPolicy: 'BULK_WEIGHT',
+          stockBaseGrams: 7200,
+          variants: [
+            expect.objectContaining({ unitLabel: '100g', weightGrams: 100, price: 480, stockAvailable: 0 }),
+            expect.objectContaining({ unitLabel: '250g', weightGrams: 250, price: 1200, stockAvailable: 0 }),
+            expect.objectContaining({ unitLabel: '500g', weightGrams: 500, price: 2400, stockAvailable: 0 }),
+            expect.objectContaining({ unitLabel: '1kg', weightGrams: 1000, price: 4800, stockAvailable: 0 }),
+          ],
+        }),
+      ),
+    )
+  })
+
   it('adds and removes variant rows before submit', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')

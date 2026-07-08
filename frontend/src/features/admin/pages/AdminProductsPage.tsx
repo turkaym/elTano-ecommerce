@@ -684,6 +684,15 @@ export function AdminProductsPage() {
                         <input type="number" min="0" step="0.01" value={editDraft.pricePerKg} onChange={(event) => setEditDraftValue({ pricePerKg: event.target.value })} aria-label="Precio por kg granel" />
                       </label>
                     </div>
+                    <div className="admin-form-grid" aria-label="Precios calculados granel">
+                      {GRANEL_FIXED_PRESENTATIONS.map((presentation, index) => (
+                        <div className="admin-field" key={presentation.label} aria-label={`Precio calculado variante ${index + 1}`}>
+                          <span>{presentation.label}</span>
+                          <strong>{formatCurrency(calculateGranelPrice(Number(editDraft.pricePerKg), presentation.weightGrams))}</strong>
+                          <small>Precio calculado desde precio por kg granel.</small>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
                 <div className="admin-preset-row" aria-label="Presets de variantes">
