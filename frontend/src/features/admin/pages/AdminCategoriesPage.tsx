@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import {
   createAdminCategory,
   listAdminCategories,
@@ -20,7 +20,11 @@ export function AdminCategoriesPage() {
   const [slug, setSlug] = useState('')
   const [slugTouched, setSlugTouched] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false)
   const write = useAdminWriteState()
+  const editDialogRef = useRef<HTMLElement | null>(null)
+
+  const editingCategory = editingId ? (items.find((item) => item.id === editingId) ?? null) : null
 
   useEffect(() => {
     let active = true
@@ -40,6 +44,43 @@ export function AdminCategoriesPage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (editingId) editDialogRef.current?.focus()
+  }, [editingId])
+
+  function resetDraft() {
+    setName('')
+    setSlug('')
+    setSlugTouched(false)
+    setEditingId(null)
+  }
+
+  function openCreateForm() {
+    resetDraft()
+    write.reset()
+    setIsCreateFormOpen(true)
+  }
+
+  function closeCreateForm() {
+    resetDraft()
+    write.reset()
+    setIsCreateFormOpen(false)
+  }
+
+  function openEditDialog(item: AdminCategoryDto) {
+    setIsCreateFormOpen(false)
+    setEditingId(item.id)
+    setName(item.name)
+    setSlug(item.slug)
+    setSlugTouched(true)
+    write.reset()
+  }
+
+  function closeEditDialog() {
+    resetDraft()
+    write.reset()
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (write.isPending) return
@@ -56,7 +97,7 @@ export function AdminCategoriesPage() {
       const payload = {
         name: name.trim(),
         slug: slug.trim(),
-        active: true,
+        active: editingCategory ? editingCategory.active !== false : true,
       }
       if (editingId) {
         await updateAdminCategory(editingId, payload)
@@ -65,10 +106,8 @@ export function AdminCategoriesPage() {
       }
       setItems(await listAdminCategories())
       setProducts(await listAdminProducts())
-      setName('')
-      setSlug('')
-      setSlugTouched(false)
-      setEditingId(null)
+      resetDraft()
+      setIsCreateFormOpen(false)
       write.succeed('Categoría guardada correctamente.')
     } catch (error) {
       write.fail(mapAdminWriteError(error))
@@ -112,44 +151,44 @@ export function AdminCategoriesPage() {
           <h2>Categorías</h2>
           <p>Ordená el catálogo y controlá qué categorías permanecen activas.</p>
         </div>
-      </div>
-      <section className="admin-card" aria-labelledby="category-form-title">
-      <div className="admin-card-header">
-        <h3 id="category-form-title">Datos de categoría</h3>
-        <p>Nombre público y slug utilizado en navegación.</p>
-      </div>
-      <form className="admin-form" onSubmit={submit}>
-        <div className="admin-form-grid">
-        <label className="admin-field">
-          <span>Nombre</span>
-          <input
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value)
-              if (!slugTouched) setSlug(slugify(event.target.value))
-            }}
-            aria-label="Nombre categoría"
-          />
-        </label>
-        <label className="admin-field">
-          <span>Slug</span>
-          <input
-            value={slug}
-            onChange={(event) => {
-              setSlugTouched(true)
-              setSlug(slugify(event.target.value))
-            }}
-            aria-label="Slug categoría"
-          />
-        </label>
-        </div>
-        <div className="admin-form-actions">
-        <button className="btn btn-primary" type="submit" disabled={write.isPending}>
-          {editingId ? 'Actualizar categoría' : 'Crear categoría'}
+        <button className="btn btn-primary" type="button" onClick={openCreateForm}>
+          Crear nueva categoría
         </button>
-        </div>
-      </form>
-      </section>
+      </div>
+      {isCreateFormOpen ? (
+        <section className="admin-card" aria-labelledby="category-form-title">
+          <div className="admin-card-header admin-card-title-row">
+            <div>
+              <h3 id="category-form-title">Datos de categoría</h3>
+              <p>Nombre público y slug utilizado en navegación.</p>
+            </div>
+            <button
+              className="admin-card-close"
+              type="button"
+              aria-label="Cerrar formulario de categoría"
+              onClick={closeCreateForm}
+              disabled={write.isPending}
+            >
+              ×
+            </button>
+          </div>
+          <CategoryForm
+            name={name}
+            slug={slug}
+            isPending={write.isPending}
+            submitLabel="Crear categoría"
+            onSubmit={submit}
+            onNameChange={(nextName) => {
+              setName(nextName)
+              if (!slugTouched) setSlug(slugify(nextName))
+            }}
+            onSlugChange={(nextSlug) => {
+              setSlugTouched(true)
+              setSlug(slugify(nextSlug))
+            }}
+          />
+        </section>
+      ) : null}
       <AdminWriteStateBanner feedback={write.feedback} onDismiss={write.reset} onRetry={write.reset} />
       {!items.length ? <AdminEmptyState title="Sin categorías" action={null} /> : null}
       <section className="admin-card admin-toolbar" aria-labelledby="category-filters-title">
@@ -170,7 +209,7 @@ export function AdminCategoriesPage() {
         </select>
       </label>
       </section>
-      <ul className="admin-list" aria-label="Categorías admin">
+      <ul className="admin-list admin-category-list" aria-label="Categorías admin">
         {visibleCategories(items, statusFilter).map((item) => (
           <li className="admin-list-item" key={item.id}>
             <article className="admin-item-card" aria-label={`Categoría ${item.name}`}>
@@ -178,17 +217,12 @@ export function AdminCategoriesPage() {
             <strong>{item.name}</strong>
             <span className={`admin-badge ${item.active === false ? 'admin-badge-muted' : 'admin-badge-success'}`}>Estado: {item.active === false ? 'Inactiva' : 'Activa'}</span>
             </div>
-            <div className="admin-item-actions">
+            <div className="admin-item-actions" role="group" aria-label={`Acciones de categoría ${item.name}`}>
             <button
               className="btn btn-secondary"
               type="button"
-              onClick={() => {
-                setEditingId(item.id)
-                setName(item.name)
-                setSlug(item.slug)
-                setSlugTouched(true)
-                write.reset()
-              }}
+              onClick={() => openEditDialog(item)}
+              aria-label={`Editar categoría ${item.name}`}
             >
               Editar
             </button>
@@ -200,7 +234,83 @@ export function AdminCategoriesPage() {
           </li>
         ))}
       </ul>
+      {editingCategory ? (
+        <div className="admin-dialog-backdrop" role="presentation">
+          <section
+            className="admin-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-edit-dialog-title"
+            ref={editDialogRef}
+            tabIndex={-1}
+          >
+            <div className="admin-dialog-header">
+              <div>
+                <p className="admin-eyebrow">Editar categoría</p>
+                <h3 id="category-edit-dialog-title">Editar categoría {editingCategory.name}</h3>
+                <p>Actualizá el nombre y slug sin abandonar la lista.</p>
+              </div>
+              <button
+                className="admin-card-close"
+                type="button"
+                aria-label="Cerrar edición de categoría"
+                onClick={closeEditDialog}
+                disabled={write.isPending}
+              >
+                ×
+              </button>
+            </div>
+            <CategoryForm
+              name={name}
+              slug={slug}
+              isPending={write.isPending}
+              submitLabel="Actualizar categoría"
+              onSubmit={submit}
+              onNameChange={(nextName) => {
+                setName(nextName)
+                if (!slugTouched) setSlug(slugify(nextName))
+              }}
+              onSlugChange={(nextSlug) => {
+                setSlugTouched(true)
+                setSlug(slugify(nextSlug))
+              }}
+            />
+          </section>
+        </div>
+      ) : null}
     </section>
+  )
+}
+
+type CategoryFormProps = {
+  name: string
+  slug: string
+  isPending: boolean
+  submitLabel: string
+  onSubmit: (event: FormEvent) => void
+  onNameChange: (value: string) => void
+  onSlugChange: (value: string) => void
+}
+
+function CategoryForm({ name, slug, isPending, submitLabel, onSubmit, onNameChange, onSlugChange }: CategoryFormProps) {
+  return (
+    <form className="admin-form" onSubmit={onSubmit}>
+      <div className="admin-form-grid">
+        <label className="admin-field">
+          <span>Nombre</span>
+          <input value={name} onChange={(event) => onNameChange(event.target.value)} aria-label="Nombre categoría" />
+        </label>
+        <label className="admin-field">
+          <span>Slug</span>
+          <input value={slug} onChange={(event) => onSlugChange(event.target.value)} aria-label="Slug categoría" />
+        </label>
+      </div>
+      <div className="admin-form-actions">
+        <button className="btn btn-primary" type="submit" disabled={isPending}>
+          {submitLabel}
+        </button>
+      </div>
+    </form>
   )
 }
 
