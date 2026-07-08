@@ -1606,6 +1606,40 @@ textarea:focus-visible,
   font-size: clamp(1.15rem, 1.4vw, 1.35rem);
 }
 
+.admin-card-title-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.admin-card-close {
+  display: inline-grid;
+  width: 2.35rem;
+  height: 2.35rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--admin-border);
+  border-radius: 999px;
+  background: var(--admin-surface-strong);
+  color: var(--admin-text);
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.admin-card-close:hover:not(:disabled),
+.admin-card-close:focus-visible {
+  border-color: var(--admin-accent);
+  color: var(--admin-accent);
+}
+
+.admin-card-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .admin-toolbar .admin-card-header {
   padding-bottom: 0;
   border-bottom: 0;

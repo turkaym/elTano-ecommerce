@@ -88,6 +88,12 @@ describe('AdminProductsPage', () => {
     expect(screen.getByRole('group', { name: /Imagen principal/i })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: /Variantes/i })).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: /Cerrar creación de producto/i }))
+
+    expect(screen.queryByRole('region', { name: /Básicos del producto/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: /Imagen principal/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: /Variantes/i })).not.toBeInTheDocument()
+
     const filters = screen.getByRole('region', { name: /Filtros de productos/i })
     expect(within(filters).getByLabelText(/Filtrar productos por estado/i)).toBeInTheDocument()
     expect(within(filters).getByLabelText(/Filtrar productos por categoría/i)).toBeInTheDocument()

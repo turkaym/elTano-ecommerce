@@ -246,6 +246,12 @@ export function AdminProductsPage() {
   const isGranelProduct = currentProductType === 'GRANEL'
   const filteredProducts = visibleProducts(items, statusFilter, categoryFilter, stockFilter)
 
+  function closeCreateForm() {
+    if (write.isPending) return
+    resetForm(categories[0]?.id || '')
+    setIsCreateFormOpen(false)
+  }
+
   return (
     <section className="admin-page" aria-label="Listado de productos admin">
       <div className="admin-page-header">
@@ -261,8 +267,15 @@ export function AdminProductsPage() {
       {isCreateFormOpen ? <form className="admin-form" onSubmit={submit} noValidate>
         <section className="admin-card" aria-labelledby="product-basics-title">
           <div className="admin-card-header">
-            <h3 id="product-basics-title">Básicos del producto</h3>
-            <p>Datos visibles y categorización principal.</p>
+            <div className="admin-card-title-row">
+              <div>
+                <h3 id="product-basics-title">Básicos del producto</h3>
+                <p>Datos visibles y categorización principal.</p>
+              </div>
+              <button className="admin-card-close" type="button" onClick={closeCreateForm} disabled={write.isPending} aria-label="Cerrar creación de producto">
+                ×
+              </button>
+            </div>
           </div>
           <div className="admin-form-grid">
             <label className="admin-field">
