@@ -31,6 +31,7 @@ import com.eltano.ecommerce.catalog.domain.Category;
 import com.eltano.ecommerce.catalog.domain.InventoryPolicy;
 import com.eltano.ecommerce.catalog.domain.Product;
 import com.eltano.ecommerce.catalog.domain.ProductType;
+import com.eltano.ecommerce.catalog.domain.ProductVariant;
 import com.eltano.ecommerce.catalog.domain.UnitType;
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
 import com.eltano.ecommerce.catalog.repository.ProductRepository;
@@ -226,6 +227,35 @@ class AdminProductServiceTest {
         assertEquals(0, responses.get(0).stockReservedBaseGrams());
     }
 
+    @Test
+    void listOrdersVariantsByWeightGramsBeforeLabelText() {
+        Product product = product(UUID.randomUUID());
+        product.addVariant(variant("GR-LABEL-1KG", 100, "1kg"));
+        product.addVariant(variant("GR-LABEL-100G", 1000, "100g"));
+        when(productRepository.findAllWithRelations()).thenReturn(List.of(product));
+
+        var responses = adminProductService.list();
+
+        assertEquals(List.of("1kg", "100g"), responses.getFirst().variants().stream()
+                .map(variant -> variant.unitLabel())
+                .toList());
+    }
+
+    @Test
+    void listOrdersUnknownUnitsDeterministicallyAfterKnownWeights() {
+        Product product = product(UUID.randomUUID());
+        product.addVariant(variant("PACK-B", null, "Caja B"));
+        product.addVariant(variant("GR-250", 250, "250g"));
+        product.addVariant(variant("PACK-A", null, "Caja A"));
+        when(productRepository.findAllWithRelations()).thenReturn(List.of(product));
+
+        var responses = adminProductService.list();
+
+        assertEquals(List.of("250g", "Caja A", "Caja B"), responses.getFirst().variants().stream()
+                .map(variant -> variant.unitLabel())
+                .toList());
+    }
+
     private Product product(UUID productId) {
         Product product = new Product();
         ReflectionTestUtils.setField(product, "id", productId);
@@ -274,5 +304,19 @@ class AdminProductServiceTest {
                 0,
                 true,
                 null);
+    }
+
+    private ProductVariant variant(String sku, Integer grams, String label) {
+        ProductVariant variant = new ProductVariant();
+        ReflectionTestUtils.setField(variant, "id", UUID.randomUUID());
+        variant.setSku(sku);
+        variant.setUnitType(UnitType.WEIGHT);
+        variant.setWeightGrams(grams);
+        variant.setUnitLabel(label);
+        variant.setPrice(new BigDecimal("6000.00"));
+        variant.setStockAvailable(5);
+        variant.setStockReserved(0);
+        variant.setActive(true);
+        return variant;
     }
 }

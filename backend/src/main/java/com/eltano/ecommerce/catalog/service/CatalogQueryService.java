@@ -54,6 +54,7 @@ public class CatalogQueryService {
         Integer stockAvailableBaseGrams = stockAvailableBaseGrams(product);
         List<PublicCatalogProductResponse.PublicCatalogVariantResponse> variants = product.getVariants().stream()
                 .filter(ProductVariant::isActive)
+                .sorted(VariantDisplayOrder.COMPARATOR)
                 .map(variant -> new PublicCatalogProductResponse.PublicCatalogVariantResponse(
                         variant.getId(),
                         variant.getSku(),

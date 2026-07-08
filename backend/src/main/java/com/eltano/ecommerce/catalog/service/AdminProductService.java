@@ -344,6 +344,7 @@ public class AdminProductService {
 
     private AdminProductResponse toResponse(Product product) {
         List<AdminProductVariantResponse> variants = product.getVariants().stream()
+                .sorted(VariantDisplayOrder.COMPARATOR)
                 .map(this::toVariantResponse)
                 .toList();
 

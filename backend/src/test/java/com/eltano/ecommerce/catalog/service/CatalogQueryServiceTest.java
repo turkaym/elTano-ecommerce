@@ -58,6 +58,42 @@ class CatalogQueryServiceTest {
         assertEquals(2, response.variants().getFirst().stockReserved());
     }
 
+    @Test
+    void listOrdersWeightVariantsSemanticallyWithoutChangingVariantIdentity() {
+        Product product = product(ProductType.GRANEL, InventoryPolicy.BULK_WEIGHT, 2000, 0);
+        ProductVariant oneKg = variant("GR-1KG", 1000, "1kg", 0, 0);
+        ProductVariant twoHundredFifty = variant("GR-250", 250, "250g", 0, 0);
+        ProductVariant oneHundred = variant("GR-100", 100, "100g", 0, 0);
+        ProductVariant fiveHundred = variant("GR-500", 500, "500g", 0, 0);
+        product.addVariant(oneKg);
+        product.addVariant(twoHundredFifty);
+        product.addVariant(oneHundred);
+        product.addVariant(fiveHundred);
+        when(productRepository.searchPublicCatalog(null)).thenReturn(List.of(product));
+
+        PublicCatalogProductResponse response = new CatalogQueryService(productRepository).list(null, null).getFirst();
+
+        assertEquals(List.of("100g", "250g", "500g", "1kg"), response.variants().stream()
+                .map(PublicCatalogProductResponse.PublicCatalogVariantResponse::unitLabel)
+                .toList());
+        assertEquals(oneKg.getId(), response.variants().get(3).id());
+    }
+
+    @Test
+    void listFallsBackToUnitLabelWhenWeightGramsAreMissing() {
+        Product product = product(ProductType.GRANEL, InventoryPolicy.BULK_WEIGHT, 2000, 0);
+        product.addVariant(variant("GR-1KG", null, "1 kg", 0, 0));
+        product.addVariant(variant("GR-100", null, "100 g", 0, 0));
+        product.addVariant(variant("GR-500", null, "500 gramos", 0, 0));
+        when(productRepository.searchPublicCatalog(null)).thenReturn(List.of(product));
+
+        PublicCatalogProductResponse response = new CatalogQueryService(productRepository).list(null, null).getFirst();
+
+        assertEquals(List.of("100 g", "500 gramos", "1 kg"), response.variants().stream()
+                .map(PublicCatalogProductResponse.PublicCatalogVariantResponse::unitLabel)
+                .toList());
+    }
+
     private Product product(ProductType type, InventoryPolicy policy, Integer stockBaseGrams, int stockReservedBaseGrams) {
         Category category = new Category();
         category.setName("Frutos secos");
@@ -76,7 +112,7 @@ class CatalogQueryServiceTest {
         return product;
     }
 
-    private ProductVariant variant(String sku, int grams, String label, int stockAvailable, int stockReserved) {
+    private ProductVariant variant(String sku, Integer grams, String label, int stockAvailable, int stockReserved) {
         ProductVariant variant = new ProductVariant();
         ReflectionTestUtils.setField(variant, "id", UUID.randomUUID());
         variant.setSku(sku);
