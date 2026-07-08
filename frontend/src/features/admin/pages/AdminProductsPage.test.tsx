@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdminProductsPage } from './AdminProductsPage'
 import {
@@ -275,7 +276,88 @@ describe('AdminProductsPage', () => {
     expect(vi.mocked(listAdminProducts).mock.calls.length).toBeGreaterThan(1)
   })
 
-  it('edits selected product loading existing image and variant values', async () => {
+  it('opens product editing in an accessible named dialog with focus inside while preserving the create form', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    fireEvent.click(within(screen.getByRole('article', { name: /Producto Nuez/i })).getByRole('button', { name: /Editar/i }))
+
+    const dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
+    const dialogName = within(dialog).getByLabelText(/Nombre producto/i)
+    expect(dialog).toBeInTheDocument()
+    expect(dialogName).toHaveValue('Nuez')
+    expect(dialogName).toHaveFocus()
+
+    expect(screen.getAllByLabelText(/Nombre producto/i)[0]).toHaveValue('')
+    expect(screen.getByRole('button', { name: /Crear producto/i })).toBeInTheDocument()
+  })
+
+  it('keeps Tab and Shift+Tab focus movement inside the edit dialog', async () => {
+    const user = userEvent.setup()
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    await user.click(within(screen.getByRole('article', { name: /Producto Nuez/i })).getByRole('button', { name: /Editar/i }))
+
+    const dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
+    const closeButton = within(dialog).getByRole('button', { name: /Cerrar edición de Nuez/i })
+    const saveButton = within(dialog).getByRole('button', { name: /Guardar cambios/i })
+
+    saveButton.focus()
+    await user.tab()
+    expect(closeButton).toHaveFocus()
+
+    closeButton.focus()
+    await user.tab({ shift: true })
+    expect(saveButton).toHaveFocus()
+  })
+
+  it('cancels product editing by closing the dialog and discarding draft changes', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    const editButton = within(screen.getByRole('article', { name: /Producto Nuez/i })).getByRole('button', { name: /Editar/i })
+    fireEvent.click(editButton)
+    let dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
+    fireEvent.change(within(dialog).getByLabelText(/Nombre producto/i), { target: { value: 'Nuez descartada' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Cancelar edición/i }))
+
+    expect(screen.queryByRole('dialog', { name: /Editar producto/i })).not.toBeInTheDocument()
+    expect(editButton).toHaveFocus()
+    expect(vi.mocked(updateAdminProduct)).not.toHaveBeenCalled()
+    expect(screen.getAllByLabelText(/Nombre producto/i)[0]).toHaveValue('')
+
+    fireEvent.click(within(screen.getByRole('article', { name: /Producto Nuez/i })).getByRole('button', { name: /Editar/i }))
+    dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
+    expect(within(dialog).getByLabelText(/Nombre producto/i)).toHaveValue('Nuez')
+  })
+
+  it('does not dismiss the edit dialog from Escape or header close while save is pending', async () => {
+    const user = userEvent.setup()
+    vi.mocked(updateAdminProduct).mockImplementationOnce(
+      () =>
+        new Promise(() => {
+          // Keep the save pending so close affordances can be asserted in that state.
+        }),
+    )
+
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+    await user.click(within(screen.getByRole('article', { name: /Producto Nuez/i })).getByRole('button', { name: /Editar/i }))
+    const dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
+
+    await user.click(within(dialog).getByRole('button', { name: /Guardar cambios/i }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Guardando cambios…')
+    expect(within(dialog).getByRole('button', { name: /Cancelar edición/i })).toBeDisabled()
+
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('dialog', { name: /Editar producto Nuez/i })).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: /Cerrar edición de Nuez/i }))
+    expect(screen.getByRole('dialog', { name: /Editar producto Nuez/i })).toBeInTheDocument()
+  })
+
+  it('saves product edits from the dialog, refreshes the list and closes the dialog', async () => {
     vi.mocked(listAdminProducts)
       .mockResolvedValueOnce([
         {
@@ -307,14 +389,15 @@ describe('AdminProductsPage', () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
     fireEvent.click(screen.getByRole('button', { name: /Editar/i }))
-    expect(screen.getByLabelText(/Descripción producto/i)).toHaveValue('Nuez mariposa')
-    expect(screen.getByLabelText(/URL imagen principal/i)).toHaveValue('https://cdn.test/nuez.jpg')
-    expect(screen.getByLabelText(/SKU variante 1/i)).toHaveValue('NUEZ-250G')
+    const dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
+    expect(within(dialog).getByLabelText(/Descripción producto/i)).toHaveValue('Nuez mariposa')
+    expect(within(dialog).getByLabelText(/URL imagen principal/i)).toHaveValue('https://cdn.test/nuez.jpg')
+    expect(within(dialog).getByLabelText(/SKU variante 1/i)).toHaveValue('NUEZ-250G')
 
-    fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Nuez Premium' } })
-    fireEvent.change(screen.getByLabelText(/Categoría producto/i), { target: { value: 'c-2' } })
-    fireEvent.change(screen.getByLabelText(/Precio variante 1/i), { target: { value: '2750' } })
-    fireEvent.click(screen.getByRole('button', { name: /Actualizar producto/i }))
+    fireEvent.change(within(dialog).getByLabelText(/Nombre producto/i), { target: { value: 'Nuez Premium' } })
+    fireEvent.change(within(dialog).getByLabelText(/Categoría producto/i), { target: { value: 'c-2' } })
+    fireEvent.change(within(dialog).getByLabelText(/Precio variante 1/i), { target: { value: '2750' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Guardar cambios/i }))
 
     await waitFor(() =>
       expect(vi.mocked(updateAdminProduct)).toHaveBeenCalledWith(
@@ -330,6 +413,7 @@ describe('AdminProductsPage', () => {
       ),
     )
     expect(await screen.findByText('Producto guardado correctamente.')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Editar producto/i })).not.toBeInTheDocument())
     expect(await screen.findByText('Nuez Premium')).toBeInTheDocument()
     expect(screen.queryByText('Nuez')).not.toBeInTheDocument()
   })

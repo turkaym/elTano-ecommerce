@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import {
   type AdminCategoryDto,
   createAdminProduct,
@@ -30,6 +30,21 @@ interface ProductVariantFormRow {
   stockReserved: number
   active: boolean
   attributesJson?: string | null
+}
+
+interface ProductFormDraft {
+  name: string
+  slug: string
+  slugTouched: boolean
+  description: string
+  imageUrl: string
+  imageAltText: string
+  imageId?: string
+  imagePreviewBroken: boolean
+  variants: ProductVariantFormRow[]
+  selectedCategoryId: string
+  stockBaseGrams: string
+  pricePerKg: string
 }
 
 const DEFAULT_VARIANT: ProductVariantFormRow = {
@@ -77,10 +92,18 @@ export function AdminProductsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [stockFilter, setStockFilter] = useState<StockFilter>('all')
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingProduct, setEditingProduct] = useState<AdminProductDto | null>(null)
+  const [editDraft, setEditDraft] = useState<ProductFormDraft | null>(null)
   const [stockBaseGrams, setStockBaseGrams] = useState('')
   const [pricePerKg, setPricePerKg] = useState('')
+  const editNameRef = useRef<HTMLInputElement>(null)
+  const editDialogRef = useRef<HTMLElement>(null)
+  const editTriggerRef = useRef<HTMLButtonElement | null>(null)
   const write = useAdminWriteState()
+
+  useEffect(() => {
+    if (editDraft) editNameRef.current?.focus()
+  }, [editDraft])
 
   useEffect(() => {
     let active = true
@@ -145,7 +168,7 @@ export function AdminProductsPage() {
       name: normalizedName,
       slug: normalizedSlug,
       description: normalizedDescription,
-      active: editingId ? (items.find((item) => item.id === editingId)?.active ?? true) : true,
+      active: true,
       categoryId,
       productType,
       inventoryPolicy,
@@ -166,11 +189,7 @@ export function AdminProductsPage() {
 
     write.start()
     try {
-      if (editingId) {
-        await updateAdminProduct(editingId, payload)
-      } else {
-        await createAdminProduct(payload)
-      }
+      await createAdminProduct(payload)
       const [products, availableCategories] = await Promise.all([listAdminProducts(), listAdminCategories()])
       setItems(products)
       setCategories(availableCategories)
@@ -470,7 +489,7 @@ export function AdminProductsPage() {
         </fieldset>
         <div className="admin-form-actions">
         <button className="btn btn-primary" type="submit" disabled={write.isPending}>
-          {editingId ? 'Actualizar producto' : 'Crear producto'}
+          Crear producto
         </button>
         </div>
       </form>
@@ -535,7 +554,8 @@ export function AdminProductsPage() {
             <button
               className="btn btn-secondary"
               type="button"
-              onClick={() => {
+              onClick={(event) => {
+                editTriggerRef.current = event.currentTarget
                 loadProductForEdit(item)
                 write.reset()
               }}
@@ -555,6 +575,190 @@ export function AdminProductsPage() {
           </li>
         ))}
       </ul>
+      {editDraft && editingProduct ? (
+        <div className="admin-dialog-backdrop" role="presentation">
+          <section
+            className="admin-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="product-edit-dialog-title"
+            ref={editDialogRef}
+            onKeyDown={handleEditDialogKeyDown}
+          >
+            <div className="admin-dialog-header">
+              <div>
+                <p className="admin-eyebrow">Edición rápida</p>
+                <h3 id="product-edit-dialog-title">Editar producto {editingProduct.name}</h3>
+                <p>Actualizá este producto sin volver al formulario superior.</p>
+              </div>
+              <button className="btn btn-secondary" type="button" onClick={requestCloseEdit} aria-label={`Cerrar edición de ${editingProduct.name}`} disabled={write.isPending}>
+                Cerrar
+              </button>
+            </div>
+            <form className="admin-form" onSubmit={(event) => void submitEdit(event)} noValidate>
+              <section className="admin-card" aria-labelledby="product-edit-basics-title">
+                <div className="admin-card-header">
+                  <h3 id="product-edit-basics-title">Básicos del producto</h3>
+                  <p>Datos visibles y categorización principal.</p>
+                </div>
+                <div className="admin-form-grid">
+                  <label className="admin-field">
+                    <span>Nombre</span>
+                    <input
+                      ref={editNameRef}
+                      value={editDraft.name}
+                      onChange={(event) => updateEditDraftName(event.target.value)}
+                      aria-label="Nombre producto"
+                    />
+                  </label>
+                  <label className="admin-field">
+                    <span>Slug producto</span>
+                    <input
+                      value={editDraft.slug}
+                      onChange={(event) => setEditDraftValue({ slugTouched: true, slug: slugify(event.target.value) })}
+                      aria-label="Slug producto"
+                    />
+                  </label>
+                  <label className="admin-field">
+                    <span>Categoría producto</span>
+                    <select value={editDraft.selectedCategoryId} onChange={(event) => setEditDraftValue({ selectedCategoryId: event.target.value })} aria-label="Categoría producto">
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="admin-field admin-field-wide">
+                    <span>Descripción producto</span>
+                    <textarea value={editDraft.description} onChange={(event) => setEditDraftValue({ description: event.target.value })} aria-label="Descripción producto" />
+                  </label>
+                </div>
+              </section>
+              <fieldset className="admin-card admin-fieldset">
+                <legend>Imagen principal</legend>
+                <p className="admin-card-help">Subí una imagen JPG, PNG o WebP, o pegá una URL pública manualmente.</p>
+                <div className="admin-form-grid">
+                  <label className="admin-field">
+                    <span>Subir imagen principal</span>
+                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void handleEditImageUpload(event.target.files?.[0])} aria-label="Subir imagen principal" />
+                  </label>
+                  <label className="admin-field">
+                    <span>URL imagen principal</span>
+                    <input
+                      value={editDraft.imageUrl}
+                      onChange={(event) => setEditDraftValue({ imageUrl: event.target.value, imagePreviewBroken: false })}
+                      aria-label="URL imagen principal"
+                    />
+                  </label>
+                  <label className="admin-field">
+                    <span>Texto alternativo imagen</span>
+                    <input value={editDraft.imageAltText} onChange={(event) => setEditDraftValue({ imageAltText: event.target.value })} aria-label="Texto alternativo imagen" />
+                  </label>
+                </div>
+                {editDraft.imageUrl.trim() && isValidImageUrl(editDraft.imageUrl.trim()) ? (
+                  <div className="admin-image-preview">
+                    <p>Vista previa imagen principal</p>
+                    <img
+                      src={resolveImagePreviewSrc(editDraft.imageUrl.trim())}
+                      alt={editDraft.imageAltText.trim() || editDraft.name.trim() || 'Vista previa imagen principal'}
+                      onError={() => setEditDraftValue({ imagePreviewBroken: true })}
+                    />
+                    {editDraft.imagePreviewBroken ? <p>No se pudo cargar la vista previa de la imagen.</p> : null}
+                  </div>
+                ) : null}
+              </fieldset>
+              <fieldset className="admin-card admin-fieldset">
+                <legend>Variantes</legend>
+                <p className="admin-card-help">Separá precios, cantidades y stock por presentación.</p>
+                {resolveProductType(editDraft.variants) === 'GRANEL' ? (
+                  <div className="admin-card-help" aria-label="Stock granel compartido">
+                    <p>El stock granel se administra una sola vez y las presentaciones comparten ese stock base.</p>
+                    <div className="admin-form-grid">
+                      <label className="admin-field">
+                        <span>Stock total granel en gramos</span>
+                        <input type="number" min="0" step="1" value={editDraft.stockBaseGrams} onChange={(event) => setEditDraftValue({ stockBaseGrams: event.target.value })} aria-label="Stock total granel en gramos" />
+                      </label>
+                      <label className="admin-field">
+                        <span>Precio por kg granel</span>
+                        <input type="number" min="0" step="0.01" value={editDraft.pricePerKg} onChange={(event) => setEditDraftValue({ pricePerKg: event.target.value })} aria-label="Precio por kg granel" />
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="admin-preset-row" aria-label="Presets de variantes">
+                  {VARIANT_PRESETS.map((preset) => (
+                    <button className="btn btn-secondary admin-chip" key={preset.label} type="button" onClick={() => applyEditVariantPreset(preset)}>
+                      Preset {preset.label}
+                    </button>
+                  ))}
+                </div>
+                {editDraft.variants.map((variant, index) => (
+                  <div className="admin-variant-row" key={`${variant.id ?? 'new'}-${index}`}>
+                    <h3>Variante {index + 1}</h3>
+                    <div className="admin-form-grid admin-variant-grid">
+                      <label className="admin-field">
+                        <span>SKU variante {index + 1}</span>
+                        <input value={variant.sku} onChange={(event) => updateEditVariant(index, { sku: event.target.value })} aria-label={`SKU variante ${index + 1}`} />
+                      </label>
+                      <label className="admin-field">
+                        <span>Cantidad variante {index + 1}</span>
+                        <input type="number" min="0" step="0.01" value={variant.amount} onChange={(event) => updateEditVariant(index, { amount: event.target.value })} aria-label={`Cantidad variante ${index + 1}`} />
+                      </label>
+                      <label className="admin-field">
+                        <span>Unidad variante {index + 1}</span>
+                        <select value={variant.unit} onChange={(event) => updateEditVariant(index, { unit: event.target.value as VariantUnit })} aria-label={`Unidad variante ${index + 1}`}>
+                          <option value="g">g</option>
+                          <option value="kg">kg</option>
+                          <option value="ml">ml</option>
+                          <option value="l">l</option>
+                          <option value="unidad">unidad</option>
+                        </select>
+                      </label>
+                      {resolveProductType(editDraft.variants) === 'GRANEL' ? (
+                        <div className="admin-field" aria-label={`Precio calculado presentación variante ${index + 1}`}>
+                          <span>Precio calculado variante {index + 1}</span>
+                          <strong>{formatCurrency(calculateVariantPriceFromKg(Number(editDraft.pricePerKg), variant))}</strong>
+                          <small>El stock de esta presentación sale del stock granel base.</small>
+                        </div>
+                      ) : (
+                        <>
+                          <label className="admin-field">
+                            <span>Precio variante {index + 1}</span>
+                            <input type="number" min="0" step="0.01" value={variant.price} onChange={(event) => updateEditVariant(index, { price: event.target.value })} aria-label={`Precio variante ${index + 1}`} />
+                          </label>
+                          <label className="admin-field">
+                            <span>Stock variante {index + 1}</span>
+                            <input type="number" min="0" step="1" value={variant.stock} onChange={(event) => updateEditVariant(index, { stock: event.target.value })} aria-label={`Stock variante ${index + 1}`} />
+                          </label>
+                        </>
+                      )}
+                      <label className="admin-field admin-checkbox-field">
+                        <span>Activa variante {index + 1}</span>
+                        <input type="checkbox" checked={variant.active} onChange={(event) => updateEditVariant(index, { active: event.target.checked })} aria-label={`Activa variante ${index + 1}`} />
+                      </label>
+                    </div>
+                    <button className="btn btn-danger-soft" type="button" onClick={() => removeEditVariant(index)}>
+                      Quitar variante {index + 1}
+                    </button>
+                  </div>
+                ))}
+                <button className="btn btn-secondary" type="button" onClick={addEditVariant}>
+                  Agregar variante
+                </button>
+              </fieldset>
+              <div className="admin-form-actions">
+                <button className="btn btn-secondary" type="button" onClick={requestCloseEdit} disabled={write.isPending}>
+                  Cancelar edición
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={write.isPending}>
+                  Guardar cambios
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
     </section>
   )
 
@@ -597,29 +801,213 @@ export function AdminProductsPage() {
     setStockBaseGrams('')
     setPricePerKg('')
     setSelectedCategoryId(categoryId)
-    setEditingId(null)
+  }
+
+  async function submitEdit(e: FormEvent) {
+    e.preventDefault()
+    if (write.isPending || !editingProduct || !editDraft) return
+    const payload = buildProductWritePayload(editDraft, editingProduct.active ?? true)
+    if (!payload.ok) {
+      write.fail(payload.error)
+      return
+    }
+
+    write.start()
+    try {
+      await updateAdminProduct(editingProduct.id, payload.value)
+      const [products, availableCategories] = await Promise.all([listAdminProducts(), listAdminCategories()])
+      setItems(products)
+      setCategories(availableCategories)
+      setSelectedCategoryId((current) => current || availableCategories[0]?.id || '')
+      closeEdit()
+      write.succeed('Producto guardado correctamente.')
+    } catch (error) {
+      write.fail(mapAdminWriteError(error))
+    }
+  }
+
+  function buildProductWritePayload(draft: ProductFormDraft, active: boolean) {
+    if (!draft.name.trim()) {
+      return { ok: false as const, error: { message: 'Nombre es requerido.', fieldErrors: [{ field: 'name', message: 'Nombre es requerido.' }] } }
+    }
+    if (!categories.length) return { ok: false as const, error: { message: 'Primero crea una categoría para poder guardar productos.' } }
+    if (!draft.selectedCategoryId) return { ok: false as const, error: { message: 'No se pudo determinar la categoría del producto.' } }
+
+    const normalizedName = draft.name.trim()
+    const normalizedSlug = draft.slug.trim() || slugify(normalizedName)
+    const normalizedDescription = draft.description.trim()
+    const resolvedProductType = resolveProductType(draft.variants)
+    const shouldGenerateGranelVariants = resolvedProductType === 'GRANEL' && Number(draft.pricePerKg) > 0
+    const validationErrors = validateProductForm({
+      description: normalizedDescription,
+      imageUrl: draft.imageUrl.trim(),
+      variants: draft.variants,
+      skipVariantPrice: shouldGenerateGranelVariants,
+    })
+    if (validationErrors.length) return { ok: false as const, error: { message: 'Revisá los datos del producto.', fieldErrors: validationErrors } }
+
+    const inventoryPolicy = resolveInventoryPolicy(resolvedProductType)
+    const payloadVariants = shouldGenerateGranelVariants
+      ? buildFixedGranelVariantPayloads(normalizedSlug, Number(draft.pricePerKg))
+      : draft.variants.map((variant, index) => buildVariantPayload(variant, normalizedSlug, index))
+    const normalizedImageUrl = draft.imageUrl.trim()
+    return {
+      ok: true as const,
+      value: {
+        name: normalizedName,
+        slug: normalizedSlug,
+        description: normalizedDescription,
+        active,
+        categoryId: draft.selectedCategoryId,
+        productType: resolvedProductType,
+        inventoryPolicy,
+        stockBaseGrams: resolveStockBaseGrams(inventoryPolicy, payloadVariants, draft.stockBaseGrams),
+        variants: payloadVariants,
+        images: normalizedImageUrl
+          ? [
+              {
+                id: draft.imageId,
+                url: normalizedImageUrl,
+                altText: draft.imageAltText.trim() || normalizedName,
+                sortOrder: 0,
+                primary: true,
+              },
+            ]
+          : [],
+      },
+    }
+  }
+
+  function requestCloseEdit() {
+    if (write.isPending) return
+    closeEdit()
+  }
+
+  function closeEdit() {
+    editTriggerRef.current?.focus()
+    setEditingProduct(null)
+    setEditDraft(null)
+  }
+
+  function handleEditDialogKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      requestCloseEdit()
+      return
+    }
+
+    if (event.key !== 'Tab') return
+
+    const focusableElements = getFocusableElements(editDialogRef.current)
+    if (!focusableElements.length) return
+
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+    const activeElement = document.activeElement
+
+    if (event.shiftKey && activeElement === firstElement) {
+      event.preventDefault()
+      lastElement.focus()
+      return
+    }
+
+    if (!event.shiftKey && activeElement === lastElement) {
+      event.preventDefault()
+      firstElement.focus()
+    }
+  }
+
+  function setEditDraftValue(patch: Partial<ProductFormDraft>) {
+    setEditDraft((current) => (current ? { ...current, ...patch } : current))
+  }
+
+  function updateEditDraftName(nextName: string) {
+    setEditDraft((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        name: nextName,
+        slug: current.slugTouched ? current.slug : slugify(nextName),
+      }
+    })
+  }
+
+  function updateEditVariant(index: number, patch: Partial<ProductVariantFormRow>) {
+    setEditDraft((current) =>
+      current ? { ...current, variants: current.variants.map((variant, variantIndex) => (variantIndex === index ? { ...variant, ...patch } : variant)) } : current,
+    )
+  }
+
+  function addEditVariant() {
+    setEditDraft((current) => (current ? { ...current, variants: [...current.variants, { ...DEFAULT_VARIANT }] } : current))
+  }
+
+  function removeEditVariant(index: number) {
+    setEditDraft((current) => (current ? { ...current, variants: current.variants.filter((_, variantIndex) => variantIndex !== index) } : current))
+  }
+
+  function applyEditVariantPreset(preset: { label: string; amount: string; unit: VariantUnit }) {
+    setEditDraft((current) => {
+      if (!current) return current
+      const skuSeed = `${slugify(current.slug || current.name || 'producto').toUpperCase()}-${preset.label.toUpperCase()}`
+      const presetRow = { ...DEFAULT_VARIANT, amount: preset.amount, unit: preset.unit, sku: skuSeed }
+      const matchingIndex = current.variants.findIndex((variant) => variant.amount === preset.amount && variant.unit === preset.unit)
+      if (matchingIndex >= 0) {
+        return {
+          ...current,
+          variants: current.variants.map((variant, index) => (index === matchingIndex ? { ...variant, amount: preset.amount, unit: preset.unit, sku: variant.sku || skuSeed } : variant)),
+        }
+      }
+      const emptyIndex = current.variants.findIndex(isBlankVariantPresetTarget)
+      if (emptyIndex >= 0) return { ...current, variants: current.variants.map((variant, index) => (index === emptyIndex ? { ...variant, ...presetRow } : variant)) }
+      return { ...current, variants: [...current.variants, presetRow] }
+    })
+  }
+
+  async function handleEditImageUpload(file: File | undefined) {
+    if (!file || write.isPending) return
+
+    write.start()
+    try {
+      const result = await uploadAdminProductImage(file)
+      setEditDraftValue({ imageUrl: result.url, imagePreviewBroken: false })
+      write.succeed('Imagen subida correctamente.')
+    } catch (error) {
+      write.fail(mapAdminWriteError(error))
+    }
   }
 
   function loadProductForEdit(item: AdminProductDto) {
     const primaryImage = item.images?.find((image) => image.primary) ?? item.images?.[0]
-    setEditingId(item.id)
-    setName(item.name)
-    setSlug(item.slug?.trim() || slugify(item.name))
-    setSlugTouched(true)
-    setDescription(item.description?.trim() || '')
-    setSelectedCategoryId(item.categoryId || categories[0]?.id || '')
-    setImageId(primaryImage?.id)
-    setImageUrl(isPlaceholderProductImage(primaryImage?.url) ? '' : primaryImage?.url || '')
-    setImageAltText(primaryImage?.altText || item.name)
-    setImagePreviewBroken(false)
-    setVariants(item.variants?.length ? item.variants.map(variantToFormRow) : [{ ...DEFAULT_VARIANT }])
-    setStockBaseGrams(item.stockBaseGrams == null ? '' : String(item.stockBaseGrams))
-    setPricePerKg('')
+    setEditingProduct(item)
+    setEditDraft({
+      name: item.name,
+      slug: item.slug?.trim() || slugify(item.name),
+      slugTouched: true,
+      description: item.description?.trim() || '',
+      selectedCategoryId: item.categoryId || categories[0]?.id || '',
+      imageId: primaryImage?.id,
+      imageUrl: isPlaceholderProductImage(primaryImage?.url) ? '' : primaryImage?.url || '',
+      imageAltText: primaryImage?.altText || item.name,
+      imagePreviewBroken: false,
+      variants: item.variants?.length ? item.variants.map(variantToFormRow) : [{ ...DEFAULT_VARIANT }],
+      stockBaseGrams: item.stockBaseGrams == null ? '' : String(item.stockBaseGrams),
+      pricePerKg: '',
+    })
   }
 }
 
 function isProductActive(item: AdminProductDto): boolean {
   return item.active !== false && !item.deletedAt
+}
+
+function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
+  if (!container) return []
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true')
 }
 
 function visibleProducts(

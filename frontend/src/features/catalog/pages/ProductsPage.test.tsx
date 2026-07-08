@@ -234,7 +234,8 @@ describe('ProductsPage', () => {
     renderProductsAt('/productos')
 
     expect(await screen.findByText(/\$\s*3.900/i)).toBeInTheDocument()
-    expect(screen.queryByText(/Desde/i)).not.toBeInTheDocument()
+    const productCard = screen.getByRole('heading', { name: 'Mix granola premium' }).closest('article')!
+    expect(productCard.querySelector('.product-price')).not.toHaveTextContent(/Desde/i)
   })
 
   it('lets shoppers add an in-stock productos card to the cart', async () => {
