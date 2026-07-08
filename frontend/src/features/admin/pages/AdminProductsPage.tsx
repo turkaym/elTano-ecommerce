@@ -92,6 +92,7 @@ export function AdminProductsPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [stockFilter, setStockFilter] = useState<StockFilter>('all')
+  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<AdminProductDto | null>(null)
   const [editDraft, setEditDraft] = useState<ProductFormDraft | null>(null)
   const [stockBaseGrams, setStockBaseGrams] = useState('')
@@ -253,8 +254,11 @@ export function AdminProductsPage() {
           <h2>Productos</h2>
           <p>Creá, editá y mantené variantes, imágenes y disponibilidad sin salir del panel.</p>
         </div>
+        <button className="btn btn-primary" type="button" onClick={() => setIsCreateFormOpen(true)}>
+          Crear nuevo producto
+        </button>
       </div>
-      <form className="admin-form" onSubmit={submit} noValidate>
+      {isCreateFormOpen ? <form className="admin-form" onSubmit={submit} noValidate>
         <section className="admin-card" aria-labelledby="product-basics-title">
           <div className="admin-card-header">
             <h3 id="product-basics-title">Básicos del producto</h3>
@@ -493,7 +497,7 @@ export function AdminProductsPage() {
           Crear producto
         </button>
         </div>
-      </form>
+      </form> : null}
       <AdminWriteStateBanner feedback={write.feedback} onDismiss={write.reset} onRetry={write.reset} />
       {!items.length ? <AdminEmptyState title="Sin productos" action={null} /> : null}
       <section className="admin-card admin-toolbar" aria-labelledby="product-filters-title">
@@ -1079,7 +1083,8 @@ function resolveCategoryName(item: AdminProductDto, categories: AdminCategoryDto
 }
 
 function primaryImageUrl(item: AdminProductDto): string {
-  return item.images?.find((image) => image.primary)?.url || item.images?.[0]?.url || 'Sin imagen'
+  const imageUrl = item.images?.find((image) => image.primary)?.url || item.images?.[0]?.url
+  return imageUrl && !isPlaceholderProductImage(imageUrl) ? imageUrl : 'Sin imagen'
 }
 
 function variantSummary(item: AdminProductDto): string {

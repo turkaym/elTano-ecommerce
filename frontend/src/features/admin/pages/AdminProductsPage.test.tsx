@@ -67,9 +67,22 @@ describe('AdminProductsPage', () => {
     vi.restoreAllMocks()
   })
 
-  it('organizes the editor and catalog controls into accessible admin sections', async () => {
+  function openCreateProductForm() {
+    fireEvent.click(screen.getByRole('button', { name: /Crear nuevo producto/i }))
+  }
+
+  it('shows product list actions first and keeps the create form hidden until requested', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+
+    expect(screen.getByRole('button', { name: /Crear nuevo producto/i })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /Productos encontrados/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Editar/i }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('region', { name: /Básicos del producto/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: /Imagen principal/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: /Variantes/i })).not.toBeInTheDocument()
+
+    openCreateProductForm()
 
     expect(screen.getByRole('region', { name: /Básicos del producto/i })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: /Imagen principal/i })).toBeInTheDocument()
@@ -108,6 +121,42 @@ describe('AdminProductsPage', () => {
     expect(within(peraCard).getByRole('button', { name: /Reactivar producto Pera/i })).toBeInTheDocument()
   })
 
+  it('shows clean product-card placeholders for explicit placeholder and missing images', async () => {
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([
+      {
+        id: 'p-placeholder',
+        name: 'Importado con placeholder',
+        slug: 'importado-placeholder',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        images: [{ id: 'img-placeholder', url: '/placeholder-product.svg', altText: '/placeholder-product.svg', sortOrder: 0, primary: true }],
+      },
+      {
+        id: 'p-missing',
+        name: 'Importado sin imagen',
+        slug: 'importado-sin-imagen',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+      },
+    ])
+
+    render(<AdminProductsPage />)
+    await screen.findByText('Importado con placeholder')
+
+    const productsRegion = screen.getByRole('region', { name: /Productos encontrados/i })
+    const placeholderCard = within(productsRegion).getByRole('article', { name: /Producto Importado con placeholder/i })
+    expect(within(placeholderCard).getByText('Sin imagen')).toBeInTheDocument()
+    expect(within(placeholderCard).getByText(/Podés cargarla desde el editor/i)).toBeInTheDocument()
+    expect(within(placeholderCard).queryByRole('img')).not.toBeInTheDocument()
+    expect(placeholderCard).not.toHaveTextContent('/placeholder-product.svg')
+
+    const missingCard = within(productsRegion).getByRole('article', { name: /Producto Importado sin imagen/i })
+    expect(within(missingCard).getByText('Sin imagen')).toBeInTheDocument()
+    expect(within(missingCard).queryByRole('img')).not.toBeInTheDocument()
+  })
+
   it('keeps filtered product results readable when no card matches', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
@@ -125,6 +174,7 @@ describe('AdminProductsPage', () => {
   it('shows validation error and blocks submit when name is empty', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.click(screen.getByRole('button', { name: /Crear producto/i }))
 
@@ -137,7 +187,9 @@ describe('AdminProductsPage', () => {
 
     render(<AdminProductsPage />)
 
-    expect(await screen.findByRole('button', { name: /Crear producto/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Crear nuevo producto/i })).toBeInTheDocument()
+    openCreateProductForm()
+    expect(screen.getByRole('button', { name: /Crear producto/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/Categoría producto/i)).toHaveValue('c-1')
     expect(screen.getByText('Sin productos')).toBeInTheDocument()
   })
@@ -145,6 +197,7 @@ describe('AdminProductsPage', () => {
   it('creates packaged product with explicit category, description, image and editable priced stock variant', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Durazno' } })
     fireEvent.change(screen.getByLabelText(/Slug producto/i), { target: { value: 'durazno-especial' } })
     fireEvent.change(screen.getByLabelText(/Categoría producto/i), { target: { value: 'c-2' } })
@@ -199,6 +252,7 @@ describe('AdminProductsPage', () => {
   it('creates products without requiring a primary image', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Mix especial' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Mix sin imagen cargada todavía' } })
@@ -220,6 +274,7 @@ describe('AdminProductsPage', () => {
   it('uses shared granel stock and price per kg to generate fixed calculated presentations without per-variant stock buckets', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Almendra' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Almendra tostada' } })
     fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: 'https://cdn.test/almendra.jpg' } })
@@ -256,6 +311,7 @@ describe('AdminProductsPage', () => {
   it('recalculates granel calculated variant prices when price per kg changes', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Precio por kg granel/i), { target: { value: '3000' } })
     expect(screen.getByLabelText(/Precio calculado variante 4/i)).toHaveTextContent('$3000')
@@ -271,6 +327,7 @@ describe('AdminProductsPage', () => {
   it('keeps stock and price inputs editable for envasado and unidad variants', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Unidad variante 1/i), { target: { value: 'ml' } })
     expect(screen.getByLabelText(/Precio variante 1/i)).toBeEnabled()
@@ -292,6 +349,7 @@ describe('AdminProductsPage', () => {
 
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Pera' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Pera orgánica' } })
@@ -315,6 +373,7 @@ describe('AdminProductsPage', () => {
   it('opens product editing in an accessible named dialog with focus inside while preserving the create form', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.click(within(screen.getByRole('article', { name: /Producto Nuez/i })).getByRole('button', { name: /Editar/i }))
 
@@ -361,7 +420,7 @@ describe('AdminProductsPage', () => {
     expect(screen.queryByRole('dialog', { name: /Editar producto/i })).not.toBeInTheDocument()
     expect(editButton).toHaveFocus()
     expect(vi.mocked(updateAdminProduct)).not.toHaveBeenCalled()
-    expect(screen.getAllByLabelText(/Nombre producto/i)[0]).toHaveValue('')
+    expect(screen.queryByLabelText(/Nombre producto/i)).not.toBeInTheDocument()
 
     fireEvent.click(within(screen.getByRole('article', { name: /Producto Nuez/i })).getByRole('button', { name: /Editar/i }))
     dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
@@ -497,6 +556,7 @@ describe('AdminProductsPage', () => {
   it('adds and removes variant rows before submit', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.click(screen.getByRole('button', { name: /Agregar variante/i }))
     expect(screen.getByLabelText(/SKU variante 2/i)).toBeInTheDocument()
@@ -528,6 +588,7 @@ describe('AdminProductsPage', () => {
   it('adds variant presets with mapped amount, unit and SKU seed', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Aceite Oliva' } })
     fireEvent.click(screen.getByRole('button', { name: /Preset 500ml/i }))
@@ -544,6 +605,7 @@ describe('AdminProductsPage', () => {
   it('reuses an existing preset variant instead of creating duplicates', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Yerba' } })
     fireEvent.click(screen.getByRole('button', { name: /Preset 500ml/i }))
@@ -560,6 +622,7 @@ describe('AdminProductsPage', () => {
   it('previews a valid image URL and shows fallback text when the preview fails', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: 'https://cdn.test/producto.jpg' } })
     fireEvent.change(screen.getByLabelText(/Texto alternativo imagen/i), { target: { value: 'Producto en frasco' } })
@@ -576,6 +639,7 @@ describe('AdminProductsPage', () => {
     vi.stubEnv('VITE_API_URL', 'http://localhost:8080/api')
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     const file = new File(['image-bytes'], 'nuez premium.png', { type: 'image/png' })
     fireEvent.change(screen.getByLabelText(/Subir imagen principal/i), { target: { files: [file] } })
@@ -592,6 +656,7 @@ describe('AdminProductsPage', () => {
   it('submits the same relative product image URL returned by upload', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Almendra' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Almendra natural' } })
@@ -619,6 +684,7 @@ describe('AdminProductsPage', () => {
 
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/URL imagen principal/i), { target: { value: 'https://cdn.test/manual.jpg' } })
     fireEvent.change(screen.getByLabelText(/Subir imagen principal/i), {
@@ -640,6 +706,7 @@ describe('AdminProductsPage', () => {
 
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Subir imagen principal/i), {
       target: { files: [new File(['not-image'], 'bad.txt', { type: 'text/plain' })] },
@@ -653,6 +720,7 @@ describe('AdminProductsPage', () => {
   it('validates image URL format before submit', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Arroz' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Arroz integral' } })
@@ -667,6 +735,7 @@ describe('AdminProductsPage', () => {
   it('rejects relative product image paths outside uploaded product images', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Arroz' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Arroz integral' } })
@@ -681,6 +750,7 @@ describe('AdminProductsPage', () => {
   it('validates variant count, price and stock before submit without requiring an image', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Arroz' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Arroz integral' } })
@@ -709,6 +779,7 @@ describe('AdminProductsPage', () => {
 
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
+    openCreateProductForm()
 
     fireEvent.change(screen.getByLabelText(/Nombre producto/i), { target: { value: 'Pera' } })
     fireEvent.change(screen.getByLabelText(/Descripción producto/i), { target: { value: 'Pera orgánica' } })
