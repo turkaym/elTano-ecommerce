@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdminOrdersPage } from './AdminOrdersPage'
 import { ApiClientError } from '../../../shared/api/httpClient'
@@ -230,13 +231,56 @@ describe('AdminOrdersPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
 
+    const dialog = await screen.findByRole('dialog', { name: /Detalle ET-2026-0007/i })
     const detail = await screen.findByRole('region', { name: /Detalle pedido ET-2026-0007/i })
+    expect(dialog).toContainElement(detail)
     expect(within(detail).getByText(/Ana Gómez/)).toBeInTheDocument()
     expect(within(detail).getByText(/11223344/)).toBeInTheDocument()
     expect(within(detail).getByText(/mercadopago/)).toBeInTheDocument()
     expect(within(detail).getByText(/Nuez/)).toBeInTheDocument()
     expect(within(detail).getByText(/2 ×/)).toBeInTheDocument()
     expect(vi.mocked(getAdminOrderDetail)).toHaveBeenCalledWith('ord-1')
+  })
+
+  it('opens order detail in a closable dialog and returns focus to the trigger', async () => {
+    render(<AdminOrdersPage />)
+    await screen.findByText('ET-2026-0007')
+
+    const trigger = screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i })
+    fireEvent.click(trigger)
+
+    const dialog = await screen.findByRole('dialog', { name: /Detalle ET-2026-0007/i })
+    expect(dialog).toBeInTheDocument()
+    expect(dialog).toHaveFocus()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Cerrar/i }))
+
+    expect(screen.queryByRole('dialog', { name: /Detalle ET-2026-0007/i })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
+
+  it('keeps Tab and Shift+Tab focus movement inside the order detail dialog', async () => {
+    const user = userEvent.setup()
+    render(<AdminOrdersPage />)
+    await screen.findByText('ET-2026-0007')
+
+    await user.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
+
+    const dialog = await screen.findByRole('dialog', { name: /Detalle ET-2026-0007/i })
+    const closeButton = within(dialog).getByRole('button', { name: /Cerrar/i })
+    const markPreparingButton = within(dialog).getByRole('button', { name: /Marcar como preparando/i })
+
+    expect(dialog).toHaveFocus()
+    await user.tab({ shift: true })
+    expect(markPreparingButton).toHaveFocus()
+
+    markPreparingButton.focus()
+    await user.tab()
+    expect(closeButton).toHaveFocus()
+
+    closeButton.focus()
+    await user.tab({ shift: true })
+    expect(markPreparingButton).toHaveFocus()
   })
 
   it('confirms a supported status transition, updates order status, refreshes data, and shows success', async () => {

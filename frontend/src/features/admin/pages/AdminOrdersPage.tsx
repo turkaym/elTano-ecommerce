@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import {
   getAdminOrderDetail,
   listAdminOrders,
@@ -28,9 +28,16 @@ export function AdminOrdersPage() {
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
   const [filters, setFilters] = useState({ status: '', search: '', from: '', to: '' })
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
+  const [selectedOrderReference, setSelectedOrderReference] = useState<string | null>(null)
   const [detail, setDetail] = useState<AdminOrderDetailResponse | null>(null)
   const [detailStatus, setDetailStatus] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
+  const detailDialogRef = useRef<HTMLElement>(null)
+  const detailTriggerRef = useRef<HTMLButtonElement | null>(null)
   const statusWrite = useAdminWriteState()
+
+  useEffect(() => {
+    if (selectedOrderId) detailDialogRef.current?.focus()
+  }, [selectedOrderId])
 
   async function loadOrders(params: AdminOrderListParams) {
     setStatus('loading')
@@ -77,22 +84,73 @@ export function AdminOrdersPage() {
   function submitFilters(event: FormEvent) {
     event.preventDefault()
     setSelectedOrderId(null)
+    setSelectedOrderReference(null)
     setDetail(null)
     setDetailStatus('idle')
     statusWrite.reset()
     void loadOrders(buildFilterParams(0))
   }
 
-  async function selectOrder(order: AdminOrderSummary) {
+  async function selectOrder(order: AdminOrderSummary, trigger: HTMLButtonElement) {
+    detailTriggerRef.current = trigger
     setSelectedOrderId(order.id)
+    setSelectedOrderReference(order.reference)
     setDetail(null)
     setDetailStatus('loading')
     try {
       const response = await getAdminOrderDetail(order.id)
       setDetail(response)
+      setSelectedOrderReference(response.reference)
       setDetailStatus('ready')
     } catch {
       setDetailStatus('error')
+    }
+  }
+
+  function closeDetailDialog() {
+    if (statusWrite.isPending) return
+    setSelectedOrderId(null)
+    setSelectedOrderReference(null)
+    setDetail(null)
+    setDetailStatus('idle')
+    detailTriggerRef.current?.focus()
+  }
+
+  function handleDetailDialogKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeDetailDialog()
+      return
+    }
+
+    if (event.key !== 'Tab') return
+
+    const focusableElements = getFocusableElements(detailDialogRef.current)
+    if (!focusableElements.length) return
+
+    const firstElement = focusableElements[0]
+    const lastElement = focusableElements[focusableElements.length - 1]
+    const activeElement = document.activeElement
+
+    if (activeElement === detailDialogRef.current) {
+      event.preventDefault()
+      if (event.shiftKey) {
+        lastElement.focus()
+        return
+      }
+      firstElement.focus()
+      return
+    }
+
+    if (event.shiftKey && activeElement === firstElement) {
+      event.preventDefault()
+      lastElement.focus()
+      return
+    }
+
+    if (!event.shiftKey && activeElement === lastElement) {
+      event.preventDefault()
+      firstElement.focus()
     }
   }
 
@@ -212,7 +270,7 @@ export function AdminOrdersPage() {
                     <span>Total: {formatMoney(order.total)}</span>
                   </div>
                   <div className="admin-item-actions">
-                    <button className="btn btn-secondary" type="button" onClick={() => void selectOrder(order)}>
+                    <button className="btn btn-secondary" type="button" onClick={(event) => void selectOrder(order, event.currentTarget)}>
                       Ver detalle {order.reference}
                     </button>
                   </div>
@@ -225,7 +283,31 @@ export function AdminOrdersPage() {
 
       <AdminWriteStateBanner feedback={statusWrite.feedback} onDismiss={statusWrite.reset} />
 
-      {selectedOrderId ? renderDetailPanel(detailStatus, detail, statusWrite.isPending, changeStatus, markPaid) : null}
+      {selectedOrderId ? (
+        <div className="admin-dialog-backdrop" role="presentation">
+          <section
+            aria-labelledby="order-detail-dialog-title"
+            aria-modal="true"
+            className="admin-dialog"
+            ref={detailDialogRef}
+            role="dialog"
+            tabIndex={-1}
+            onKeyDown={handleDetailDialogKeyDown}
+          >
+            <div className="admin-dialog-header">
+              <div>
+                <p className="admin-eyebrow">Detalle de pedido</p>
+                <h3 id="order-detail-dialog-title">Detalle {detail?.reference ?? selectedOrderReference ?? 'pedido'}</h3>
+                <p>Revisá datos, pago, items y siguiente acción sin moverte de la lista.</p>
+              </div>
+              <button className="btn btn-secondary" type="button" onClick={closeDetailDialog} disabled={statusWrite.isPending}>
+                Cerrar
+              </button>
+            </div>
+            {renderDetailPanel(detailStatus, detail, statusWrite.isPending, changeStatus, markPaid)}
+          </section>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -318,6 +400,15 @@ function renderDetailPanel(
 
 function fulfillmentLabel(method?: AdminOrderDetailResponse['fulfillmentMethod']) {
   return method === 'DELIVERY' ? 'Envío a domicilio' : 'Retiro en el local'
+}
+
+function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
+  if (!container) return []
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true')
 }
 
 function canMarkPaid(detail: AdminOrderDetailResponse): boolean {
