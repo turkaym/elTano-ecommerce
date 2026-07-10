@@ -104,7 +104,7 @@ export function AdminProductsPage() {
 
   useEffect(() => {
     if (editDraft) editNameRef.current?.focus()
-  }, [editDraft])
+  }, [editingProduct?.id])
 
   useEffect(() => {
     let active = true

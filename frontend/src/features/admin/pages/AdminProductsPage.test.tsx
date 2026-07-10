@@ -393,6 +393,49 @@ describe('AdminProductsPage', () => {
     expect(screen.getByRole('button', { name: /Crear producto/i })).toBeInTheDocument()
   })
 
+  it('keeps focus on the edited stock input instead of jumping back to the product name', async () => {
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([
+      {
+        id: 'p-unit',
+        name: 'Barra',
+        slug: 'barra',
+        description: 'Barra saludable',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        productType: 'UNIDAD',
+        inventoryPolicy: 'PER_VARIANT',
+        active: true,
+        variants: [
+          {
+            id: 'v-unit',
+            sku: 'BARRA-UNIT',
+            unitType: 'UNIT',
+            weightGrams: null,
+            unitLabel: 'unidad',
+            price: 1600,
+            stockAvailable: 0,
+            stockReserved: 0,
+            active: true,
+          },
+        ],
+        images: [],
+      },
+    ])
+
+    render(<AdminProductsPage />)
+    await screen.findByText('Barra')
+
+    fireEvent.click(within(screen.getByRole('article', { name: /Producto Barra/i })).getByRole('button', { name: /Editar/i }))
+    const dialog = screen.getByRole('dialog', { name: /Editar producto Barra/i })
+    const stockInput = within(dialog).getByLabelText(/Stock variante 1/i)
+
+    stockInput.focus()
+    fireEvent.change(stockInput, { target: { value: '1' } })
+
+    expect(stockInput).toHaveValue(1)
+    expect(stockInput).toHaveFocus()
+  })
+
   it('keeps Tab and Shift+Tab focus movement inside the edit dialog', async () => {
     const user = userEvent.setup()
     render(<AdminProductsPage />)
