@@ -203,13 +203,15 @@ export function App() {
 
             <div className="top-shell-right">
               <div className="top-shell-icons" aria-label="Accesos de cuenta y carrito">
-                <span aria-hidden="true">👤</span>
+                <span aria-hidden="true">
+                  <img src="/user.svg" alt="" />
+                </span>
                 <Link
                   className="cart-icon-link cart-icon-with-badge"
                   to="/carrito"
                   aria-label={`Ver carrito, ${cart.totals.itemCount} ${cartItemLabel}`}
                 >
-                  <span aria-hidden="true">🛒</span>
+                  <img src="/cart.svg" alt="" aria-hidden="true" />
                   {cart.totals.itemCount > 0 ? (
                     <span className="cart-icon-badge" aria-hidden="true">
                       {cart.totals.itemCount}

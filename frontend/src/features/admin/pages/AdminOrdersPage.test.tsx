@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdminOrdersPage } from './AdminOrdersPage'
 import { ApiClientError } from '../../../shared/api/httpClient'
@@ -106,6 +107,20 @@ function orderDetail(overrides: Partial<AdminOrderDetailResponse> = {}): AdminOr
   }
 }
 
+function renderAdminOrdersPage(initialEntry = '/admin/pedidos') {
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <AdminOrdersPage />
+      <LocationProbe />
+    </MemoryRouter>,
+  )
+}
+
+function LocationProbe() {
+  const location = useLocation()
+  return <span data-testid="orders-location">{location.pathname}{location.search}</span>
+}
+
 describe('AdminOrdersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -130,7 +145,7 @@ describe('AdminOrdersPage', () => {
   })
 
   it('renders order filters, paging metadata, and summary columns', async () => {
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
 
     expect(await screen.findByRole('heading', { name: 'Pedidos' })).toBeInTheDocument()
     expect(screen.getByLabelText(/Estado pedido/i)).toBeInTheDocument()
@@ -142,8 +157,50 @@ describe('AdminOrdersPage', () => {
     expect(screen.getByText(/Mostrando 1 de 1 pedidos/i)).toBeInTheDocument()
   })
 
+  it('hydrates status and date filters from the order deep link before the first list request', async () => {
+    renderAdminOrdersPage('/admin/pedidos?status=PAYMENT_PENDING&from=2026-07-12&to=2026-07-12')
+
+    expect(await screen.findByRole('heading', { name: 'Pedidos' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Estado pedido/i)).toHaveValue('PAYMENT_PENDING')
+    expect(screen.getByLabelText(/Fecha desde/i)).toHaveValue('2026-07-12')
+    expect(screen.getByLabelText(/Fecha hasta/i)).toHaveValue('2026-07-12')
+    expect(vi.mocked(listAdminOrders)).toHaveBeenNthCalledWith(1, {
+      status: 'PAYMENT_PENDING',
+      from: '2026-07-12',
+      to: '2026-07-12',
+      page: 0,
+      size: 20,
+    })
+  })
+
+  it('hydrates a trimmed order query from query before search alias deep links', async () => {
+    renderAdminOrdersPage('/admin/pedidos?query=%20ET-2026-0007%20&search=ignored')
+
+    expect(await screen.findByRole('heading', { name: 'Pedidos' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Cliente o referencia/i)).toHaveValue('ET-2026-0007')
+    expect(vi.mocked(listAdminOrders)).toHaveBeenNthCalledWith(1, {
+      query: 'ET-2026-0007',
+      page: 0,
+      size: 20,
+    })
+  })
+
+  it('ignores unsupported order deep-link params and keeps empty results usable', async () => {
+    vi.mocked(listAdminOrders).mockResolvedValueOnce({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+
+    renderAdminOrdersPage('/admin/pedidos?status=REFUNDED&from=2026-7-12&to=2026-99-99&query=%20%20')
+
+    expect(await screen.findByRole('heading', { name: /Sin pedidos/i })).toBeInTheDocument()
+    expect(screen.getByLabelText(/Estado pedido/i)).toHaveValue('')
+    expect(screen.getByLabelText(/Cliente o referencia/i)).toHaveValue('')
+    expect(screen.getByLabelText(/Fecha desde/i)).toHaveValue('')
+    expect(screen.getByLabelText(/Fecha hasta/i)).toHaveValue('')
+    expect(vi.mocked(listAdminOrders)).toHaveBeenNthCalledWith(1, { page: 0, size: 20 })
+    expect(screen.getByRole('button', { name: /Actualizar lista/i })).toBeInTheDocument()
+  })
+
   it('applies supported filters with paging and keeps list read-only', async () => {
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
 
     fireEvent.change(screen.getByLabelText(/Estado pedido/i), { target: { value: 'PAID' } })
@@ -165,6 +222,20 @@ describe('AdminOrdersPage', () => {
     expect(screen.queryByRole('button', { name: /Cambiar estado/i })).not.toBeInTheDocument()
   })
 
+  it('syncs submitted order filters back to stable query params', async () => {
+    renderAdminOrdersPage('/admin/pedidos?search=stale')
+    await screen.findByText('ET-2026-0007')
+
+    fireEvent.change(screen.getByLabelText(/Estado pedido/i), { target: { value: 'PAID' } })
+    fireEvent.change(screen.getByLabelText(/Cliente o referencia/i), { target: { value: ' Ana ' } })
+    fireEvent.change(screen.getByLabelText(/Fecha desde/i), { target: { value: '2026-05-01' } })
+    fireEvent.change(screen.getByLabelText(/Fecha hasta/i), { target: { value: '2026-05-31' } })
+    fireEvent.click(screen.getByRole('button', { name: /Filtrar pedidos/i }))
+
+    await waitFor(() => expect(screen.getByTestId('orders-location')).toHaveTextContent('/admin/pedidos?status=PAID&query=Ana&from=2026-05-01&to=2026-05-31'))
+    expect(screen.getByTestId('orders-location')).not.toHaveTextContent('search=stale')
+  })
+
   it('uses the single search box as an OR query for customer names', async () => {
     vi.mocked(listAdminOrders).mockImplementation(async (params = {}) => {
       if (params.query?.toLowerCase() === 'farid') {
@@ -179,7 +250,7 @@ describe('AdminOrdersPage', () => {
       return { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }
     })
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByRole('heading', { name: /Sin pedidos/i })
 
     fireEvent.change(screen.getByLabelText(/Cliente o referencia/i), { target: { value: 'farid' } })
@@ -211,7 +282,7 @@ describe('AdminOrdersPage', () => {
       return { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }
     })
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByRole('heading', { name: /Sin pedidos/i })
 
     fireEvent.change(screen.getByLabelText(/Cliente o referencia/i), { target: { value: 'ET-2026-A2F8F0' } })
@@ -226,7 +297,7 @@ describe('AdminOrdersPage', () => {
   })
 
   it('loads selected order detail with items, customer and payment information', async () => {
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
 
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
@@ -243,7 +314,7 @@ describe('AdminOrdersPage', () => {
   })
 
   it('opens order detail in a closable dialog and returns focus to the trigger', async () => {
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
 
     const trigger = screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i })
@@ -261,7 +332,7 @@ describe('AdminOrdersPage', () => {
 
   it('keeps Tab and Shift+Tab focus movement inside the order detail dialog', async () => {
     const user = userEvent.setup()
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
 
     await user.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
@@ -300,7 +371,7 @@ describe('AdminOrdersPage', () => {
       updatedAt: '2026-05-01T10:00:00Z',
     })
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
     await screen.findByRole('region', { name: /Detalle pedido ET-2026-0007/i })
@@ -331,7 +402,7 @@ describe('AdminOrdersPage', () => {
       updatedAt: '2026-05-01T10:00:00Z',
     })
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
     await screen.findByRole('region', { name: /Detalle pedido ET-2026-0007/i })
@@ -362,7 +433,7 @@ describe('AdminOrdersPage', () => {
       updatedAt: '2026-05-01T10:00:00Z',
     })
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
 
@@ -378,7 +449,7 @@ describe('AdminOrdersPage', () => {
   it('shows a clear next-action area for draft orders with payment, cancel, and expire actions', async () => {
     vi.mocked(getAdminOrderDetail).mockResolvedValueOnce(orderDetail({ status: 'DRAFT', payment: null }))
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
 
@@ -393,7 +464,7 @@ describe('AdminOrdersPage', () => {
     vi.mocked(getAdminOrderDetail).mockResolvedValueOnce(orderDetail({ status: 'PAID' }))
     vi.mocked(updateAdminOrderStatus).mockResolvedValueOnce(orderDetail({ status: 'PREPARING' }))
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
 
@@ -408,7 +479,7 @@ describe('AdminOrdersPage', () => {
     vi.mocked(getAdminOrderDetail).mockResolvedValueOnce(orderDetail({ status: 'PREPARING' }))
     vi.mocked(updateAdminOrderStatus).mockResolvedValueOnce(orderDetail({ status: 'READY' }))
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
 
@@ -423,7 +494,7 @@ describe('AdminOrdersPage', () => {
     vi.mocked(getAdminOrderDetail).mockResolvedValueOnce(orderDetail({ status: 'READY' }))
     vi.mocked(updateAdminOrderStatus).mockResolvedValueOnce(orderDetail({ status: 'DELIVERED' }))
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
 
@@ -451,7 +522,7 @@ describe('AdminOrdersPage', () => {
       updatedAt: '2026-05-01T10:00:00Z',
     })
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
 
@@ -466,7 +537,7 @@ describe('AdminOrdersPage', () => {
   ])('shows terminal state without progression actions for %s orders', async (terminalStatus, terminalLabel) => {
     vi.mocked(getAdminOrderDetail).mockResolvedValueOnce(orderDetail({ status: terminalStatus }))
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
 
@@ -493,7 +564,7 @@ describe('AdminOrdersPage', () => {
     })
     vi.mocked(updateAdminOrderStatus).mockRejectedValueOnce(new ApiClientError(409, 'Invalid order status transition PAID -> CANCELLED', { code: 'CONFLICT', correlationId: 'corr-order-409' }))
 
-    render(<AdminOrdersPage />)
+    renderAdminOrdersPage()
     await screen.findByText('ET-2026-0007')
     fireEvent.click(screen.getByRole('button', { name: /Ver detalle ET-2026-0007/i }))
     await screen.findByRole('region', { name: /Detalle pedido ET-2026-0007/i })
@@ -506,11 +577,20 @@ describe('AdminOrdersPage', () => {
 
   it('shows empty, loading, and error states matching admin pages', async () => {
     vi.mocked(listAdminOrders).mockResolvedValueOnce({ items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
-    render(<AdminOrdersPage />)
+    const emptyRender = renderAdminOrdersPage()
     expect(await screen.findByRole('heading', { name: /Sin pedidos/i })).toBeInTheDocument()
+    emptyRender.unmount()
 
     vi.mocked(listAdminOrders).mockRejectedValueOnce(new Error('boom'))
-    render(<AdminOrdersPage />)
+    const errorRender = renderAdminOrdersPage()
     expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cargar pedidos admin.')
+    errorRender.unmount()
+
+    vi.mocked(listAdminOrders).mockRejectedValueOnce(new Error('boom'))
+    renderAdminOrdersPage('/admin/pedidos?status=PAYMENT_PENDING&from=2026-07-12&to=2026-07-12')
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo cargar pedidos admin.')
+    expect(screen.getByLabelText(/Estado pedido/i)).toHaveValue('PAYMENT_PENDING')
+    expect(screen.getByLabelText(/Fecha desde/i)).toHaveValue('2026-07-12')
+    expect(screen.getByLabelText(/Fecha hasta/i)).toHaveValue('2026-07-12')
   })
 })

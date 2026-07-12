@@ -56,12 +56,12 @@ export function AdminDashboardPage() {
       </div>
 
       <section className="admin-dashboard-metrics" aria-label="Métricas principales">
-        <MetricCard label="Pedidos de hoy" value={summary.todayOrders} helper="Órdenes creadas desde las 00:00" />
-        <MetricCard label="Ventas confirmadas de hoy" value={formatMoney(summary.todayConfirmedSales)} helper="Pagos aprobados o confirmados" />
-        <MetricCard label="Pendientes de pago" value={summary.pendingOrders} helper="Requieren revisión de cobro" />
-        <MetricCard label="Pedidos para preparar" value={summary.ordersToPrepare} helper="Pagados y todavía abiertos" />
-        <MetricCard label="Productos sin stock" value={summary.outOfStockProducts} helper="No se pueden vender" />
-        <MetricCard label="Productos con stock bajo" value={summary.lowStockProducts} helper="Reponer pronto" />
+        <MetricCard label="Pedidos de hoy" value={summary.todayOrders} helper="Órdenes creadas desde las 00:00" actionTo={summary.todayOrdersHref} />
+        <MetricCard label="Ventas confirmadas de hoy" value={formatMoney(summary.todayConfirmedSales)} helper="Pagos aprobados o confirmados" actionTo="/admin/pedidos?status=PAID" />
+        <MetricCard label="Pendientes de pago" value={summary.pendingOrders} helper="Requieren revisión de cobro" actionTo="/admin/pedidos?status=PAYMENT_PENDING" />
+        <MetricCard label="Pedidos para preparar" value={summary.ordersToPrepare} helper="Pagados y todavía abiertos" actionTo="/admin/pedidos?status=PAID" />
+        <MetricCard label="Productos sin stock" value={summary.outOfStockProducts} helper="No se pueden vender" actionTo="/admin/productos?stock=out" />
+        <MetricCard label="Productos con stock bajo" value={summary.lowStockProducts} helper="Reponer pronto" actionTo="/admin/productos?stock=low" />
       </section>
 
       <section className="admin-card" aria-label="Alertas y atención">
@@ -81,7 +81,7 @@ export function AdminDashboardPage() {
                     </span>
                     <span>{alert.label}</span>
                   </div>
-                  <Link className="btn btn-secondary" to="/admin/productos">Revisar producto</Link>
+                  <Link className="btn btn-secondary" to={buildProductAlertHref(alert)}>Revisar producto</Link>
                 </article>
               </li>
             ))}
@@ -93,7 +93,7 @@ export function AdminDashboardPage() {
                     <span>{order.customer} · {formatDate(order.createdAt)}</span>
                     <span>Estado: {order.status} · Pago: {order.paymentStatus || 'Sin detalle'}</span>
                   </div>
-                  <Link className="btn btn-secondary" to="/admin/pedidos">Revisar pedido {order.reference}</Link>
+                  <Link className="btn btn-secondary" to={buildAdminHref('/admin/pedidos', { query: order.reference })}>Revisar pedido {order.reference}</Link>
                 </article>
               </li>
             ))}
@@ -142,12 +142,13 @@ export function AdminDashboardPage() {
   )
 }
 
-function MetricCard({ label, value, helper }: { label: string; value: number | string; helper: string }) {
+function MetricCard({ label, value, helper, actionTo }: { label: string; value: number | string; helper: string; actionTo?: string }) {
   return (
     <article className="admin-card admin-metric-card" aria-label={label}>
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{helper}</small>
+      {actionTo ? <Link className="btn btn-secondary" to={actionTo}>Gestionar</Link> : null}
     </article>
   )
 }
@@ -157,6 +158,7 @@ function buildDashboardSummary(orders: AdminOrderSummary[], products: AdminProdu
   const stockAlerts = products.flatMap(buildStockAlerts)
   return {
     todayOrders: todayOrders.length,
+    todayOrdersHref: buildAdminHref('/admin/pedidos', { from: formatLocalDate(now), to: formatLocalDate(now) }),
     todayConfirmedSales: todayOrders.filter(isPaymentConfirmed).reduce((total, order) => total + toNumber(order.total), 0),
     pendingOrders: orders.filter(isPendingPaymentOrder).length,
     ordersToPrepare: orders.filter(isOrderToPrepare).length,
@@ -165,6 +167,32 @@ function buildDashboardSummary(orders: AdminOrderSummary[], products: AdminProdu
     stockAlerts,
     pendingPaymentOrders: orders.filter(isPendingPaymentOrder),
   }
+}
+
+function buildProductAlertHref(alert: StockAlert): string {
+  return buildAdminHref('/admin/productos', {
+    stock: alert.severity,
+    productId: alert.productId,
+    query: alert.productName,
+  })
+}
+
+function buildAdminHref(pathname: string, params: Record<string, string>): string {
+  const searchParams = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    const normalizedValue = value.trim()
+    if (normalizedValue) searchParams.set(key, normalizedValue)
+  })
+
+  const query = searchParams.toString()
+  return query ? `${pathname}?${query}` : pathname
+}
+
+function formatLocalDate(value: Date): string {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function buildStockAlerts(product: AdminProductDto): StockAlert[] {

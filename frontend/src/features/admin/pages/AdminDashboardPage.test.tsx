@@ -88,6 +88,37 @@ describe('AdminDashboardPage', () => {
     expect(screen.getByRole('article', { name: /Productos con stock bajo/i })).toHaveTextContent('2')
   })
 
+  it('renders deterministic management links for actionable dashboard metrics', async () => {
+    render(<AdminDashboardPage />, { wrapper: MemoryRouter })
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard admin' })).toBeInTheDocument()
+
+    expect(within(screen.getByRole('article', { name: /Pedidos de hoy/i })).getByRole('link', { name: /Gestionar/i })).toHaveAttribute(
+      'href',
+      '/admin/pedidos?from=2026-05-13&to=2026-05-13',
+    )
+    expect(within(screen.getByRole('article', { name: /Ventas confirmadas de hoy/i })).getByRole('link', { name: /Gestionar/i })).toHaveAttribute(
+      'href',
+      '/admin/pedidos?status=PAID',
+    )
+    expect(within(screen.getByRole('article', { name: /Pendientes de pago/i })).getByRole('link', { name: /Gestionar/i })).toHaveAttribute(
+      'href',
+      '/admin/pedidos?status=PAYMENT_PENDING',
+    )
+    expect(within(screen.getByRole('article', { name: /Pedidos para preparar/i })).getByRole('link', { name: /Gestionar/i })).toHaveAttribute(
+      'href',
+      '/admin/pedidos?status=PAID',
+    )
+    expect(within(screen.getByRole('article', { name: /Productos sin stock/i })).getByRole('link', { name: /Gestionar/i })).toHaveAttribute(
+      'href',
+      '/admin/productos?stock=out',
+    )
+    expect(within(screen.getByRole('article', { name: /Productos con stock bajo/i })).getByRole('link', { name: /Gestionar/i })).toHaveAttribute(
+      'href',
+      '/admin/productos?stock=low',
+    )
+  })
+
   it('counts only paid orders that have not started fulfillment as orders to prepare', async () => {
     vi.mocked(listAdminOrders).mockResolvedValueOnce({
       items: [
@@ -140,7 +171,40 @@ describe('AdminDashboardPage', () => {
     const outOfStockAlert = within(alerts).getByRole('article', { name: /Alerta stock Aceite de oliva/i })
     expect(outOfStockAlert).toHaveTextContent('Aceite de oliva')
     expect(outOfStockAlert).toHaveTextContent('Sin stock')
-    expect(within(alerts).getByRole('link', { name: /Revisar pedido ET-1000/i })).toHaveAttribute('href', '/admin/pedidos')
+    expect(within(alerts).getByRole('link', { name: /Revisar pedido ET-1000/i })).toHaveAttribute('href', '/admin/pedidos?query=ET-1000')
+  })
+
+  it('deep-links dashboard stock alerts to product identity with stock and search query params', async () => {
+    render(<AdminDashboardPage />, { wrapper: MemoryRouter })
+
+    const alerts = await screen.findByRole('region', { name: /Alertas y atención/i })
+    expect(within(within(alerts).getByRole('article', { name: /Alerta stock Almendras/i })).getByRole('link', { name: /Revisar producto/i })).toHaveAttribute(
+      'href',
+      '/admin/productos?stock=low&productId=p-1&query=Almendras',
+    )
+    expect(within(within(alerts).getByRole('article', { name: /Alerta stock Aceite de oliva/i })).getByRole('link', { name: /Revisar producto/i })).toHaveAttribute(
+      'href',
+      '/admin/productos?stock=out&productId=p-2&query=Aceite+de+oliva',
+    )
+  })
+
+  it('keeps the no-alert empty state free of misleading review links', async () => {
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([])
+    vi.mocked(listAdminOrders).mockResolvedValueOnce({
+      items: [],
+      page: 0,
+      size: 8,
+      totalElements: 0,
+      totalPages: 0,
+    })
+
+    render(<AdminDashboardPage />, { wrapper: MemoryRouter })
+
+    const alerts = await screen.findByRole('region', { name: /Alertas y atención/i })
+    expect(within(alerts).getByText(/Sin alertas críticas/i)).toBeInTheDocument()
+    expect(within(alerts).getByText(/No hay pagos pendientes ni stock crítico/i)).toBeInTheDocument()
+    expect(within(alerts).queryByRole('link', { name: /Revisar producto/i })).not.toBeInTheDocument()
+    expect(within(alerts).queryByRole('link', { name: /Revisar pedido/i })).not.toBeInTheDocument()
   })
 
   it('uses shared GRANEL availability semantics for all-reserved dashboard stock alerts', async () => {

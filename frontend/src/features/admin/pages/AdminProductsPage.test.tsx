@@ -1,5 +1,7 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactElement, ReactNode } from 'react'
+import { fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdminProductsPage } from './AdminProductsPage'
 import {
@@ -12,6 +14,14 @@ import {
   uploadAdminProductImage,
   updateAdminProduct,
 } from '../services/adminOperationsService'
+
+function render(ui: ReactElement, route = '/admin/productos') {
+  function Wrapper({ children }: { children: ReactNode }) {
+    return <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+  }
+
+  return rtlRender(ui, { wrapper: Wrapper })
+}
 
 vi.mock('../services/adminOperationsService', () => ({
   listAdminProducts: vi.fn(async () => [
@@ -972,6 +982,140 @@ describe('AdminProductsPage', () => {
     expect(screen.getByText('Pistachos')).toBeInTheDocument()
     expect(screen.getByText('Almendras')).toBeInTheDocument()
     expect(screen.queryByText('Castañas')).not.toBeInTheDocument()
+  })
+
+  it('hydrates stock filter from the URL and filters visible product cards', async () => {
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([
+      {
+        id: 'p-low',
+        name: 'Aceite',
+        slug: 'aceite',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        variants: [{ id: 'v-low', sku: 'ACE-500ML', unitType: 'UNIT', unitLabel: '500ml', price: 9000, stockAvailable: 5, active: true }],
+      },
+      {
+        id: 'p-out',
+        name: 'Harina',
+        slug: 'harina',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        variants: [{ id: 'v-out', sku: 'HAR-1KG', unitType: 'WEIGHT', weightGrams: 1000, unitLabel: '1kg', price: 1100, stockAvailable: 0, active: true }],
+      },
+      {
+        id: 'p-ok',
+        name: 'Café',
+        slug: 'cafe',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        variants: [{ id: 'v-ok', sku: 'CAF-250G', unitType: 'WEIGHT', weightGrams: 250, unitLabel: '250g', price: 4500, stockAvailable: 20, active: true }],
+      },
+    ])
+
+    render(<AdminProductsPage />, '/admin/productos?stock=out')
+    await screen.findByText('Harina')
+
+    expect(screen.getByLabelText(/Filtrar productos por stock/i)).toHaveValue('out')
+    const productsRegion = screen.getByRole('region', { name: /Productos encontrados/i })
+    expect(productsRegion).toHaveTextContent('1 productos visibles')
+    expect(within(productsRegion).getByRole('article', { name: /Producto Harina/i })).toHaveTextContent('Sin stock')
+    expect(within(productsRegion).queryByRole('article', { name: /Producto Aceite/i })).not.toBeInTheDocument()
+    expect(within(productsRegion).queryByRole('article', { name: /Producto Café/i })).not.toBeInTheDocument()
+  })
+
+  it('uses productId and query URL params to make an existing product visible and focused after load', async () => {
+    const scrollIntoView = vi.fn()
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([
+      {
+        id: 'p-out',
+        name: 'Harina integral',
+        slug: 'harina-integral',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        variants: [{ id: 'v-out', sku: 'HAR-1KG', unitType: 'WEIGHT', weightGrams: 1000, unitLabel: '1kg', price: 1100, stockAvailable: 0, active: true }],
+      },
+      {
+        id: 'p-ok',
+        name: 'Café',
+        slug: 'cafe',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        variants: [{ id: 'v-ok', sku: 'CAF-250G', unitType: 'WEIGHT', weightGrams: 250, unitLabel: '250g', price: 4500, stockAvailable: 20, active: true }],
+      },
+    ])
+
+    render(<AdminProductsPage />, '/admin/productos?stock=low&productId=p-out&query=Harina')
+    const targetCard = await screen.findByRole('article', { name: /Producto destacado Harina integral/i })
+
+    expect(screen.getByLabelText(/Buscar productos admin/i)).toHaveValue('Harina')
+    expect(screen.getByLabelText(/Filtrar productos por stock/i)).toHaveValue('low')
+    expect(targetCard).toHaveTextContent('Producto destacado desde el dashboard')
+    expect(targetCard).toHaveFocus()
+    expect(scrollIntoView).toHaveBeenCalled()
+    expect(screen.queryByRole('article', { name: /Producto Café/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: /Editar producto/i })).not.toBeInTheDocument()
+  })
+
+  it('focuses the first query-matched product when the dashboard link has no productId', async () => {
+    const scrollIntoView = vi.fn()
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([
+      {
+        id: 'p-query',
+        name: 'Barra de arroz',
+        slug: 'barra-de-arroz',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        variants: [{ id: 'v-query', sku: 'BAR-ARROZ', unitType: 'UNIT', weightGrams: null, unitLabel: 'unidad', price: 1600, stockAvailable: 0, active: true }],
+      },
+      {
+        id: 'p-ok',
+        name: 'Café',
+        slug: 'cafe',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        variants: [{ id: 'v-ok', sku: 'CAF-250G', unitType: 'WEIGHT', weightGrams: 250, unitLabel: '250g', price: 4500, stockAvailable: 20, active: true }],
+      },
+    ])
+
+    render(<AdminProductsPage />, '/admin/productos?query=Barra%20de%20arroz')
+    const targetCard = await screen.findByRole('article', { name: /Producto destacado Barra de arroz/i })
+
+    expect(screen.getByLabelText(/Buscar productos admin/i)).toHaveValue('Barra de arroz')
+    expect(targetCard).toHaveTextContent('Producto destacado desde el dashboard')
+    expect(targetCard).toHaveFocus()
+    expect(scrollIntoView).toHaveBeenCalled()
+    expect(screen.queryByRole('article', { name: /Producto Café/i })).not.toBeInTheDocument()
+  })
+
+  it('keeps the filtered product list understandable when a URL productId target is missing', async () => {
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([
+      {
+        id: 'p-ok',
+        name: 'Café',
+        slug: 'cafe',
+        categoryId: 'c-1',
+        categoryName: 'Secos',
+        active: true,
+        variants: [{ id: 'v-ok', sku: 'CAF-250G', unitType: 'WEIGHT', weightGrams: 250, unitLabel: '250g', price: 4500, stockAvailable: 20, active: true }],
+      },
+    ])
+
+    render(<AdminProductsPage />, '/admin/productos?productId=p-missing&query=Harina')
+    await screen.findByText(/No hay productos que coincidan con esos filtros/i)
+
+    expect(screen.getByLabelText(/Buscar productos admin/i)).toHaveValue('Harina')
+    expect(screen.getByRole('status')).toHaveTextContent('No encontramos el producto enlazado desde el dashboard.')
+    expect(screen.getByRole('status')).toHaveTextContent('Probá cambiar o limpiar la búsqueda para volver a ver productos.')
+    expect(screen.queryByRole('dialog', { name: /Editar producto/i })).not.toBeInTheDocument()
   })
 
   it('confirms and deactivates active products, then refreshes list', async () => {

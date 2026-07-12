@@ -169,6 +169,12 @@ textarea:focus-visible,
   text-decoration: none;
 }
 
+.top-shell-icons img {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
+}
+
 .top-shell-icons .cart-icon-with-badge {
   position: relative;
 }
@@ -2013,6 +2019,28 @@ textarea:focus-visible,
 
 .admin-product-card {
   align-items: stretch;
+}
+
+.admin-product-card-target {
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px var(--admin-accent-soft), var(--admin-shadow);
+}
+
+.admin-product-card-target::before {
+  opacity: 1;
+  width: 0.38rem;
+}
+
+.admin-product-target-note {
+  width: fit-content;
+  margin: 0;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 999px;
+  background: var(--admin-accent-soft);
+  color: var(--admin-text);
+  padding: 0.28rem 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .admin-product-media {

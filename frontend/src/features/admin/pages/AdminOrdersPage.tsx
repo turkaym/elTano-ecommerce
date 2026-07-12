@@ -1,4 +1,5 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   getAdminOrderDetail,
   listAdminOrders,
@@ -15,7 +16,15 @@ import { useAdminWriteState } from './adminWriteState'
 
 const DEFAULT_PAGE_SIZE = 20
 const ORDER_STATUSES = ['', 'DRAFT', 'PAYMENT_PENDING', 'PAID', 'PREPARING', 'READY', 'DELIVERED', 'FAILED', 'CANCELLED', 'EXPIRED']
+const SUPPORTED_ORDER_STATUSES = new Set(ORDER_STATUSES.filter(Boolean))
 const TERMINAL_STATUSES = new Set(['DELIVERED', 'FAILED', 'CANCELLED', 'EXPIRED'])
+
+interface OrderFilters {
+  status: string
+  search: string
+  from: string
+  to: string
+}
 
 interface OrderStatusAction {
   targetStatus: string
@@ -24,9 +33,11 @@ interface OrderStatusAction {
 }
 
 export function AdminOrdersPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [filters, setFilters] = useState<OrderFilters>(() => normalizeOrderUrlFilters(searchParams))
+  const [initialListParams] = useState<AdminOrderListParams>(() => buildOrderListParams(normalizeOrderUrlFilters(searchParams), 0, DEFAULT_PAGE_SIZE))
   const [data, setData] = useState<AdminOrderListResponse | null>(null)
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
-  const [filters, setFilters] = useState({ status: '', search: '', from: '', to: '' })
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
   const [selectedOrderReference, setSelectedOrderReference] = useState<string | null>(null)
   const [detail, setDetail] = useState<AdminOrderDetailResponse | null>(null)
@@ -54,7 +65,7 @@ export function AdminOrdersPage() {
 
   useEffect(() => {
     let active = true
-    void listAdminOrders({ page: 0, size: DEFAULT_PAGE_SIZE })
+    void listAdminOrders(initialListParams)
       .then((response) => {
         if (!active) return
         setData(response)
@@ -67,18 +78,10 @@ export function AdminOrdersPage() {
     return () => {
       active = false
     }
-  }, [])
+  }, [initialListParams])
 
   function buildFilterParams(page = 0): AdminOrderListParams {
-    const search = filters.search.trim()
-    return {
-      status: filters.status || undefined,
-      query: search || undefined,
-      from: filters.from || undefined,
-      to: filters.to || undefined,
-      page,
-      size: data?.size ?? DEFAULT_PAGE_SIZE,
-    }
+    return buildOrderListParams(filters, page, data?.size ?? DEFAULT_PAGE_SIZE)
   }
 
   function submitFilters(event: FormEvent) {
@@ -88,6 +91,7 @@ export function AdminOrdersPage() {
     setDetail(null)
     setDetailStatus('idle')
     statusWrite.reset()
+    setSearchParams(buildOrderSearchParams(filters))
     void loadOrders(buildFilterParams(0))
   }
 
@@ -196,7 +200,6 @@ export function AdminOrdersPage() {
   }
 
   if (status === 'loading') return <AdminLoadingState label="Cargando pedidos…" />
-  if (status === 'error') return <AdminErrorState message="No se pudo cargar pedidos admin." />
 
   return (
     <section className="admin-page" aria-label="Listado de pedidos admin">
@@ -253,7 +256,9 @@ export function AdminOrdersPage() {
         </div>
       </form>
 
-      {!data || !data.items.length ? (
+      {status === 'error' ? (
+        <AdminErrorState message="No se pudo cargar pedidos admin." />
+      ) : !data || !data.items.length ? (
         <AdminEmptyState title="Sin pedidos" action={<button className="btn btn-secondary" type="button" onClick={() => void loadOrders(buildFilterParams(0))}>Actualizar lista</button>} />
       ) : (
         <>
@@ -396,6 +401,50 @@ function renderDetailPanel(
       <p><strong>Subtotal:</strong> {formatMoney(detail.subtotal)} · <strong>Total:</strong> {formatMoney(detail.total)} {detail.currency || ''}</p>
     </section>
   )
+}
+
+function normalizeOrderUrlFilters(searchParams: URLSearchParams): OrderFilters {
+  const status = searchParams.get('status')?.trim() ?? ''
+  const query = searchParams.get('query')?.trim() || searchParams.get('search')?.trim() || ''
+  const from = searchParams.get('from')?.trim() ?? ''
+  const to = searchParams.get('to')?.trim() ?? ''
+
+  return {
+    status: SUPPORTED_ORDER_STATUSES.has(status) ? status : '',
+    search: query,
+    from: normalizeDateParam(from),
+    to: normalizeDateParam(to),
+  }
+}
+
+function buildOrderListParams(filters: OrderFilters, page: number, size: number): AdminOrderListParams {
+  const search = filters.search.trim()
+  return {
+    status: filters.status || undefined,
+    query: search || undefined,
+    from: filters.from || undefined,
+    to: filters.to || undefined,
+    page,
+    size,
+  }
+}
+
+function buildOrderSearchParams(filters: OrderFilters): URLSearchParams {
+  const nextParams = new URLSearchParams()
+  const search = filters.search.trim()
+  if (filters.status) nextParams.set('status', filters.status)
+  if (search) nextParams.set('query', search)
+  if (filters.from) nextParams.set('from', filters.from)
+  if (filters.to) nextParams.set('to', filters.to)
+  return nextParams
+}
+
+function normalizeDateParam(value: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return ''
+  const parsed = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime())) return ''
+  const normalized = `${parsed.getUTCFullYear()}-${String(parsed.getUTCMonth() + 1).padStart(2, '0')}-${String(parsed.getUTCDate()).padStart(2, '0')}`
+  return normalized === value ? value : ''
 }
 
 function fulfillmentLabel(method?: AdminOrderDetailResponse['fulfillmentMethod']) {

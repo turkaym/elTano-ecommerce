@@ -1,4 +1,5 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   type AdminCategoryDto,
   createAdminProduct,
@@ -76,6 +77,8 @@ const GRANEL_FIXED_PRESENTATIONS = [
 ]
 
 export function AdminProductsPage() {
+  const [searchParams] = useSearchParams()
+  const urlFilters = normalizeProductUrlFilters(searchParams)
   const [items, setItems] = useState<AdminProductDto[]>([])
   const [categories, setCategories] = useState<AdminCategoryDto[]>([])
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
@@ -91,7 +94,8 @@ export function AdminProductsPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
-  const [stockFilter, setStockFilter] = useState<StockFilter>('all')
+  const [stockFilter, setStockFilter] = useState<StockFilter>(urlFilters.stock)
+  const [productSearch, setProductSearch] = useState(urlFilters.query)
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<AdminProductDto | null>(null)
   const [editDraft, setEditDraft] = useState<ProductFormDraft | null>(null)
@@ -100,11 +104,12 @@ export function AdminProductsPage() {
   const editNameRef = useRef<HTMLInputElement>(null)
   const editDialogRef = useRef<HTMLElement>(null)
   const editTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const productCardRefs = useRef(new Map<string, HTMLElement>())
   const write = useAdminWriteState()
 
   useEffect(() => {
-    if (editDraft) editNameRef.current?.focus()
-  }, [editingProduct?.id])
+    if (editingProduct) editNameRef.current?.focus()
+  }, [editingProduct])
 
   useEffect(() => {
     let active = true
@@ -124,6 +129,21 @@ export function AdminProductsPage() {
       active = false
     }
   }, [])
+
+  const currentProductType = resolveProductType(variants)
+  const isGranelProduct = currentProductType === 'GRANEL'
+  const focusedProductId = urlFilters.productId
+  const targetExists = focusedProductId ? items.some((item) => item.id === focusedProductId) : false
+  const targetMissing = status === 'ready' && Boolean(focusedProductId) && !targetExists
+  const filteredProducts = visibleProducts(items, categories, statusFilter, categoryFilter, stockFilter, productSearch, focusedProductId)
+  const focusTargetProductId = focusedProductId ?? (urlFilters.query ? filteredProducts[0]?.id : undefined)
+
+  useEffect(() => {
+    if (status !== 'ready' || !focusTargetProductId || !filteredProducts.some((item) => item.id === focusTargetProductId)) return
+    const target = productCardRefs.current.get(focusTargetProductId)
+    target?.focus()
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [filteredProducts, focusTargetProductId, status])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -241,10 +261,6 @@ export function AdminProductsPage() {
 
   if (status === 'loading') return <AdminLoadingState label="Cargando productos…" />
   if (status === 'error') return <AdminErrorState message="No se pudo cargar productos admin." />
-
-  const currentProductType = resolveProductType(variants)
-  const isGranelProduct = currentProductType === 'GRANEL'
-  const filteredProducts = visibleProducts(items, statusFilter, categoryFilter, stockFilter)
 
   function closeCreateForm() {
     if (write.isPending) return
@@ -520,6 +536,15 @@ export function AdminProductsPage() {
         </div>
         <div className="admin-toolbar-grid">
         <label className="admin-field">
+          <span>Buscar productos admin</span>
+          <input
+            value={productSearch}
+            onChange={(event) => setProductSearch(event.target.value)}
+            aria-label="Buscar productos admin"
+            placeholder="Nombre, slug, categoría o SKU"
+          />
+        </label>
+        <label className="admin-field">
           <span>Filtrar productos por estado</span>
           <select
             value={statusFilter}
@@ -568,9 +593,18 @@ export function AdminProductsPage() {
             const imageUrl = primaryImageUrl(item)
             const stockState = getAdminStockState(item)
             const active = isProductActive(item)
+            const isFocusedProduct = item.id === focusTargetProductId
             return (
               <li className="admin-list-item" key={item.id}>
-                <article className="admin-item-card admin-product-card" aria-label={`Producto ${item.name}`}>
+                <article
+                  className={`admin-item-card admin-product-card${isFocusedProduct ? ' admin-product-card-target' : ''}`}
+                  aria-label={`${isFocusedProduct ? 'Producto destacado' : 'Producto'} ${item.name}`}
+                  tabIndex={isFocusedProduct ? -1 : undefined}
+                  ref={(element) => {
+                    if (element) productCardRefs.current.set(item.id, element)
+                    else productCardRefs.current.delete(item.id)
+                  }}
+                >
                   <div className="admin-product-media" aria-label={`Imagen de ${item.name}`}>
                     {imageUrl === 'Sin imagen' ? (
                       <div className="admin-product-media-placeholder">
@@ -596,6 +630,7 @@ export function AdminProductsPage() {
                     <ul className="admin-product-variant-list" aria-label={`Presentaciones de ${item.name}`}>
                       <li>Variantes: {variantSummary(item)}</li>
                     </ul>
+                    {isFocusedProduct ? <p className="admin-product-target-note">Producto destacado desde el dashboard</p> : null}
                   </div>
                   <div className="admin-item-actions" role="group" aria-label={`Acciones de ${item.name}`}>
                     <button
@@ -626,7 +661,16 @@ export function AdminProductsPage() {
         {!filteredProducts.length ? (
           <div className="admin-empty-card" role="status">
             <h3>No hay productos que coincidan con esos filtros.</h3>
-            <p>Probá cambiar estado, categoría o stock para volver a ver productos.</p>
+            {targetMissing ? (
+              <p>No encontramos el producto enlazado desde el dashboard. Probá cambiar o limpiar la búsqueda para volver a ver productos.</p>
+            ) : (
+              <p>Probá cambiar estado, categoría, stock o búsqueda para volver a ver productos.</p>
+            )}
+          </div>
+        ) : null}
+        {targetMissing && filteredProducts.length ? (
+          <div className="admin-empty-card" role="status">
+            <p>No encontramos el producto enlazado desde el dashboard. La lista sigue disponible con los filtros actuales.</p>
           </div>
         ) : null}
       </section>
@@ -1076,11 +1120,17 @@ function getFocusableElements(container: HTMLElement | null): HTMLElement[] {
 
 function visibleProducts(
   items: AdminProductDto[],
+  categories: AdminCategoryDto[],
   statusFilter: 'all' | 'active' | 'inactive',
   categoryFilter: string,
   stockFilter: StockFilter,
+  query: string,
+  focusedProductId?: string,
 ): AdminProductDto[] {
+  const normalizedQuery = normalizeText(query)
   return items.filter((item) => {
+    if (focusedProductId && item.id === focusedProductId) return true
+    if (normalizedQuery && !matchesProductQuery(item, categories, normalizedQuery)) return false
     if (categoryFilter !== 'all' && item.categoryId !== categoryFilter) return false
     if (statusFilter === 'active' && !isProductActive(item)) return false
     if (statusFilter === 'inactive' && isProductActive(item)) return false
@@ -1089,6 +1139,38 @@ function visibleProducts(
     if (stockFilter === 'low') return stockState !== 'available'
     return true
   })
+}
+
+function normalizeProductUrlFilters(searchParams: URLSearchParams): { stock: StockFilter; query: string; productId?: string } {
+  const stock = normalizeStockFilter(searchParams.get('stock'))
+  const query = searchParams.get('query')?.trim() || ''
+  const productId = searchParams.get('productId')?.trim() || undefined
+  return { stock, query, productId }
+}
+
+function normalizeStockFilter(value: string | null): StockFilter {
+  return value === 'out' || value === 'low' ? value : 'all'
+}
+
+function matchesProductQuery(item: AdminProductDto, categories: AdminCategoryDto[], normalizedQuery: string): boolean {
+  const categoryName = resolveCategoryName(item, categories)
+  const searchableValues = [
+    item.name,
+    item.slug,
+    item.categoryName,
+    categoryName,
+    ...(item.variants?.flatMap((variant) => [variant.sku, variant.unitLabel]) ?? []),
+  ]
+
+  return searchableValues.some((value) => normalizeText(value).includes(normalizedQuery))
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return (value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
 }
 
 function resolveCategoryName(item: AdminProductDto, categories: AdminCategoryDto[]): string {
