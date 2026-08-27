@@ -6,11 +6,25 @@ import com.eltano.ecommerce.catalog.domain.InventoryPolicy;
 import com.eltano.ecommerce.catalog.domain.Product;
 import com.eltano.ecommerce.catalog.domain.ProductVariant;
 import com.eltano.ecommerce.common.api.ConflictException;
+import com.eltano.ecommerce.inventory.service.InventoryMutationService;
 
 @Service
 public class InventoryPolicyService {
+    private final InventoryMutationService inventory;
+
+    public InventoryPolicyService(InventoryMutationService inventory) {
+        this.inventory = inventory;
+    }
+
+    InventoryPolicyService() {
+        this.inventory = null;
+    }
 
     public void reserve(ProductVariant variant, int quantity) {
+        if (inventory != null) {
+            inventory.reserve(variant, quantity);
+            return;
+        }
         if (resolvePolicy(variant) == InventoryPolicy.BULK_WEIGHT) {
             reserveBulkWeight(variant, quantity);
             return;
@@ -24,6 +38,10 @@ public class InventoryPolicyService {
     }
 
     public void release(ProductVariant variant, int quantity) {
+        if (inventory != null) {
+            inventory.release(variant, quantity);
+            return;
+        }
         if (resolvePolicy(variant) == InventoryPolicy.BULK_WEIGHT) {
             Product product = variant.getProduct();
             int releasedGrams = requiredGrams(variant, quantity);
@@ -36,6 +54,10 @@ public class InventoryPolicyService {
     }
 
     public void finalizeReservation(ProductVariant variant, int quantity) {
+        if (inventory != null) {
+            inventory.finalizeReservation(variant, quantity);
+            return;
+        }
         if (resolvePolicy(variant) == InventoryPolicy.BULK_WEIGHT) {
             Product product = variant.getProduct();
             int finalizedGrams = requiredGrams(variant, quantity);

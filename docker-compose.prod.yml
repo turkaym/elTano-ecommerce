@@ -55,6 +55,21 @@ services:
     networks:
       - eltano
 
+  assistant:
+    build:
+      context: ../elTano_whatsapp_assistant
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      ECOMMERCE_BASE_URL: http://backend:8080
+      CATALOG_CACHE_TTL_MS: ${ASSISTANT_CATALOG_CACHE_TTL_MS:-60000}
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks:
+      - eltano
+
 networks:
   eltano:
 

@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as adminAccess from '../../features/admin/auth/adminAccess'
 import * as adminOperationsService from '../../features/admin/services/adminOperationsService'
+import * as procurementService from '../../features/admin/services/procurementService'
 import { AppRoutes } from './AppRoutes'
 
 vi.mock('../../shared/config/flags', () => ({
@@ -33,6 +34,9 @@ describe('AppRoutes admin nested routes', () => {
       totalPages: 0,
     })
     vi.spyOn(adminOperationsService, 'listAdminCatalogJobs').mockResolvedValue([])
+    vi.spyOn(procurementService, 'listPurchases').mockResolvedValue([])
+    vi.spyOn(procurementService, 'listSuppliers').mockResolvedValue([])
+    vi.spyOn(procurementService, 'listMappings').mockResolvedValue([])
   }
 
   function renderRoutes(initialEntry = '/admin') {
@@ -111,6 +115,7 @@ describe('AppRoutes admin nested routes', () => {
     ['/admin/categorias', 'Categorías'],
     ['/admin/pedidos', 'Pedidos'],
     ['/admin/catalog-jobs', 'Sin jobs todavía'],
+    ['/admin/compras', 'No purchases'],
   ])('shows the persistent sidebar links on %s', async (initialEntry, readyText) => {
     await renderReadyAdminRoute(initialEntry, readyText)
 
@@ -126,6 +131,7 @@ describe('AppRoutes admin nested routes', () => {
       ['Categorías', '/admin/categorias'],
       ['Pedidos', '/admin/pedidos'],
       ['Catalog Jobs', '/admin/catalog-jobs'],
+      ['Purchases', '/admin/compras'],
     ]
 
     for (const [label, href] of expectedLinks) {

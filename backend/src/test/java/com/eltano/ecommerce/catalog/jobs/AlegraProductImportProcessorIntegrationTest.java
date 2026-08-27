@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -35,6 +36,16 @@ import com.eltano.ecommerce.catalog.jobs.repository.AdminCatalogJobRowRepository
 import com.eltano.ecommerce.catalog.repository.CategoryRepository;
 import com.eltano.ecommerce.catalog.repository.ProductRepository;
 import com.eltano.ecommerce.catalog.repository.ProductVariantRepository;
+import com.eltano.ecommerce.procurement.domain.InventoryTargetType;
+import com.eltano.ecommerce.procurement.domain.Purchase;
+import com.eltano.ecommerce.procurement.domain.PurchaseReceipt;
+import com.eltano.ecommerce.procurement.domain.ReceiptKind;
+import com.eltano.ecommerce.procurement.domain.StockMovement;
+import com.eltano.ecommerce.procurement.domain.Supplier;
+import com.eltano.ecommerce.procurement.repository.PurchaseReceiptRepository;
+import com.eltano.ecommerce.procurement.repository.PurchaseRepository;
+import com.eltano.ecommerce.procurement.repository.StockMovementRepository;
+import com.eltano.ecommerce.procurement.repository.SupplierRepository;
 
 @SpringBootTest(properties = "app.catalog.seed-on-empty=false")
 @ActiveProfiles("test")
@@ -62,8 +73,24 @@ class AlegraProductImportProcessorIntegrationTest {
     @Autowired
     private ProductVariantRepository productVariantRepository;
 
+    @Autowired
+    private StockMovementRepository stockMovementRepository;
+
+    @Autowired
+    private PurchaseReceiptRepository purchaseReceiptRepository;
+
+    @Autowired
+    private PurchaseRepository purchaseRepository;
+
+    @Autowired
+    private SupplierRepository supplierRepository;
+
     @BeforeEach
     void clean() {
+        stockMovementRepository.deleteAll();
+        purchaseReceiptRepository.deleteAll();
+        purchaseRepository.deleteAll();
+        supplierRepository.deleteAll();
         rowRepository.deleteAll();
         jobInputRepository.deleteAll();
         jobRepository.deleteAll();
@@ -111,7 +138,7 @@ class AlegraProductImportProcessorIntegrationTest {
     }
 
     @Test
-    void reimportUpdatesCatalogFieldsAndPricesWithoutDuplicatingOrResettingStockAndImages() {
+    void reimportUpdatesCatalogFieldsAndPricesWithoutOverwritingLedgerBackedStockOrImages() {
         AdminCatalogJob firstJob = excelJob(jsonRow(2, "Frutos Secos", "Almendra", "Original", "ALM-001", "Unidad", "100.00"));
         assertEquals("processed=1,created=1,updated=0,skipped=0,errors=0", jobService.executeClaimedJob(firstJob.getId()));
 
@@ -122,6 +149,7 @@ class AlegraProductImportProcessorIntegrationTest {
         existingProduct.getImages().getFirst().setUrl("/manual/almendra.jpg");
         existingProduct.getImages().getFirst().setAltText("Manual image");
         productRepository.saveAndFlush(existingProduct);
+        recordLedgerMovement(existingVariant, 7);
 
         AdminCatalogJob secondJob = excelJob(jsonRow(2, "Snacks", "Almendra Premium", "Updated", "ALM-001", "Unidad", "150.00"));
         String summary = jobService.executeClaimedJob(secondJob.getId());
@@ -140,6 +168,9 @@ class AlegraProductImportProcessorIntegrationTest {
         assertEquals(2, updatedVariant.getStockReserved());
         assertEquals("/manual/almendra.jpg", updatedProduct.getImages().getFirst().getUrl());
         assertEquals("Manual image", updatedProduct.getImages().getFirst().getAltText());
+        assertTrue(stockMovementRepository.existsByTargetTypeAndTargetId(
+                InventoryTargetType.VARIANT_UNIT,
+                updatedVariant.getId()));
     }
 
     @Test
@@ -192,6 +223,47 @@ class AlegraProductImportProcessorIntegrationTest {
                 .filter(variant -> variant.getSku().equals(sku))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    private void recordLedgerMovement(ProductVariant variant, int balance) {
+        Supplier supplier = new Supplier();
+        supplier.setName("Import protection supplier");
+        supplier = supplierRepository.save(supplier);
+
+        Purchase purchase = new Purchase();
+        purchase.setSupplier(supplier);
+        purchase.setDocumentType("TEST");
+        purchase.setDocumentNumber(UUID.randomUUID().toString());
+        purchase.setNormalizedDocumentType("test");
+        purchase.setNormalizedDocumentNumber(purchase.getDocumentNumber().toLowerCase());
+        purchase.setPurchasedAt(LocalDate.now());
+        purchase.setCreatedBy("test");
+        purchase = purchaseRepository.save(purchase);
+
+        PurchaseReceipt receipt = new PurchaseReceipt();
+        receipt.setPurchase(purchase);
+        receipt.setKind(ReceiptKind.RECEIPT);
+        receipt.setIdempotencyKey(UUID.randomUUID().toString());
+        receipt.setRequestHash("0".repeat(64));
+        receipt.setActor("test");
+        receipt.setCorrelationId(UUID.randomUUID().toString());
+        receipt = purchaseReceiptRepository.save(receipt);
+
+        StockMovement movement = new StockMovement();
+        movement.setSourceType("TEST_IMPORT_PROTECTION");
+        movement.setSourceId(UUID.randomUUID());
+        movement.setPurchase(purchase);
+        movement.setReceipt(receipt);
+        movement.setTargetType(InventoryTargetType.VARIANT_UNIT);
+        movement.setTargetId(variant.getId());
+        movement.setQuantity(BigDecimal.valueOf(balance));
+        movement.setConversion(BigDecimal.ONE);
+        movement.setCanonicalDelta(balance);
+        movement.setBeforeBalance(0);
+        movement.setAfterBalance(balance);
+        movement.setActor("test");
+        movement.setCorrelationId(UUID.randomUUID().toString());
+        stockMovementRepository.save(movement);
     }
 
     private String jsonRow(int rowNumber, String category, String name, String description, String code, String unit, String price) {

@@ -6,11 +6,17 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
 
 import com.eltano.ecommerce.catalog.domain.Product;
+import jakarta.persistence.LockModeType;
 
 public interface ProductRepository extends JpaRepository<Product, UUID> {
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Product p where p.id in :ids order by p.id")
+    List<Product> findAllByIdInForUpdate(@Param("ids") List<UUID> ids);
 
     boolean existsBySlugIgnoreCase(String slug);
 

@@ -3,6 +3,8 @@ package com.eltano.ecommerce.orders.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -16,10 +18,28 @@ import com.eltano.ecommerce.catalog.domain.Product;
 import com.eltano.ecommerce.catalog.domain.ProductType;
 import com.eltano.ecommerce.catalog.domain.ProductVariant;
 import com.eltano.ecommerce.common.api.ConflictException;
+import com.eltano.ecommerce.inventory.service.InventoryMutationService;
 
 class InventoryPolicyServiceTest {
 
     private InventoryPolicyService inventoryPolicyService;
+
+    @Test
+    void delegatesOrderReservationLifecycleToNeutralInventoryBoundary() {
+        InventoryMutationService inventory = mock(InventoryMutationService.class);
+        InventoryPolicyService policy = new InventoryPolicyService(inventory);
+        ProductVariant variant = perVariant(10, 1);
+
+        policy.reserve(variant, 2);
+        policy.release(variant, 1);
+        policy.finalizeReservation(variant, 1);
+
+        verify(inventory).reserve(variant, 2);
+        verify(inventory).release(variant, 1);
+        verify(inventory).finalizeReservation(variant, 1);
+        assertEquals(10, variant.getStockAvailable());
+        assertEquals(1, variant.getStockReserved());
+    }
 
     @BeforeEach
     void setUp() {

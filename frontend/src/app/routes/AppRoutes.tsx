@@ -8,6 +8,7 @@ import { AdminCategoriesPage } from '../../features/admin/pages/AdminCategoriesP
 import { AdminDashboardPage } from '../../features/admin/pages/AdminDashboardPage'
 import { AdminOrdersPage } from '../../features/admin/pages/AdminOrdersPage'
 import { AdminProductsPage } from '../../features/admin/pages/AdminProductsPage'
+import { AdminProcurementPage } from '../../features/admin/pages/AdminProcurementPage'
 import { CategoriesPage } from '../../features/catalog/pages/CategoriesPage'
 import { CategoryDetailPage } from '../../features/catalog/pages/CategoryDetailPage'
 import { ProductsPage } from '../../features/catalog/pages/ProductsPage'
@@ -45,6 +46,7 @@ export function AppRoutes({
             <Route path="productos" element={<AdminProductsPage />} />
             <Route path="categorias" element={<AdminCategoriesPage />} />
             <Route path="pedidos" element={<AdminOrdersPage />} />
+            <Route path="compras" element={<AdminProcurementPage />} />
             <Route path="catalog-jobs" element={<AdminCatalogJobsPage />} />
           </Route>
         </Route>

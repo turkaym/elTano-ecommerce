@@ -85,7 +85,7 @@ public class SecurityConfig {
         CorsConfiguration adminConfig = new CorsConfiguration();
         adminConfig.setAllowedOrigins(parseAllowedOrigins(adminAllowedOrigins));
         adminConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        adminConfig.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-XSRF-TOKEN"));
+        adminConfig.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-XSRF-TOKEN", "Idempotency-Key"));
         adminConfig.setAllowCredentials(true);
 
         CorsConfiguration storefrontConfig = new CorsConfiguration();

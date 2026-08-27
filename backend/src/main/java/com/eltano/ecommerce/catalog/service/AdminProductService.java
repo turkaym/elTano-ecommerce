@@ -32,6 +32,9 @@ import com.eltano.ecommerce.catalog.repository.ProductVariantRepository;
 import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.common.api.ResourceNotFoundException;
 import com.eltano.ecommerce.common.api.UnprocessableEntityException;
+import com.eltano.ecommerce.procurement.domain.InventoryTargetType;
+import com.eltano.ecommerce.procurement.repository.StockMovementRepository;
+import com.eltano.ecommerce.procurement.service.ProcurementConflictException;
 
 @Service
 public class AdminProductService {
@@ -44,14 +47,17 @@ public class AdminProductService {
     private final ProductRepository productRepository;
     private final ProductVariantRepository productVariantRepository;
     private final CategoryRepository categoryRepository;
+    private final StockMovementRepository stockMovementRepository;
 
     public AdminProductService(
             ProductRepository productRepository,
             ProductVariantRepository productVariantRepository,
-            CategoryRepository categoryRepository) {
+            CategoryRepository categoryRepository,
+            StockMovementRepository stockMovementRepository) {
         this.productRepository = productRepository;
         this.productVariantRepository = productVariantRepository;
         this.categoryRepository = categoryRepository;
+        this.stockMovementRepository = stockMovementRepository;
     }
 
     @Transactional
@@ -77,8 +83,9 @@ public class AdminProductService {
 
     @Transactional
     public AdminProductResponse update(UUID id, AdminProductUpsertRequest request) {
-        Product product = productRepository.findByIdWithRelations(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+        Product product = lockedProductWithRelations(id);
+
+        ensureLedgerBackedStockIsPreserved(product, request);
 
         ensureProductSlugUnique(request.slug(), id);
         ensureVariantSkusUniqueInPayload(request.variants());
@@ -258,6 +265,34 @@ public class AdminProductService {
         }
 
         return output;
+    }
+
+    private void ensureLedgerBackedStockIsPreserved(Product product, AdminProductUpsertRequest request) {
+        if (request.stockBaseGrams() != null
+                && !java.util.Objects.equals(request.stockBaseGrams(), product.getStockBaseGrams())
+                && stockMovementRepository.existsByTargetTypeAndTargetId(InventoryTargetType.BULK_GRAM, product.getId())) {
+            throw new ProcurementConflictException("LEDGER_STOCK_PROTECTED", "Ledger-backed bulk stock cannot be overwritten");
+        }
+        Map<UUID, ProductVariant> existing = product.getVariants().stream()
+                .filter(variant -> variant.getId() != null)
+                .collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
+        for (AdminProductVariantUpsertRequest requested : request.variants()) {
+            ProductVariant current = requested.id() == null ? null : existing.get(requested.id());
+            if (current != null && (requested.stockAvailable() != current.getStockAvailable()
+                    || requested.stockReserved() != current.getStockReserved())
+                    && stockMovementRepository.existsByTargetTypeAndTargetId(InventoryTargetType.VARIANT_UNIT, current.getId())) {
+                throw new ProcurementConflictException("LEDGER_STOCK_PROTECTED", "Ledger-backed variant stock cannot be overwritten");
+            }
+        }
+    }
+
+    private Product lockedProductWithRelations(UUID id) {
+        productRepository.findAllByIdInForUpdate(List.of(id)).stream().findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+        List<UUID> variantIds = productVariantRepository.findIdsByProductId(id);
+        if (!variantIds.isEmpty()) productVariantRepository.findAllByIdInForUpdate(variantIds);
+        return productRepository.findByIdWithRelations(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
     }
 
     private List<AdminProductImageUpsertRequest> normalizeImageRequests(List<AdminProductImageUpsertRequest> images) {

@@ -39,6 +39,8 @@ import com.eltano.ecommerce.catalog.repository.ProductVariantRepository;
 import com.eltano.ecommerce.catalog.service.AdminProductService;
 import com.eltano.ecommerce.common.api.ConflictException;
 import com.eltano.ecommerce.common.api.UnprocessableEntityException;
+import com.eltano.ecommerce.procurement.repository.StockMovementRepository;
+import com.eltano.ecommerce.procurement.service.ProcurementConflictException;
 
 @ExtendWith(MockitoExtension.class)
 class AdminProductServiceTest {
@@ -52,11 +54,14 @@ class AdminProductServiceTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private StockMovementRepository stockMovementRepository;
+
     private AdminProductService adminProductService;
 
     @BeforeEach
     void setUp() {
-        adminProductService = new AdminProductService(productRepository, productVariantRepository, categoryRepository);
+        adminProductService = new AdminProductService(productRepository, productVariantRepository, categoryRepository, stockMovementRepository);
     }
 
     @Test
@@ -173,6 +178,8 @@ class AdminProductServiceTest {
         existing.setProductType(ProductType.ENVASADO);
         existing.setInventoryPolicy(InventoryPolicy.PER_VARIANT);
 
+        when(productRepository.findAllByIdInForUpdate(List.of(productId))).thenReturn(List.of(existing));
+        when(productVariantRepository.findIdsByProductId(productId)).thenReturn(List.of());
         when(productRepository.findByIdWithRelations(productId)).thenReturn(Optional.of(existing));
         when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
 
@@ -254,6 +261,38 @@ class AdminProductServiceTest {
         assertEquals(List.of("250g", "Caja A", "Caja B"), responses.getFirst().variants().stream()
                 .map(variant -> variant.unitLabel())
                 .toList());
+    }
+
+    @Test
+    void updateRejectsDirectOverwriteOfLedgerBackedVariantStock() {
+        UUID categoryId = UUID.randomUUID();
+        UUID productId = UUID.randomUUID();
+        UUID variantId = UUID.randomUUID();
+        Category category = category(categoryId);
+        Product existing = product(productId);
+        existing.setCategory(category);
+        ProductVariant existingVariant = variant("SKU-1", 500, "bag");
+        ReflectionTestUtils.setField(existingVariant, "id", variantId);
+        existingVariant.setStockAvailable(5);
+        existing.addVariant(existingVariant);
+        when(productRepository.findAllByIdInForUpdate(List.of(productId))).thenReturn(List.of(existing));
+        when(productVariantRepository.findIdsByProductId(productId)).thenReturn(List.of(variantId));
+        when(productVariantRepository.findAllByIdInForUpdate(List.of(variantId))).thenReturn(List.of(existingVariant));
+        when(productRepository.findByIdWithRelations(productId)).thenReturn(Optional.of(existing));
+        when(stockMovementRepository.existsByTargetTypeAndTargetId(
+                com.eltano.ecommerce.procurement.domain.InventoryTargetType.VARIANT_UNIT, variantId)).thenReturn(true);
+
+        AdminProductVariantUpsertRequest changed = new AdminProductVariantUpsertRequest(
+                variantId, "SKU-1", UnitType.WEIGHT, 500, "bag", new BigDecimal("6000"), 9, 0, true, null);
+        AdminProductUpsertRequest request = new AdminProductUpsertRequest(
+                "Almendra", "almendra", "desc", true, categoryId, ProductType.ENVASADO,
+                InventoryPolicy.PER_VARIANT, null, List.of(changed), List.of());
+
+        ProcurementConflictException error = assertThrows(ProcurementConflictException.class,
+                () -> adminProductService.update(productId, request));
+        assertEquals("LEDGER_STOCK_PROTECTED", error.getCode());
+        assertEquals(5, existingVariant.getStockAvailable());
+        verify(productRepository, never()).save(any());
     }
 
     private Product product(UUID productId) {

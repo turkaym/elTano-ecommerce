@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.eltano.ecommerce.orders.service.payment.MercadoPagoWebhookService.InvalidWebhookSignatureException;
+import com.eltano.ecommerce.procurement.service.ProcurementConflictException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -107,7 +108,7 @@ public class RestExceptionHandler {
             HttpServletRequest request) {
         if (isAdminRequest(request)) {
             return ResponseEntity.badRequest().body(new AdminApiError(
-                    "BAD_REQUEST",
+                    isProcurementRequest(request) ? "VALIDATION_ERROR" : "BAD_REQUEST",
                     ex.getMessage(),
                     correlationId(request),
                     List.of()));
@@ -187,6 +188,12 @@ public class RestExceptionHandler {
                 request.getRequestURI(),
                 List.of());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
+    }
+
+    @ExceptionHandler(ProcurementConflictException.class)
+    public ResponseEntity<?> handleProcurementConflict(ProcurementConflictException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new AdminApiError(
+                ex.getCode(), ex.getMessage(), correlationId(request), List.of()));
     }
 
     @ExceptionHandler(UnprocessableEntityException.class)
@@ -379,6 +386,11 @@ public class RestExceptionHandler {
     private boolean isAdminRequest(HttpServletRequest request) {
         String path = request.getRequestURI();
         return path != null && path.startsWith(ADMIN_API_PREFIX);
+    }
+
+    private boolean isProcurementRequest(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path != null && path.startsWith("/api/admin/procurement/");
     }
 
     private String correlationId(HttpServletRequest request) {

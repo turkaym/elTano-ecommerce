@@ -40,6 +40,9 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     List<ProductVariant> findBySkuLowercaseInWithProduct(@Param("skus") List<String> skus);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select pv from ProductVariant pv where pv.id in :ids")
-    List<ProductVariant> findAllByIdInForUpdate(List<UUID> ids);
+    @Query("select pv from ProductVariant pv where pv.id in :ids order by pv.id")
+    List<ProductVariant> findAllByIdInForUpdate(@Param("ids") List<UUID> ids);
+
+    @Query("select pv.id from ProductVariant pv where pv.product.id = :productId order by pv.id")
+    List<UUID> findIdsByProductId(@Param("productId") UUID productId);
 }
