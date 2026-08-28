@@ -131,7 +131,7 @@ describe('AppRoutes admin nested routes', () => {
       ['Categorías', '/admin/categorias'],
       ['Pedidos', '/admin/pedidos'],
       ['Catalog Jobs', '/admin/catalog-jobs'],
-      ['Purchases', '/admin/compras'],
+      ['Compras', '/admin/compras'],
     ]
 
     for (const [label, href] of expectedLinks) {

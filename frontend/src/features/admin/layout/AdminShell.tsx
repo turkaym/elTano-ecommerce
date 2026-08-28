@@ -11,7 +11,7 @@ const adminNavItems = [
   { to: '/admin/productos', label: 'Productos' },
   { to: '/admin/categorias', label: 'Categorías' },
   { to: '/admin/pedidos', label: 'Pedidos' },
-  { to: '/admin/compras', label: 'Purchases' },
+  { to: '/admin/compras', label: 'Compras' },
   { to: '/admin/catalog-jobs', label: 'Catalog Jobs' },
 ]
 
