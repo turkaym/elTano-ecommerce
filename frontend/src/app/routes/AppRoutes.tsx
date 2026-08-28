@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Route, Routes } from 'react-router-dom'
 import { AdminGuard } from '../../features/admin/auth/AdminGuard'
+import { AdminLoginPage } from '../../features/admin/auth/AdminLoginPage'
 import { AdminShell } from '../../features/admin/layout/AdminShell'
 import { AdminCatalogJobsPage } from '../../features/admin/pages/AdminCatalogJobsPage'
 import { AdminCategoriesPage } from '../../features/admin/pages/AdminCategoriesPage'
@@ -40,16 +41,19 @@ export function AppRoutes({
         element={<ProductsPage onAddCartItem={onCatalogAddToCart} />}
       />
       {adminDashboardEnabled ? (
-        <Route element={<AdminGuard />}>
-          <Route path="/admin" element={<AdminShell />}>
-            <Route index element={<AdminDashboardPage />} />
-            <Route path="productos" element={<AdminProductsPage />} />
-            <Route path="categorias" element={<AdminCategoriesPage />} />
-            <Route path="pedidos" element={<AdminOrdersPage />} />
-            <Route path="compras" element={<AdminProcurementPage />} />
-            <Route path="catalog-jobs" element={<AdminCatalogJobsPage />} />
+        <>
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route element={<AdminGuard />}>
+            <Route path="/admin" element={<AdminShell />}>
+              <Route index element={<AdminDashboardPage />} />
+              <Route path="productos" element={<AdminProductsPage />} />
+              <Route path="categorias" element={<AdminCategoriesPage />} />
+              <Route path="pedidos" element={<AdminOrdersPage />} />
+              <Route path="compras" element={<AdminProcurementPage />} />
+              <Route path="catalog-jobs" element={<AdminCatalogJobsPage />} />
+            </Route>
           </Route>
-        </Route>
+        </>
       ) : (
         <Route path="/admin" element={<Navigate to="/" replace />} />
       )}

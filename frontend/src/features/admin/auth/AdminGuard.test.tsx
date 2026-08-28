@@ -33,7 +33,7 @@ describe('AdminGuard', () => {
           <Route element={<AdminGuard />}>
             <Route path="/admin" element={<h1>Panel admin</h1>} />
           </Route>
-          <Route path="/" element={<h1>Storefront</h1>} />
+          <Route path="/admin/login" element={<h1>Admin login</h1>} />
         </Routes>
       </MemoryRouter>,
     )
@@ -51,12 +51,12 @@ describe('AdminGuard', () => {
           <Route element={<AdminGuard />}>
             <Route path="/admin" element={<h1>Panel admin</h1>} />
           </Route>
-          <Route path="/" element={<h1>Storefront</h1>} />
+          <Route path="/admin/login" element={<h1>Admin login</h1>} />
         </Routes>
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: 'Storefront' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Admin login' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Panel admin' })).not.toBeInTheDocument()
   })
 
@@ -78,6 +78,38 @@ describe('AdminGuard', () => {
     expect(screen.queryByRole('heading', { name: 'Panel admin' })).not.toBeInTheDocument()
   })
 
+  it('keeps CSRF failures distinct from an expired session', async () => {
+    vi.spyOn(adminAccess, 'bootstrapAdminSession').mockResolvedValue('csrf-failure')
+
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <Routes>
+          <Route element={<AdminGuard />}>
+            <Route path="/admin" element={<h1>Panel admin</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Sesión no validada' })).toBeInTheDocument()
+  })
+
+  it('renders backend unavailability without redirecting to login', async () => {
+    vi.spyOn(adminAccess, 'bootstrapAdminSession').mockRejectedValue(new TypeError('Failed to fetch'))
+
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <Routes>
+          <Route element={<AdminGuard />}>
+            <Route path="/admin" element={<h1>Panel admin</h1>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: 'Panel admin temporalmente no disponible' })).toBeInTheDocument()
+  })
+
   it('preserves origin pathname when redirecting unauthenticated users', async () => {
     vi.spyOn(adminAccess, 'bootstrapAdminSession').mockResolvedValue('unauthenticated')
 
@@ -87,7 +119,7 @@ describe('AdminGuard', () => {
           <Route element={<AdminGuard />}>
             <Route path="/admin/catalogo" element={<h1>Panel admin</h1>} />
           </Route>
-          <Route path="/" element={<StorefrontLanding />} />
+          <Route path="/admin/login" element={<StorefrontLanding />} />
         </Routes>
       </MemoryRouter>,
     )

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { clearAdminSessionMarker } from '../auth/adminAccess'
+import { logoutAdmin } from '../auth/adminAuthApi'
 
 type AdminTheme = 'dark' | 'light'
 
@@ -39,6 +39,8 @@ function writeStoredAdminTheme(theme: AdminTheme) {
 export function AdminShell() {
   const navigate = useNavigate()
   const [adminTheme, setAdminTheme] = useState<AdminTheme>(() => readStoredAdminTheme())
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutFailed, setLogoutFailed] = useState(false)
 
   useEffect(() => {
     document.body.dataset.adminTheme = adminTheme
@@ -48,9 +50,17 @@ export function AdminShell() {
     }
   }, [adminTheme])
 
-  function handleLogout() {
-    clearAdminSessionMarker()
-    navigate('/', { replace: true })
+  async function handleLogout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setLogoutFailed(false)
+    try {
+      await logoutAdmin()
+      navigate('/admin/login', { replace: true })
+    } catch {
+      setLoggingOut(false)
+      setLogoutFailed(true)
+    }
   }
 
   function handleThemeToggle() {
@@ -86,8 +96,13 @@ export function AdminShell() {
         <button className="admin-theme-toggle" type="button" onClick={handleThemeToggle}>
           {adminTheme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
         </button>
-        <button className="admin-logout" type="button" onClick={handleLogout}>
-          Cerrar sesión
+        {logoutFailed ? (
+          <p className="admin-feedback admin-feedback-error" role="alert">
+            No pudimos cerrar la sesión. Intenta nuevamente.
+          </p>
+        ) : null}
+        <button className="admin-logout" type="button" onClick={handleLogout} disabled={loggingOut}>
+          {loggingOut ? 'Cerrando sesión…' : logoutFailed ? 'Reintentar cierre de sesión' : 'Cerrar sesión'}
         </button>
       </aside>
       <section className="admin-content" aria-label="Admin content">

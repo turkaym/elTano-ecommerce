@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpServletResponse;
 public class AdminAuditInterceptor implements HandlerInterceptor {
 
     private static final String ADMIN_PREFIX = "/api/admin/";
+    private static final String ADMIN_AUTH_PREFIX = "/api/admin/auth/";
     private static final Set<String> MUTATING_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
 
     private final AdminAuditService adminAuditService;
@@ -55,7 +56,7 @@ public class AdminAuditInterceptor implements HandlerInterceptor {
 
     private boolean shouldAudit(HttpServletRequest request) {
         String path = request.getRequestURI();
-        if (path == null || !path.startsWith(ADMIN_PREFIX)) {
+        if (path == null || !path.startsWith(ADMIN_PREFIX) || path.startsWith(ADMIN_AUTH_PREFIX)) {
             return false;
         }
         return MUTATING_METHODS.contains(request.getMethod());

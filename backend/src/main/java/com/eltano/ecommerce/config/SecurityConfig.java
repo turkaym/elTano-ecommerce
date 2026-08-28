@@ -15,13 +15,18 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.InvalidCsrfTokenException;
+import org.springframework.security.web.csrf.MissingCsrfTokenException;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableWebSecurity
@@ -40,23 +45,64 @@ public class SecurityConfig {
     private String storefrontAllowedOrigins;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
-        csrfRequestHandler.setCsrfRequestAttributeName(null);
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            ObjectMapper objectMapper,
+            @Value("${app.security.admin-basic-enabled:true}") boolean adminBasicEnabled,
+            @Value("${app.security.secure-cookies:false}") boolean secureCookies) throws Exception {
+        CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfTokenRepository.setCookiePath("/");
+        csrfTokenRepository.setCookieCustomizer(cookie -> cookie.sameSite("Lax").secure(secureCookies));
 
         http
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                        .csrfTokenRequestHandler(csrfRequestHandler)
+                        .csrfTokenRepository(csrfTokenRepository)
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
                         .requireCsrfProtectionMatcher(adminWriteRequestMatcher()))
                 .cors(Customizer.withDefaults())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .sessionFixation(fixation -> fixation.changeSessionId()))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) ->
+                                writeSecurityError(objectMapper, response, 401, "UNAUTHORIZED", "Authentication required"))
+                        .accessDeniedHandler((request, response, exception) -> {
+                            boolean csrfFailure = exception instanceof MissingCsrfTokenException
+                                    || exception instanceof InvalidCsrfTokenException;
+                            writeSecurityError(
+                                    objectMapper,
+                                    response,
+                                    403,
+                                    csrfFailure ? "CSRF_FORBIDDEN" : "FORBIDDEN",
+                                    csrfFailure ? "CSRF token is missing or invalid" : "Access denied");
+                        }))
+                .formLogin(form -> form
+                        .loginProcessingUrl("/api/admin/auth/login")
+                        .successHandler((request, response, authentication) -> {
+                            response.setHeader("Cache-Control", "no-store");
+                            response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                        })
+                        .failureHandler((request, response, exception) ->
+                                writeSecurityError(objectMapper, response, 401, "UNAUTHORIZED", "Invalid username or password"))
+                        .permitAll())
+                .logout(logout -> logout
+                        .logoutUrl("/api/admin/auth/logout")
+                        .deleteCookies("JSESSIONID", "XSRF-TOKEN")
+                        .logoutSuccessHandler((request, response, authentication) -> {
+                            response.setHeader("Cache-Control", "no-store");
+                            response.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                        })
+                        .permitAll())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**")
                         .permitAll()
                         .requestMatchers("/error")
                         .permitAll()
                         .requestMatchers("/api/health", "/api/catalog/**")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/admin/auth/csrf")
+                        .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/admin/auth/login", "/api/admin/auth/logout")
                         .permitAll()
                         .requestMatchers(normalizedProductImagesPublicMatcher())
                         .permitAll()
@@ -74,10 +120,28 @@ public class SecurityConfig {
                                     authentication.get().getAuthorities().stream()
                                             .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority())));
                         })
-                        .anyRequest().authenticated())
-                .httpBasic(Customizer.withDefaults());
+                        .anyRequest().authenticated());
+
+        if (adminBasicEnabled) {
+            http.httpBasic(Customizer.withDefaults());
+        }
 
         return http.build();
+    }
+
+    private static void writeSecurityError(
+            ObjectMapper objectMapper,
+            HttpServletResponse response,
+            int status,
+            String code,
+            String message) throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.setHeader("Cache-Control", "no-store");
+        objectMapper.writeValue(response.getOutputStream(), new SecurityError(code, message, List.of()));
+    }
+
+    private record SecurityError(String code, String message, List<Object> fieldErrors) {
     }
 
     @Bean

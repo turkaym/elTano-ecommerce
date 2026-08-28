@@ -9,8 +9,6 @@ vi.mock('../../shared/config/flags', () => ({
 
 describe('AppRoutes admin flag', () => {
   it('redirects /admin to storefront when admin flag is disabled', () => {
-    window.sessionStorage.setItem('admin-session-role', 'admin')
-
     render(
       <MemoryRouter initialEntries={['/admin']}>
         <Routes>

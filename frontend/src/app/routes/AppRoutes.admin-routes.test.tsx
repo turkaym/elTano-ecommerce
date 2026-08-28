@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as adminAccess from '../../features/admin/auth/adminAccess'
+import * as adminAuthApi from '../../features/admin/auth/adminAuthApi'
 import * as adminOperationsService from '../../features/admin/services/adminOperationsService'
 import * as procurementService from '../../features/admin/services/procurementService'
 import { AppRoutes } from './AppRoutes'
@@ -149,17 +150,37 @@ describe('AppRoutes admin nested routes', () => {
     expect(within(sidebar).getByRole('link', { name: activeLabel })).toHaveAttribute('aria-current', 'page')
   })
 
-  it('keeps admin logout accessible from the sidebar and returns to storefront', async () => {
+  it('keeps admin logout accessible and returns to login after backend logout', async () => {
     const user = userEvent.setup()
     mockAuthenticatedAdminServices()
-    const clearSessionSpy = vi.spyOn(adminAccess, 'clearAdminSessionMarker').mockImplementation(() => undefined)
+    const logoutSpy = vi.spyOn(adminAuthApi, 'logoutAdmin').mockResolvedValue(undefined)
     renderRoutes('/admin')
 
     expect(await screen.findByRole('heading', { name: 'Dashboard admin' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
 
-    expect(clearSessionSpy).toHaveBeenCalledTimes(1)
-    expect(await screen.findByRole('heading', { name: 'Storefront' })).toBeInTheDocument()
+    expect(logoutSpy).toHaveBeenCalledTimes(1)
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
+  })
+
+  it('keeps the admin shell available when logout fails and allows a successful retry', async () => {
+    const user = userEvent.setup()
+    mockAuthenticatedAdminServices()
+    const logoutSpy = vi.spyOn(adminAuthApi, 'logoutAdmin')
+      .mockRejectedValueOnce(new Error('Network failure'))
+      .mockResolvedValueOnce(undefined)
+    renderRoutes('/admin')
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard admin' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no pudimos cerrar la sesión/i)
+    expect(screen.getByRole('heading', { name: 'Dashboard admin' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Iniciar sesión' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reintentar cierre de sesión' }))
+
+    expect(logoutSpy).toHaveBeenCalledTimes(2)
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
   })
 
   it('defaults the admin shell to dark mode and lets admins switch to light mode', async () => {

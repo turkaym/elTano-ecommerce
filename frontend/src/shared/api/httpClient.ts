@@ -1,6 +1,4 @@
 const API_URL = import.meta.env.VITE_API_URL?.trim() ?? ''
-const ADMIN_BASIC_USER = import.meta.env.VITE_ADMIN_BASIC_USER?.trim() ?? ''
-const ADMIN_BASIC_PASS = import.meta.env.VITE_ADMIN_BASIC_PASS?.trim() ?? ''
 
 interface ApiErrorPayload {
   code?: string
@@ -36,7 +34,7 @@ export class ApiClientError extends Error {
 }
 
 export function isUnauthorizedStatus(status: number): boolean {
-  return status === 401 || status === 403
+  return status === 401
 }
 
 export function isUnauthorizedError(error: unknown): boolean {
@@ -51,20 +49,6 @@ function joinUrl(base: string, path: string): string {
   const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${normalizedBase}${normalizedPath}`
-}
-
-function buildAuthHeader(path: string): Record<string, string> {
-  if (!path.startsWith('/api/admin/')) {
-    return {}
-  }
-
-  if (!ADMIN_BASIC_USER || !ADMIN_BASIC_PASS) {
-    return {}
-  }
-
-  return {
-    Authorization: `Basic ${btoa(`${ADMIN_BASIC_USER}:${ADMIN_BASIC_PASS}`)}`,
-  }
 }
 
 function buildCredentials(path: string): RequestCredentials {
@@ -110,7 +94,6 @@ export async function getJson<T>(path: string): Promise<T> {
     credentials: buildCredentials(path),
     headers: {
       Accept: 'application/json',
-      ...buildAuthHeader(path),
     },
   })
 
@@ -128,7 +111,6 @@ export async function postJson<TRequest, TResponse>(path: string, payload: TRequ
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      ...buildAuthHeader(path),
       ...buildCsrfHeader(path, 'POST'),
     },
     body: JSON.stringify(payload),
@@ -147,7 +129,6 @@ export async function deleteRequest(path: string): Promise<void> {
     credentials: buildCredentials(path),
     headers: {
       Accept: 'application/json',
-      ...buildAuthHeader(path),
       ...buildCsrfHeader(path, 'DELETE'),
     },
   })
@@ -160,7 +141,6 @@ export async function deleteRequest(path: string): Promise<void> {
 export function buildAdminWriteHeaders(path: string, method: string, headers: Record<string, string>): Record<string, string> {
   return {
     ...headers,
-    ...buildAuthHeader(path),
     ...buildCsrfHeader(path, method),
   }
 }

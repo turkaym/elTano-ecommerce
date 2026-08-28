@@ -21,6 +21,14 @@ spring:
 
 server:
   port: 8080
+  servlet:
+    session:
+      timeout: ${ADMIN_SESSION_TIMEOUT:30m}
+      cookie:
+        http-only: true
+        secure: ${ADMIN_SECURE_COOKIES:false}
+        same-site: lax
+        path: /
 
 app:
   admin:
@@ -29,6 +37,8 @@ app:
     admin-allowed-origins: ${CORS_ADMIN_ALLOWED_ORIGINS:http://localhost:5173}
     storefront-allowed-origins: ${CORS_STOREFRONT_ALLOWED_ORIGINS:http://localhost:5173}
   security:
+    admin-basic-enabled: ${ADMIN_BASIC_ENABLED:true}
+    secure-cookies: ${ADMIN_SECURE_COOKIES:false}
     jwt-secret: ${JWT_SECRET:change-me-in-env}
     admin-user: ${ADMIN_BASIC_USER:}
     admin-password: ${ADMIN_BASIC_PASS:}

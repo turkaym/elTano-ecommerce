@@ -1,41 +1,27 @@
 import { ApiClientError, isUnauthorizedError } from '../../../shared/api/httpClient'
-import { listAdminOrders } from '../services/adminOperationsService'
+import { getAdminSession } from './adminAuthApi'
 
-export const adminSessionRoleStorageKey = 'admin-session-role'
-
-export type AdminAccessState = 'loading' | 'authenticated' | 'unauthenticated' | 'forbidden' | 'service-unavailable'
+export type AdminAccessState = 'loading' | 'authenticated' | 'unauthenticated' | 'forbidden' | 'csrf-failure' | 'service-unavailable'
 
 export const adminGuardMessages = {
   unauthenticated: 'Inicia sesión para entrar al panel admin.',
   forbidden: 'Tu usuario no tiene permisos de administrador.',
+  csrfFailure: 'No pudimos validar la protección de la sesión. Recarga la página e intenta nuevamente.',
   serviceUnavailable: 'No pudimos verificar el acceso admin por un error del servidor. Intentá nuevamente en unos minutos.',
   cancelUnsupported: 'Cancelación no disponible: contrato backend no soportado (501).',
 } as const
 
-export function hasAdminSession(): boolean {
-  return window.sessionStorage.getItem(adminSessionRoleStorageKey) === 'admin'
-}
-
 export async function bootstrapAdminSession(): Promise<AdminAccessState> {
   try {
-    await listAdminOrders({ page: 0, size: 1 })
-    window.sessionStorage.setItem(adminSessionRoleStorageKey, 'admin')
+    await getAdminSession()
     return 'authenticated'
   } catch (error) {
-    if (error instanceof ApiClientError && error.status === 401) {
-      clearAdminSessionMarker()
-      return 'unauthenticated'
-    }
+    if (error instanceof ApiClientError && error.status === 401) return 'unauthenticated'
     if (error instanceof ApiClientError && error.status === 403) {
-      clearAdminSessionMarker()
-      return 'forbidden'
+      return error.code === 'CSRF_FORBIDDEN' ? 'csrf-failure' : 'forbidden'
     }
     throw error
   }
-}
-
-export function clearAdminSessionMarker() {
-  window.sessionStorage.removeItem(adminSessionRoleStorageKey)
 }
 
 export function isAdminUnauthorized(error: unknown): boolean {

@@ -8,8 +8,6 @@ import {
 } from '../../../shared/api/httpClient'
 
 const API_URL = import.meta.env.VITE_API_URL?.trim() ?? ''
-const ADMIN_BASIC_USER = import.meta.env.VITE_ADMIN_BASIC_USER?.trim() ?? ''
-const ADMIN_BASIC_PASS = import.meta.env.VITE_ADMIN_BASIC_PASS?.trim() ?? ''
 
 function joinUrl(base: string, path: string): string {
   if (!base) {
@@ -19,16 +17,6 @@ function joinUrl(base: string, path: string): string {
   const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${normalizedBase}${normalizedPath}`
-}
-
-function adminAuthHeader(): Record<string, string> {
-  if (!ADMIN_BASIC_USER || !ADMIN_BASIC_PASS) {
-    return {}
-  }
-
-  return {
-    Authorization: `Basic ${btoa(`${ADMIN_BASIC_USER}:${ADMIN_BASIC_PASS}`)}`,
-  }
 }
 
 export interface AdminOrderSummary {
@@ -228,7 +216,7 @@ export async function uploadAdminProductImage(file: File): Promise<AdminProductI
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...buildAdminWriteHeaders(path, 'POST', adminAuthHeader()),
+      ...buildAdminWriteHeaders(path, 'POST', {}),
     },
     body: formData,
   })
@@ -250,7 +238,7 @@ export async function uploadAlegraCatalogImport(file: File): Promise<AdminImport
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...buildAdminWriteHeaders(path, 'POST', adminAuthHeader()),
+      ...buildAdminWriteHeaders(path, 'POST', {}),
     },
     body: formData,
   })
@@ -322,7 +310,7 @@ export async function createAdminImportJob(csvPayload: string) {
     headers: {
       Accept: 'application/json',
       'Content-Type': 'text/plain',
-      ...buildAdminWriteHeaders('/api/admin/catalog/jobs/import', 'POST', adminAuthHeader()),
+      ...buildAdminWriteHeaders('/api/admin/catalog/jobs/import', 'POST', {}),
     },
     body: csvPayload,
   })
@@ -397,7 +385,7 @@ async function putJson<TRequest, TResponse>(path: string, payload: TRequest): Pr
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      ...buildAdminWriteHeaders(path, 'PUT', adminAuthHeader()),
+      ...buildAdminWriteHeaders(path, 'PUT', {}),
     },
     body: JSON.stringify(payload),
   })
@@ -416,7 +404,7 @@ async function patchJson<TRequest, TResponse>(path: string, payload: TRequest): 
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      ...buildAdminWriteHeaders(path, 'PATCH', adminAuthHeader()),
+      ...buildAdminWriteHeaders(path, 'PATCH', {}),
     },
     body: JSON.stringify(payload),
   })
@@ -434,7 +422,7 @@ async function postWithoutJson(path: string): Promise<void> {
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...buildAdminWriteHeaders(path, 'POST', adminAuthHeader()),
+      ...buildAdminWriteHeaders(path, 'POST', {}),
     },
     body: JSON.stringify({}),
   })

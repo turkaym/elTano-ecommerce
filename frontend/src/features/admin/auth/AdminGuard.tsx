@@ -63,5 +63,16 @@ export function AdminGuard() {
     )
   }
 
-  return <Navigate to="/" replace state={{ from: location.pathname, reason: 'login-required' }} />
+  if (state === 'csrf-failure') {
+    return (
+      <main className="main-content">
+        <section className="section" role="alert">
+          <h1>Sesión no validada</h1>
+          <p>{adminGuardMessages.csrfFailure}</p>
+        </section>
+      </main>
+    )
+  }
+
+  return <Navigate to="/admin/login" replace state={{ from: location.pathname, reason: 'login-required' }} />
 }

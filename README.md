@@ -125,7 +125,10 @@ Use the example files as the source of truth for local and production configurat
 | `DB_PASSWORD` | PostgreSQL password. |
 | `JWT_SECRET` | Secret used for JWT signing/validation. |
 | `ADMIN_ENABLED` | Enables or disables admin endpoints. |
-| `ADMIN_BASIC_USER` / `ADMIN_BASIC_PASS` | Basic Auth credentials for admin endpoints. |
+| `ADMIN_BASIC_USER` / `ADMIN_BASIC_PASS` | Server-side admin credentials used by session login and transitional Basic authentication. |
+| `ADMIN_BASIC_ENABLED` | Keeps transitional HTTP Basic compatibility enabled. Defaults to `true`; disable after validating the session rollout. |
+| `ADMIN_SESSION_TIMEOUT` | Admin inactivity timeout. Defaults to `30m`. |
+| `ADMIN_SECURE_COOKIES` | Marks session and CSRF cookies Secure. Use `true` in HTTPS production and `false` for local HTTP development/tests. |
 | `STOREFRONT_BASIC_USER` / `STOREFRONT_BASIC_PASS` | Basic Auth credentials for protected storefront use cases. |
 | `EXPIRED_ADMIN_BASIC_USER` / `EXPIRED_ADMIN_BASIC_PASS` | Expired admin credentials used to validate security behavior. |
 | `CORS_ADMIN_ALLOWED_ORIGINS` | Comma-separated allowed origins for admin requests. |
@@ -144,7 +147,6 @@ Use the example files as the source of truth for local and production configurat
 | `VITE_STOREFRONT_VARIANT_FLOW_ENABLED` | Enables the current storefront variant flow. |
 | `VITE_ADMIN_ENABLED` | Enables admin UI routes/features. |
 | `VITE_DELIVERY_SURCHARGE_FROM_AMOUNT` | Displays the operational delivery surcharge warning amount; it is not added to checkout totals. |
-| `VITE_ADMIN_BASIC_USER` / `VITE_ADMIN_BASIC_PASS` | Existing admin UI Basic Auth build-time credentials. Avoid setting these in production unless explicitly accepted as a temporary risk. |
 
 ## Verification
 
@@ -254,6 +256,7 @@ sudo systemctl reload nginx
 
 - Never commit real `.env` files, database passwords, API tokens, Mercado Pago secrets, or production Basic Auth credentials.
 - `VITE_*` variables are bundled into browser assets. Do not put private production secrets in frontend build variables.
-- `VITE_ADMIN_BASIC_USER` and `VITE_ADMIN_BASIC_PASS` are a known temporary risk if used in production because they become visible client-side.
+- Admin browser authentication uses a server-side Spring Security session. The frontend never receives or bundles server-configured credentials and never sends an `Authorization` header.
+- Deploy the backend first and validate `/api/admin/auth/csrf`, login, session, CSRF-protected writes, and logout before deploying the frontend. Keep `ADMIN_BASIC_ENABLED=true` for rollback during this validation window, then set it to `false` after compatibility clients are retired.
 - Replace `MP_WEBHOOK_SECRET` with a strong random value before enabling Mercado Pago webhooks.
 - Internal planning folders such as `sdd/` and `.atl/` are not required for runtime or deployment. They are usually better kept out of a public production repository unless the team intentionally wants to publish planning history.

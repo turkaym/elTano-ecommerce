@@ -37,7 +37,7 @@ describe('httpClient unauthorized normalization', () => {
     await expect(result).rejects.toSatisfy((error) => isUnauthorizedError(error))
   })
 
-  it('treats 403 responses as unauthorized for guard handling', async () => {
+  it('does not treat authorization denials as an expired session', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify({ message: 'Sin permisos' }), {
         status: 403,
@@ -47,7 +47,7 @@ describe('httpClient unauthorized normalization', () => {
 
     const result = postJson('/api/admin/products', { name: 'Nuez' })
 
-    await expect(result).rejects.toSatisfy((error) => isUnauthorizedError(error))
+    await expect(result).rejects.toSatisfy((error) => !isUnauthorizedError(error))
   })
 
   it('normalizes correlationId-aware delete errors for admin operations', async () => {
@@ -143,6 +143,6 @@ describe('httpClient unauthorized normalization', () => {
       message: 'Missing CSRF token',
       correlationId: 'corr-csrf-403',
     })
-    await expect(result).rejects.toSatisfy((error) => isUnauthorizedError(error))
+    await expect(result).rejects.toSatisfy((error) => !isUnauthorizedError(error))
   })
 })
