@@ -21,13 +21,16 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "supplier_item_mappings", uniqueConstraints = @UniqueConstraint(
-        name = "uk_supplier_item_mapping_code", columnNames = {"supplier_id", "normalized_code"}))
+@Table(name = "supplier_item_mappings", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_supplier_item_mapping_code", columnNames = {"supplier_id", "normalized_code"}),
+        @UniqueConstraint(name = "uk_supplier_item_mapping_name", columnNames = {"supplier_id", "normalized_name"})})
 public class SupplierItemMapping {
     @Id @GeneratedValue(strategy = GenerationType.UUID) private UUID id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "supplier_id") private Supplier supplier;
-    @Column(nullable = false, length = 180) private String supplierItemCode;
-    @Column(nullable = false, length = 180) private String normalizedCode;
+    @Column(length = 180) private String supplierItemCode;
+    @Column(length = 180) private String normalizedCode;
+    @Column(length = 500) private String supplierItemName;
+    @Column(length = 500) private String normalizedName;
     @Column(nullable = false, length = 500) private String description;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private InventoryTargetType targetType;
     private UUID productId;
@@ -43,6 +46,10 @@ public class SupplierItemMapping {
     public void setSupplierItemCode(String value) { supplierItemCode = value; }
     public String getNormalizedCode() { return normalizedCode; }
     public void setNormalizedCode(String value) { normalizedCode = value; }
+    public String getSupplierItemName() { return supplierItemName; }
+    public void setSupplierItemName(String value) { supplierItemName = value; }
+    public String getNormalizedName() { return normalizedName; }
+    public void setNormalizedName(String value) { normalizedName = value; }
     public String getDescription() { return description; }
     public void setDescription(String value) { description = value; }
     public InventoryTargetType getTargetType() { return targetType; }

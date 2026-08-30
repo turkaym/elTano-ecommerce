@@ -20,7 +20,7 @@ import jakarta.persistence.Table;
 public class PurchaseLine {
     @Id @GeneratedValue(strategy = GenerationType.UUID) private UUID id;
     @ManyToOne(fetch = FetchType.LAZY, optional = false) @JoinColumn(name = "purchase_id") private Purchase purchase;
-    @Column(nullable = false) private UUID mappingId;
+    private UUID mappingId;
     @Column(nullable = false, length = 180) private String supplierItemCode;
     @Column(nullable = false, length = 500) private String supplierDescription;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private InventoryTargetType targetType;

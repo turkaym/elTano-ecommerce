@@ -1,16 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiClientError } from '../../../shared/api/httpClient'
 import {
+  addPurchaseDraftLine,
   cancelPurchase,
+  confirmPurchaseDraft,
   confirmReceipt,
   correctPurchase,
+  createManualPurchaseDraft,
   createMapping,
   createPurchase,
   createSupplier,
+  deletePurchaseDraftLine,
+  downloadPurchaseDraftSource,
+  downloadPurchaseDraftTemplate,
   getPurchase,
+  getPurchaseDraft,
+  importPurchaseWorkbook,
+  listCatalogCandidates,
   listMappings,
+  listPurchaseDrafts,
   listPurchases,
+  matchPurchaseDraftLine,
+  previewPurchaseDraft,
   previewReceipt,
+  updatePurchaseDraftLine,
   updateMapping,
   updatePurchase,
   updateSupplier,
@@ -104,8 +117,63 @@ describe('procurementService', () => {
 
     await expect(listPurchases()).rejects.toMatchObject({ status: 503, message: 'Request failed with status 503' })
   })
+
+  it('uploads XLSX as FormData without setting Content-Type and preserves the idempotency key', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({ id: 'd1', version: 0, lines: [] }, 201))
+    const file = new File(['xlsx'], 'compra.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+
+    await importPurchaseWorkbook('s1', file, 'upload-key')
+
+    const options = fetchSpy.mock.calls[0][1] as RequestInit
+    expect(options.body).toBeInstanceOf(FormData)
+    expect(options.headers).toEqual(expect.objectContaining({ 'Idempotency-Key': 'upload-key' }))
+    expect(options.headers).not.toHaveProperty('Content-Type')
+  })
+
+  it('implements draft CRUD, matching, preview and confirmation contracts', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({ id: 'd1', version: 0, lines: [] }, 201))
+      .mockResolvedValueOnce(jsonResponse({ id: 'd1', version: 1, lines: [] }))
+      .mockResolvedValueOnce(jsonResponse({ id: 'd1', version: 2, lines: [] }))
+      .mockResolvedValueOnce(jsonResponse({ id: 'd1', version: 3, lines: [] }))
+      .mockResolvedValueOnce(jsonResponse({ id: 'd1', version: 4, lines: [] }))
+      .mockResolvedValueOnce(jsonResponse([{ value: 'v1', label: 'Almendras - ALM-1', targetType: 'VARIANT_UNIT' }]))
+      .mockResolvedValueOnce(jsonResponse({ id: 'd1', version: 5, lines: [] }))
+      .mockResolvedValueOnce(jsonResponse({ version: 6, ready: true, previewHash: 'hash', canonicalDeltas: [], errors: [] }))
+      .mockResolvedValueOnce(jsonResponse({ draftId: 'd1', purchaseId: 'p1', receiptId: 'r1', replayed: false, canonicalDeltas: [] }))
+
+    await listPurchaseDrafts()
+    await createManualPurchaseDraft({ supplierId: 's1', purchaseDate: '2026-08-29', lines: [] })
+    await addPurchaseDraftLine('d1', { version: 0, productName: 'Almendras', quantity: '2', unit: 'UNIDAD' })
+    await updatePurchaseDraftLine('d1', 'l1', { version: 1, productName: 'Almendras', quantity: '3', unit: 'UNIDAD' })
+    await deletePurchaseDraftLine('d1', 'l1', 2)
+    await getPurchaseDraft('d1')
+    await listCatalogCandidates('alm', 'UNIDAD', 10)
+    await matchPurchaseDraftLine('d1', 'l1', { version: 4, targetId: 'v1', remember: true })
+    await previewPurchaseDraft('d1', 5)
+    await confirmPurchaseDraft('d1', { version: 6, previewHash: 'hash' }, 'confirm-key')
+
+    expect(String(fetchSpy.mock.calls[6][0])).toContain('catalog-candidates?q=alm&unit=UNIDAD&limit=10')
+    expect(fetchSpy.mock.calls[7][1]).toMatchObject({ method: 'PUT', body: JSON.stringify({ version: 4, targetId: 'v1', remember: true }) })
+    expect(fetchSpy.mock.calls[9][1]).toMatchObject({ headers: expect.objectContaining({ 'Idempotency-Key': 'confirm-key' }) })
+  })
+
+  it('downloads template and original source while preserving the server filename', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('template', { status: 200 }))
+      .mockResolvedValueOnce(new Response('source', { status: 200, headers: { 'Content-Disposition': "attachment; filename*=UTF-8''compra%20agosto.xlsx" } }))
+
+    const template = await downloadPurchaseDraftTemplate()
+    const source = await downloadPurchaseDraftSource('d1')
+
+    expect(template).toBeInstanceOf(Blob)
+    expect(template.size).toBeGreaterThan(0)
+    expect(source.filename).toBe('compra agosto.xlsx')
+    expect(String(fetchSpy.mock.calls[1][0])).toMatch(/purchase-drafts\/d1\/source-file$/)
+  })
 })
 
-function jsonResponse(payload: unknown) {
-  return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } })
+function jsonResponse(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } })
 }

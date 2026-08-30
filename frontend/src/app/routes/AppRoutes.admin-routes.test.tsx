@@ -37,6 +37,7 @@ describe('AppRoutes admin nested routes', () => {
     vi.spyOn(adminOperationsService, 'listAdminCatalogJobs').mockResolvedValue([])
     vi.spyOn(procurementService, 'listPurchases').mockResolvedValue([])
     vi.spyOn(procurementService, 'listSuppliers').mockResolvedValue([])
+    vi.spyOn(procurementService, 'listPurchaseDrafts').mockResolvedValue([])
     vi.spyOn(procurementService, 'listMappings').mockResolvedValue([])
   }
 
@@ -116,7 +117,7 @@ describe('AppRoutes admin nested routes', () => {
     ['/admin/categorias', 'Categorías'],
     ['/admin/pedidos', 'Pedidos'],
     ['/admin/catalog-jobs', 'Sin jobs todavía'],
-    ['/admin/compras', 'No purchases'],
+    ['/admin/compras', 'Registrar compra'],
   ])('shows the persistent sidebar links on %s', async (initialEntry, readyText) => {
     await renderReadyAdminRoute(initialEntry, readyText)
 

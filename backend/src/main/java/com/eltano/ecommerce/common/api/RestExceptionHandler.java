@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.eltano.ecommerce.orders.service.payment.MercadoPagoWebhookService.InvalidWebhookSignatureException;
 import com.eltano.ecommerce.procurement.service.ProcurementConflictException;
+import com.eltano.ecommerce.procurement.draft.service.PurchaseDraftException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -87,7 +88,7 @@ public class RestExceptionHandler {
         if (isAdminRequest(request)) {
             return ResponseEntity.badRequest().body(new AdminApiError(
                     "VALIDATION_ERROR",
-                    "Malformed request body",
+                    isPurchaseDraftRequest(request) ? "El cuerpo de la solicitud no es valido" : "Malformed request body",
                     correlationId(request),
                     List.of()));
         }
@@ -193,6 +194,12 @@ public class RestExceptionHandler {
     @ExceptionHandler(ProcurementConflictException.class)
     public ResponseEntity<?> handleProcurementConflict(ProcurementConflictException ex, HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new AdminApiError(
+                ex.getCode(), ex.getMessage(), correlationId(request), List.of()));
+    }
+
+    @ExceptionHandler(PurchaseDraftException.class)
+    public ResponseEntity<?> handlePurchaseDraft(PurchaseDraftException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.getStatus()).body(new AdminApiError(
                 ex.getCode(), ex.getMessage(), correlationId(request), List.of()));
     }
 
@@ -391,6 +398,11 @@ public class RestExceptionHandler {
     private boolean isProcurementRequest(HttpServletRequest request) {
         String path = request.getRequestURI();
         return path != null && path.startsWith("/api/admin/procurement/");
+    }
+
+    private boolean isPurchaseDraftRequest(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        return path != null && path.startsWith("/api/admin/procurement/purchase-drafts");
     }
 
     private String correlationId(HttpServletRequest request) {

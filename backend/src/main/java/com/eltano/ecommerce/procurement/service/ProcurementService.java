@@ -153,6 +153,33 @@ public class ProcurementService {
     }
 
     @Transactional
+    public ImportedPurchaseResult confirmImportedPurchase(UUID supplierId, LocalDate purchasedAt, String documentNumber,
+            List<ImportedPurchaseLine> importedLines, String key, String actor, String correlationId) {
+        Supplier supplier = supplier(supplierId);
+        if (!supplier.isActive()) conflict("INVALID_STATE", "El proveedor esta inactivo.");
+        if (purchasedAt == null || importedLines == null || importedLines.isEmpty()) {
+            throw new IllegalArgumentException("La compra importada requiere fecha y lineas.");
+        }
+        String documentType = "IMPORTACION_XLSX";
+        Purchase purchase = new Purchase();
+        purchase.setSupplier(supplier);
+        purchase.setDocumentType(documentType);
+        purchase.setDocumentNumber(documentNumber);
+        purchase.setNormalizedDocumentType(normalize(documentType));
+        purchase.setNormalizedDocumentNumber(normalize(documentNumber));
+        purchase.setPurchasedAt(purchasedAt);
+        purchase.setCreatedBy(actor);
+        purchase.replaceLines(importedLines.stream().map(this::snapshotImportedLine).toList());
+        try { purchases.saveAndFlush(purchase); }
+        catch (DataIntegrityViolationException exception) { conflict("DUPLICATE_FILE", "Este archivo ya fue confirmado para el proveedor."); }
+
+        ReceiptCommand receipt = new ReceiptCommand(purchase.getLines().stream().map(line -> new ReceiptLineCommand(
+                line.getId(), List.of(new DispositionCommand(DispositionType.ACCEPTED_ORDERED, line.getOrderedQuantity(), null)))).toList());
+        ReceiptResponse confirmed = confirm(purchase.getId(), receipt, key, actor, correlationId);
+        return new ImportedPurchaseResult(purchase.getId(), confirmed.receiptId(), confirmed.replayed());
+    }
+
+    @Transactional
     public PurchaseResponse updatePurchase(UUID id, PurchaseCommand command) {
         Purchase purchase = lockedPurchase(id);
         if (purchase.getStatus() != PurchaseStatus.PENDING || !receipts.findAllByPurchaseIdOrderByConfirmedAt(id).isEmpty()) {
@@ -394,6 +421,25 @@ public class ProcurementService {
         line.setSupplierDescription(mapping.getDescription()); line.setTargetType(mapping.getTargetType()); line.setProductId(mapping.getProductId());
         line.setVariantId(mapping.getVariantId()); line.setOrderedQuantity(command.orderedQuantity()); line.setConversion(conversion); return line;
     }
+    private PurchaseLine snapshotImportedLine(ImportedPurchaseLine command) {
+        requireText(command.sourceProductName(), "El nombre de producto es obligatorio.");
+        requirePositive(command.quantity(), "La cantidad debe ser positiva.");
+        requirePositive(command.conversion(), "La conversion debe ser positiva.");
+        ProcurementRules.toCanonical(command.quantity(), command.conversion());
+        boolean valid = command.targetType() == InventoryTargetType.VARIANT_UNIT && command.variantId() != null && command.productId() == null
+                || command.targetType() == InventoryTargetType.BULK_GRAM && command.productId() != null && command.variantId() == null;
+        if (!valid) throw new IllegalArgumentException("El destino de inventario importado es invalido.");
+        PurchaseLine line = new PurchaseLine();
+        line.setMappingId(command.mappingId());
+        line.setSupplierItemCode(command.sourceProductName());
+        line.setSupplierDescription(command.sourceProductName());
+        line.setTargetType(command.targetType());
+        line.setProductId(command.productId());
+        line.setVariantId(command.variantId());
+        line.setOrderedQuantity(command.quantity());
+        line.setConversion(command.conversion());
+        return line;
+    }
     private void validateMapping(MappingCommand command) {
         requireText(command.supplierItemCode(), "Supplier item code is required"); requireText(command.description(), "Description is required");
         requirePositive(command.defaultConversion(), "Conversion must be positive");
@@ -462,4 +508,7 @@ public class ProcurementService {
     public record ReasonCommand(String reason) { }
     public record CorrectionDelta(InventoryTargetType targetType, UUID targetId, int delta) { }
     public record CorrectionCommand(String reason, List<CorrectionDelta> deltas) { }
+    public record ImportedPurchaseLine(String sourceProductName, UUID mappingId, InventoryTargetType targetType,
+            UUID productId, UUID variantId, BigDecimal quantity, BigDecimal conversion) { }
+    public record ImportedPurchaseResult(UUID purchaseId, UUID receiptId, boolean replayed) { }
 }

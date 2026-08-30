@@ -34,7 +34,7 @@ class ProcurementMigrationPostgreSqlIntegrationTest {
                 .locations("classpath:db/migration")
                 .load()
                 .migrate();
-        assertEquals(14, result.migrationsExecuted);
+        assertEquals(15, result.migrationsExecuted);
     }
 
     @Test
@@ -105,6 +105,34 @@ class ProcurementMigrationPostgreSqlIntegrationTest {
                     .formatted(UUID.randomUUID(), receiptLineId));
             execute(connection, "update purchases set status='RECEIVED' where id='%s'".formatted(fixture.purchaseId()));
             assertInvariant(connection, "update purchases set status='CANCELLED' where id='%s'".formatted(fixture.purchaseId()));
+        }
+    }
+
+    @Test
+    void enforcesNameMappingScopeDraftHashUniquenessAndConfirmedDraftImmutability() throws Exception {
+        try (Connection connection = POSTGRES.createConnection("")) {
+            Fixture fixture = fixture(connection);
+            UUID mappingId = UUID.randomUUID();
+            execute(connection, "insert into supplier_item_mappings(id,supplier_id,supplier_item_name,normalized_name,description,target_type,variant_id,default_conversion) values ('%s','%s','Cafe Premium','cafe premium','Cafe','VARIANT_UNIT','%s',1)"
+                    .formatted(mappingId, fixture.supplierId(), fixture.variantId()));
+            assertConstraint(connection, "insert into supplier_item_mappings(id,supplier_id,supplier_item_name,normalized_name,description,target_type,variant_id,default_conversion) values ('%s','%s','CAFE','cafe premium','Cafe','VARIANT_UNIT','%s',1)"
+                    .formatted(UUID.randomUUID(), fixture.supplierId(), fixture.variantId()));
+
+            UUID draftId = UUID.randomUUID();
+            UUID lineId = UUID.randomUUID();
+            execute(connection, "insert into purchase_drafts(id,supplier_id,status,source_type,source_sha256,created_by) values ('%s','%s','DRAFT','MANUAL','%s','admin')"
+                    .formatted(draftId, fixture.supplierId(), "d".repeat(64)));
+            assertConstraint(connection, "insert into purchase_drafts(id,supplier_id,status,source_type,source_sha256,created_by) values ('%s','%s','DRAFT','MANUAL','%s','admin')"
+                    .formatted(UUID.randomUUID(), fixture.supplierId(), "d".repeat(64)));
+            execute(connection, "insert into purchase_draft_lines(id,draft_id,source_row_number,source_product_name,normalized_product_name,source_quantity_value,quantity,unit,match_status,mapping_id,target_type,variant_id,conversion) values ('%s','%s',2,'Cafe','cafe','1',1,'UNIDAD','MATCHED','%s','VARIANT_UNIT','%s',1)"
+                    .formatted(lineId, draftId, mappingId, fixture.variantId()));
+            UUID receiptId = UUID.randomUUID();
+            execute(connection, "insert into purchase_receipts(id,purchase_id,kind,idempotency_key,request_hash,actor,correlation_id) values ('%s','%s','RECEIPT','draft-fixture','%s','admin','corr-draft')"
+                    .formatted(receiptId, fixture.purchaseId(), "f".repeat(64)));
+            execute(connection, "update purchase_drafts set status='CONFIRMED',confirmed_purchase_id='%s',confirmed_receipt_id='%s',confirm_idempotency_key='key',confirm_request_hash='%s' where id='%s'"
+                    .formatted(fixture.purchaseId(), receiptId, "e".repeat(64), draftId));
+            assertImmutable(connection, "update purchase_drafts set purchase_date=current_date where id='%s'".formatted(draftId));
+            assertImmutable(connection, "update purchase_draft_lines set quantity=2 where id='%s'".formatted(lineId));
         }
     }
 

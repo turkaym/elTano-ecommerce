@@ -65,7 +65,7 @@ public class SecurityConfig {
                         .sessionFixation(fixation -> fixation.changeSessionId()))
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, exception) ->
-                                writeSecurityError(objectMapper, response, 401, "UNAUTHORIZED", "Authentication required"))
+                                writeSecurityError(objectMapper, response, 401, "UNAUTHORIZED", "Se requiere autenticacion"))
                         .accessDeniedHandler((request, response, exception) -> {
                             boolean csrfFailure = exception instanceof MissingCsrfTokenException
                                     || exception instanceof InvalidCsrfTokenException;
@@ -74,7 +74,7 @@ public class SecurityConfig {
                                     response,
                                     403,
                                     csrfFailure ? "CSRF_FORBIDDEN" : "FORBIDDEN",
-                                    csrfFailure ? "CSRF token is missing or invalid" : "Access denied");
+                                    csrfFailure ? "El token CSRF falta o es invalido" : "Acceso denegado");
                         }))
                 .formLogin(form -> form
                         .loginProcessingUrl("/api/admin/auth/login")
@@ -83,7 +83,7 @@ public class SecurityConfig {
                             response.setStatus(HttpServletResponse.SC_NO_CONTENT);
                         })
                         .failureHandler((request, response, exception) ->
-                                writeSecurityError(objectMapper, response, 401, "UNAUTHORIZED", "Invalid username or password"))
+                                writeSecurityError(objectMapper, response, 401, "UNAUTHORIZED", "Usuario o contrasena invalidos"))
                         .permitAll())
                 .logout(logout -> logout
                         .logoutUrl("/api/admin/auth/logout")

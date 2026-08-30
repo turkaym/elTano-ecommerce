@@ -18,6 +18,10 @@ spring:
       hibernate:
         format_sql: true
     open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 server:
   port: 8080
@@ -62,6 +66,9 @@ app:
       directory: ${PRODUCT_IMAGE_UPLOAD_DIR:uploads/product-images}
       public-path: ${PRODUCT_IMAGE_PUBLIC_PATH:/uploads/product-images}
       max-size-bytes: ${PRODUCT_IMAGE_MAX_SIZE_BYTES:5242880}
+  procurement:
+    purchase-files:
+      directory: ${PURCHASE_FILE_STORAGE_DIR:uploads/private/purchases}
   mercadopago:
     enabled: ${MP_ENABLED:false}
     api-base-url: ${MP_API_BASE_URL:https://api.mercadopago.com}

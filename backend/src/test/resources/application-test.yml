@@ -16,6 +16,9 @@ logging:
     org.hibernate.engine.jdbc.spi.SqlExceptionHelper: ERROR
 
 app:
+  procurement:
+    purchase-files:
+      directory: ${java.io.tmpdir}/eltano-purchase-drafts-test
   security:
     admin-user: admin-user
     admin-password: admin-pass

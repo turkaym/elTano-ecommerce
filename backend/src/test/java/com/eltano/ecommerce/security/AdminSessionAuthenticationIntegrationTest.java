@@ -69,7 +69,7 @@ class AdminSessionAuthenticationIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
-                .andExpect(jsonPath("$.message").value("Invalid username or password"));
+                .andExpect(jsonPath("$.message").value("Usuario o contrasena invalidos"));
 
         org.junit.jupiter.api.Assertions.assertEquals(auditCount, auditEventRepository.count());
     }

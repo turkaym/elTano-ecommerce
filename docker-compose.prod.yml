@@ -30,6 +30,7 @@ services:
       DB_USER: ${DB_USER:?DB_USER is required}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       PRODUCT_IMAGE_UPLOAD_DIR: ${PRODUCT_IMAGE_UPLOAD_DIR:-/app/uploads/product-images}
+      PURCHASE_FILE_STORAGE_DIR: /app/uploads/private/purchases
       CATALOG_JOBS_WORKER_ENABLED: ${CATALOG_JOBS_WORKER_ENABLED:-true}
       ADMIN_SESSION_TIMEOUT: ${ADMIN_SESSION_TIMEOUT:-30m}
       ADMIN_SECURE_COOKIES: ${ADMIN_SECURE_COOKIES:-true}
@@ -38,6 +39,7 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - product-images:${PRODUCT_IMAGE_UPLOAD_DIR:-/app/uploads/product-images}
+      - purchase-files:/app/uploads/private/purchases
     networks:
       - eltano
 
@@ -77,3 +79,4 @@ networks:
 volumes:
   postgres-data:
   product-images:
+  purchase-files:
