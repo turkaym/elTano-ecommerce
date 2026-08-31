@@ -19,6 +19,8 @@ interface Props {
 const statusLabels = { MATCHED: 'Vinculado', UNRESOLVED: 'Sin resolver', INVALID: 'Inválido', DUPLICATE: 'Duplicado' } as const
 
 export function PurchaseDraftReview(props: Props) {
+  if (props.draft.status === 'CONFIRMED') return <ConfirmedDraftEvidence draft={props.draft} confirmation={props.confirmation} onDownloadSource={props.onDownloadSource} />
+
   const counts = props.draft.lines.reduce((result, line) => {
     const status = displayStatus(line)
     result[status] += 1
@@ -93,7 +95,7 @@ function DraftLineRow({ line, pending, onUpdate, onDelete, onMatch }: { line: Pu
       <td data-label="Producto"><strong>{line.productName}</strong>{line.errors.length ? <small>{line.errors.join(' ')}</small> : null}</td>
       <td data-label="Cantidad">{line.quantity} {humanUnit(line.unit ?? '')}</td>
       <td data-label="Estado"><span className={`procurement-line-status ${displayStatus(line).toLowerCase()}`}>{statusLabels[displayStatus(line)]}</span></td>
-      <td data-label="Catálogo">{line.matchStatus === 'MATCHED' ? 'Producto vinculado' : line.matchStatus === 'UNRESOLVED' ? <MatchEditor line={line} pending={pending} onMatch={onMatch} /> : 'Corregí la fila para vincularla'}</td>
+      <td data-label="Catálogo">{line.matchStatus === 'MATCHED' ? <TargetLink line={line} /> : line.matchStatus === 'UNRESOLVED' ? <MatchEditor line={line} pending={pending} onMatch={onMatch} /> : 'Corregí la fila para vincularla'}</td>
       <td data-label="Acciones"><div className="procurement-row-actions"><button className="btn btn-secondary" type="button" onClick={() => setEditing(true)}>Editar</button><button className="btn btn-secondary" type="button" disabled={pending} onClick={() => onDelete(line.id)}>Eliminar</button></div></td>
     </tr>
   )
@@ -104,7 +106,7 @@ function MatchEditor({ line, pending, onMatch }: { line: PurchaseDraftLine; pend
   const deferredQuery = useDeferredValue(query)
   const [candidates, setCandidates] = useState<CatalogCandidate[]>([])
   const [selected, setSelected] = useState('')
-  const [remember, setRemember] = useState(true)
+  const [remember, setRemember] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -120,7 +122,7 @@ function MatchEditor({ line, pending, onMatch }: { line: PurchaseDraftLine; pend
   return <div className="procurement-match-editor">
     <label><span className="sr-only">Buscar producto para {line.productName}</span><input aria-label={`Buscar producto para ${line.productName}`} placeholder="Buscar en catálogo" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
     <label><span className="sr-only">Resultado para {line.productName}</span><select aria-label={`Resultado para ${line.productName}`} value={selected} onChange={(event) => setSelected(event.target.value)}><option value="">Seleccionar coincidencia</option>{visibleCandidates.map((candidate) => <option key={candidate.value} value={candidate.value}>{candidate.label}</option>)}</select></label>
-    <label className="procurement-remember"><input aria-label={`Recordar equivalencia para ${line.productName}`} type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Recordar para próximas compras</label>
+    <label className="procurement-remember"><input aria-label={`Recordar equivalencia para ${line.productName}`} type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /> Recordar solo para futuras importaciones</label>
     <button type="button" className="btn btn-secondary" aria-label={`Vincular ${line.productName}`} disabled={!selected || pending} onClick={() => onMatch(line.id, selected, remember)}>Vincular</button>
   </div>
 }
@@ -136,11 +138,28 @@ function AddLineForm({ onAdd, disabled }: { onAdd: Props['onAddLine']; disabled:
 }
 
 function PreviewPanel({ draft, preview, pending, retry, onConfirm }: { draft: PurchaseDraft; preview: PurchaseDraftPreview; pending: boolean; retry: boolean; onConfirm: () => void }) {
-  return <section className="procurement-preview" aria-labelledby="preview-title"><header><p className="admin-eyebrow">Impacto en inventario</p><h3 id="preview-title">Vista previa canónica</h3></header>{preview.errors.length ? <ul className="admin-feedback admin-feedback-error" role="alert">{preview.errors.map((error) => <li key={`${error.rowNumber}-${error.code}-${error.message}`}>{error.rowNumber ? `Fila ${error.rowNumber}: ` : ''}{error.message}</li>)}</ul> : null}<ul className="procurement-delta-list">{preview.canonicalDeltas.map((delta) => <li key={delta.lineId}><span>{lineName(draft, delta.lineId)}</span><strong>+{delta.delta}</strong></li>)}</ul><button type="button" className="btn btn-primary" disabled={!preview.ready || pending} onClick={onConfirm}>{pending ? 'Confirmando…' : retry ? 'Reintentar confirmación' : 'Confirmar compra'}</button></section>
+  return <section className="procurement-preview" aria-labelledby="preview-title"><header><p className="admin-eyebrow">Impacto en inventario</p><h3 id="preview-title">Vista previa canónica</h3></header>{preview.errors.length ? <ul className="admin-feedback admin-feedback-error" role="alert">{preview.errors.map((error) => <li key={`${error.rowNumber}-${error.code}-${error.message}`}>{error.rowNumber ? `Fila ${error.rowNumber}: ` : ''}{error.message}</li>)}</ul> : null}<ul className="procurement-delta-list">{preview.canonicalDeltas.map((delta) => { const line = draft.lines.find((item) => item.id === delta.lineId); return <li key={delta.lineId}><span><strong>{line?.productName}</strong> · {line?.quantity} {humanUnit(line?.unit ?? '')} → {line?.targetLabel} <small>{targetIdentity(line)}</small></span><strong>+{delta.delta}</strong></li> })}</ul><button type="button" className="btn btn-primary" disabled={!preview.ready || pending} onClick={onConfirm}>{pending ? 'Confirmando…' : retry ? 'Reintentar confirmación' : 'Confirmar compra'}</button></section>
 }
 
 function ConfirmationPanel({ draft, confirmation }: { draft: PurchaseDraft; confirmation: PurchaseDraftConfirmation }) {
   return <section className="procurement-success" role="status"><p className="admin-eyebrow">Inventario actualizado</p><h3>Compra confirmada</h3><p>Comprobante de recepción registrado</p><ul>{confirmation.canonicalDeltas.map((delta) => <li key={delta.lineId}>{lineName(draft, delta.lineId)}: +{delta.delta}</li>)}</ul>{confirmation.replayed ? <small>La confirmación ya había sido procesada; no se duplicó el stock.</small> : null}</section>
+}
+
+function ConfirmedDraftEvidence({ draft, confirmation, onDownloadSource }: { draft: PurchaseDraft; confirmation: PurchaseDraftConfirmation | null; onDownloadSource: () => void }) {
+  return <section className="admin-card procurement-review" aria-labelledby="draft-review-title">
+    <header className="admin-card-header procurement-review-header"><div><p className="admin-eyebrow">Evidencia confirmada</p><h2 id="draft-review-title">{draft.supplierName}</h2><p>{draft.originalFilename ?? 'Carga manual'} · {draft.purchaseDate}</p></div>{draft.sourceType === 'XLSX' ? <button type="button" className="btn btn-secondary" onClick={onDownloadSource}>Descargar archivo original</button> : null}</header>
+    <div className="procurement-success" role="status"><h3>Compra confirmada</h3><p>Comprobante de recepción registrado</p><p>Compra: <code>{draft.confirmedPurchaseId}</code></p><p>Recepción: <code>{draft.confirmedReceiptId}</code></p>{confirmation?.replayed ? <small>La confirmación ya había sido procesada; no se duplicó el stock.</small> : null}</div>
+    <div className="procurement-table-wrap"><table className="procurement-table"><caption>Detalle inmutable de la importación</caption><thead><tr><th>Fila</th><th>Origen</th><th>Cantidad original</th><th>Destino y referencia</th><th>Conversión</th><th>Variación canónica</th></tr></thead><tbody>{draft.lines.map((line) => <tr key={line.id}><td>{line.rowNumber}</td><td><strong>{line.productName}</strong></td><td>{line.sourceQuantity} {humanUnit(line.unit ?? '')}</td><td><TargetLink line={line} /></td><td>× {line.conversion}</td><td><strong>+{line.canonicalDelta}</strong></td></tr>)}</tbody></table></div>
+  </section>
+}
+
+function TargetLink({ line }: { line: PurchaseDraftLine }) {
+  return <span>{line.productName} → <strong>{line.targetLabel ?? 'Destino no disponible'}</strong> <small>{targetIdentity(line)}</small>{!line.targetLabelPersisted ? <small> Etiqueta reconstruida del catálogo actual; no es un nombre histórico exacto.</small> : null}</span>
+}
+
+function targetIdentity(line?: PurchaseDraftLine) {
+  if (!line?.targetType) return ''
+  return `(${line.targetType === 'BULK_GRAM' ? 'producto a granel' : 'variante'}: ${line.productId ?? line.variantId})`
 }
 
 function humanUnit(unit: string) {

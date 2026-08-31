@@ -180,7 +180,36 @@ class PurchaseDraftConfirmationPostgreSqlIntegrationTest extends PostgreSqlInteg
         mapping.setActive(false); mappings.saveAndFlush(mapping);
         var inactive = importWorkbook(fixture.supplierId(), "Cafe Premium", "3", "unidad", "inactive");
         assertEquals("UNRESOLVED", inactive.lines().getFirst().matchStatus().name());
+        var repaired = service.match(inactive.id(), inactive.lines().getFirst().id(),
+                new PurchaseDraftService.MatchCommand(inactive.version(), fixture.otherVariantId(), true));
+        assertEquals(fixture.otherVariantId(), repaired.lines().getFirst().variantId());
+        assertTrue(mappings.findBySupplierIdAndNormalizedName(fixture.supplierId(), "cafe premium").orElseThrow().isActive());
+        var activeConflict = service.create(new PurchaseDraftService.ManualDraftCommand(fixture.supplierId(), LocalDate.now(), List.of(
+                new PurchaseDraftService.LineCommand(0, "Cafe Premium", BigDecimal.ONE, PurchaseDraftUnit.UNIDAD))), "admin");
+        PurchaseDraftException conflict = assertThrows(PurchaseDraftException.class, () -> service.match(activeConflict.id(), activeConflict.lines().getFirst().id(),
+                new PurchaseDraftService.MatchCommand(activeConflict.version(), fixture.variantId(), true)));
+        assertEquals("MAPPING_CONFLICT", conflict.getCode());
+        assertEquals(fixture.otherVariantId(), mappings.findBySupplierIdAndNormalizedName(fixture.supplierId(), "cafe premium").orElseThrow().getVariantId());
         assertTrue(ready.hash() != null);
+    }
+
+    @Test
+    void explicitMappingRepairLeavesConfirmedDraftPurchaseReceiptAndMovementHistoryUntouched() {
+        Fixture fixture = fixture(0);
+        ReadyDraft ready = readyDraft(fixture, "Historia inmutable");
+        var confirmed = service.confirm(ready.id(), new PurchaseDraftService.ConfirmCommand(ready.version(), ready.hash()),
+                "history-confirm", "admin", "history-correlation");
+        var mapping = mappings.findBySupplierIdAndNormalizedName(fixture.supplierId(), "historia inmutable").orElseThrow();
+        long receiptCount = receipts.count(); long movementCount = movements.count();
+
+        procurement.repairMapping(mapping.getId(), new ProcurementService.MappingRepairCommand(
+                com.eltano.ecommerce.procurement.domain.InventoryTargetType.VARIANT_UNIT, null, fixture.otherVariantId(), BigDecimal.ONE, true));
+
+        assertEquals(fixture.variantId(), service.get(ready.id()).lines().getFirst().variantId());
+        assertEquals(fixture.variantId(), procurement.getPurchase(confirmed.purchaseId()).lines().getFirst().variantId());
+        assertEquals(fixture.variantId(), movements.findAllByPurchaseIdOrderByCreatedAt(confirmed.purchaseId()).getFirst().getTargetId());
+        assertEquals(receiptCount, receipts.count()); assertEquals(movementCount, movements.count());
+        assertEquals(confirmed.receiptId(), service.get(ready.id()).confirmedReceiptId());
     }
 
     private PurchaseDraftService.DraftResponse importWorkbook(UUID supplierId, String name, String quantity, String unit, String key) {
@@ -230,12 +259,14 @@ class PurchaseDraftConfirmationPostgreSqlIntegrationTest extends PostgreSqlInteg
             Product product = new Product(); product.setName("Target"); product.setSlug("target-" + UUID.randomUUID()); product.setDescription("Target");
             product.setActive(true); product.setCategory(category); product.setProductType(ProductType.ENVASADO); product.setInventoryPolicy(InventoryPolicy.PER_VARIANT);
             ProductVariant variant = new ProductVariant(); variant.setSku("DRAFT-" + UUID.randomUUID()); variant.setUnitType(UnitType.UNIT); variant.setUnitLabel("unidad");
-            variant.setPrice(BigDecimal.ONE); variant.setStockAvailable(stock); variant.setStockReserved(0); variant.setActive(true); product.addVariant(variant); products.saveAndFlush(product);
+            variant.setPrice(BigDecimal.ONE); variant.setStockAvailable(stock); variant.setStockReserved(0); variant.setActive(true); product.addVariant(variant);
+            ProductVariant other = new ProductVariant(); other.setSku("DRAFT-OTHER-" + UUID.randomUUID()); other.setUnitType(UnitType.UNIT); other.setUnitLabel("unidad");
+            other.setPrice(BigDecimal.ONE); other.setStockAvailable(0); other.setStockReserved(0); other.setActive(true); product.addVariant(other); products.saveAndFlush(product);
             var supplier = procurement.createSupplier(new ProcurementService.SupplierCommand("Proveedor " + UUID.randomUUID(), null, true));
-            return new Fixture(supplier.id(), variant.getId());
+            return new Fixture(supplier.id(), variant.getId(), other.getId());
         });
     }
 
-    private record Fixture(UUID supplierId, UUID variantId) { }
+    private record Fixture(UUID supplierId, UUID variantId, UUID otherVariantId) { }
     private record ReadyDraft(UUID id, long version, String hash) { }
 }

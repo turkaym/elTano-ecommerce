@@ -23,6 +23,7 @@ import {
   matchPurchaseDraftLine,
   previewPurchaseDraft,
   previewReceipt,
+  repairMapping,
   updatePurchaseDraftLine,
   updateMapping,
   updatePurchase,
@@ -60,19 +61,22 @@ describe('procurementService', () => {
     expect(fetchSpy.mock.calls[1]).toEqual(expect.arrayContaining([expect.stringMatching(/\/suppliers\/s1$/), expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ active: false }) })]))
   })
 
-  it('lists, creates, and updates supplier mappings', async () => {
+  it('lists, creates, updates, and explicitly repairs supplier mappings', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(jsonResponse([]))
       .mockResolvedValueOnce(jsonResponse({ id: 'm1' }))
       .mockResolvedValueOnce(jsonResponse({ id: 'm1', active: false }))
+      .mockResolvedValueOnce(jsonResponse({ id: 'm1', active: true }))
 
     await listMappings('supplier/one')
     await createMapping({ supplierId: 's1', supplierItemCode: 'Q-1' })
     await updateMapping('m1', { active: false })
+    await repairMapping('m1', { targetType: 'BULK_GRAM', productId: 'p1', variantId: null, defaultConversion: '1000', active: true })
 
     expect(String(fetchSpy.mock.calls[0][0])).toMatch(/\/mappings\?supplierId=supplier%2Fone$/)
     expect(fetchSpy.mock.calls[1][1]).toMatchObject({ method: 'POST', body: JSON.stringify({ supplierId: 's1', supplierItemCode: 'Q-1' }) })
     expect(fetchSpy.mock.calls[2][1]).toMatchObject({ method: 'PATCH', body: JSON.stringify({ active: false }) })
+    expect(fetchSpy.mock.calls[3]).toEqual(expect.arrayContaining([expect.stringMatching(/\/mappings\/m1\/repair$/), expect.objectContaining({ method: 'PUT' })]))
   })
 
   it('gets, creates, and updates purchase evidence', async () => {

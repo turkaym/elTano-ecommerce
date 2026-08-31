@@ -8,12 +8,15 @@ import {
   downloadPurchaseDraftSource,
   downloadPurchaseDraftTemplate,
   importPurchaseWorkbook,
+  getPurchaseDraft,
   listCatalogCandidates,
+  listMappings,
   listPurchaseDrafts,
   listPurchases,
   listSuppliers,
   matchPurchaseDraftLine,
   previewPurchaseDraft,
+  repairMapping,
 } from '../services/procurementService'
 import { AdminProcurementPage } from './AdminProcurementPage'
 
@@ -28,11 +31,13 @@ vi.mock('../services/procurementService', () => ({
   getPurchaseDraft: vi.fn(),
   importPurchaseWorkbook: vi.fn(),
   listCatalogCandidates: vi.fn(),
+  listMappings: vi.fn(),
   listPurchaseDrafts: vi.fn(),
   listPurchases: vi.fn(),
   listSuppliers: vi.fn(),
   matchPurchaseDraftLine: vi.fn(),
   previewPurchaseDraft: vi.fn(),
+  repairMapping: vi.fn(),
   updatePurchaseDraftLine: vi.fn(),
 }))
 
@@ -40,12 +45,12 @@ const supplier = { id: 's1', name: 'Proveedor Norte', active: true }
 const unresolvedDraft = {
   id: 'd1', version: 2, status: 'DRAFT' as const, supplierId: 's1', supplierName: supplier.name,
   purchaseDate: '2026-08-29', sourceType: 'XLSX' as const, originalFilename: 'compra.xlsx', sourceSha256: 'hash',
-  previewHash: null, confirmedPurchaseId: null, reused: false,
-  lines: [{ id: 'l1', rowNumber: 2, sourceDate: '2026-08-29', productName: 'Almendra', sourceQuantity: '2', quantity: '2', unit: 'UNIDAD' as const, errors: [], matchStatus: 'UNRESOLVED' as const, targetType: null, productId: null, variantId: null, conversion: null }],
+  previewHash: null, confirmedPurchaseId: null, confirmedReceiptId: null, reused: false,
+  lines: [{ id: 'l1', rowNumber: 2, sourceDate: '2026-08-29', productName: 'Almendra', sourceQuantity: '2', quantity: '2', unit: 'UNIDAD' as const, errors: [], matchStatus: 'UNRESOLVED' as const, targetType: null, productId: null, variantId: null, targetLabel: null, targetLabelPersisted: false, conversion: null, canonicalDelta: null }],
 }
 const readyDraft = {
   ...unresolvedDraft, version: 3,
-  lines: [{ ...unresolvedDraft.lines[0], matchStatus: 'MATCHED' as const, targetType: 'VARIANT_UNIT' as const, variantId: 'v1', conversion: '1' }],
+  lines: [{ ...unresolvedDraft.lines[0], matchStatus: 'MATCHED' as const, targetType: 'VARIANT_UNIT' as const, variantId: 'v1', targetLabel: 'Almendras - ALM-1', targetLabelPersisted: true, conversion: '1', canonicalDelta: 2 }],
 }
 
 describe('AdminProcurementPage', () => {
@@ -55,6 +60,7 @@ describe('AdminProcurementPage', () => {
     vi.mocked(listSuppliers).mockResolvedValue([supplier])
     vi.mocked(listPurchases).mockResolvedValue([])
     vi.mocked(listPurchaseDrafts).mockResolvedValue([])
+    vi.mocked(listMappings).mockResolvedValue([])
     vi.mocked(downloadPurchaseDraftTemplate).mockResolvedValue(new Blob(['template']))
     vi.mocked(downloadPurchaseDraftSource).mockResolvedValue({ blob: new Blob(['source']), filename: 'compra.xlsx' })
     vi.mocked(listCatalogCandidates).mockResolvedValue([{ value: 'v1', label: 'Almendras - unidad', targetType: 'VARIANT_UNIT' }])
@@ -71,7 +77,7 @@ describe('AdminProcurementPage', () => {
     expect(downloadPurchaseDraftTemplate).toHaveBeenCalledOnce()
   })
 
-  it('uploads XLSX and supports searchable matching with remembered mappings enabled', async () => {
+  it('shows exact source to target and keeps remembered mappings opt-in', async () => {
     const user = userEvent.setup()
     vi.mocked(importPurchaseWorkbook).mockResolvedValue(unresolvedDraft)
     vi.mocked(matchPurchaseDraftLine).mockResolvedValue(readyDraft)
@@ -85,10 +91,11 @@ describe('AdminProcurementPage', () => {
 
     await user.type(screen.getByLabelText('Buscar producto para Almendra'), 'alm')
     expect(await screen.findByRole('option', { name: 'Almendras - unidad' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Recordar equivalencia para Almendra')).toBeChecked()
+    expect(screen.getByLabelText('Recordar equivalencia para Almendra')).not.toBeChecked()
     await user.selectOptions(screen.getByLabelText('Resultado para Almendra'), 'v1')
     await user.click(screen.getByRole('button', { name: 'Vincular Almendra' }))
-    expect(matchPurchaseDraftLine).toHaveBeenCalledWith('d1', 'l1', { version: 2, targetId: 'v1', remember: true })
+    expect(matchPurchaseDraftLine).toHaveBeenCalledWith('d1', 'l1', { version: 2, targetId: 'v1', remember: false })
+    expect(await screen.findByText(/Almendra →/)).toHaveTextContent('Almendras - ALM-1')
   })
 
   it('creates a manual draft without exposing UUID inputs', async () => {
@@ -149,6 +156,46 @@ describe('AdminProcurementPage', () => {
     expect(screen.getByText('Comprobante de recepción registrado')).toBeInTheDocument()
     expect(screen.getByText(/no se duplicó el stock/i)).toBeInTheDocument()
     expect(listPurchases).toHaveBeenCalledTimes(2)
+  })
+
+  it('opens confirmed drafts as read-only evidence with purchase and receipt IDs', async () => {
+    const user = userEvent.setup()
+    const confirmed = { ...readyDraft, status: 'CONFIRMED' as const, confirmedPurchaseId: 'p1', confirmedReceiptId: 'r1', lines: [{ ...readyDraft.lines[0], targetLabelPersisted: false }] }
+    vi.mocked(listPurchaseDrafts).mockResolvedValue([confirmed])
+    vi.mocked(getPurchaseDraft).mockResolvedValue(confirmed)
+    render(<AdminProcurementPage />)
+
+    await user.click(await screen.findByRole('button', { name: 'Abrir revisión' }))
+
+    expect(await screen.findByText('Compra confirmada')).toBeInTheDocument()
+    expect(screen.getByText('p1')).toBeInTheDocument()
+    expect(screen.getByText('r1')).toBeInTheDocument()
+    expect(screen.getByText(/Almendra →/)).toHaveTextContent('Almendras - ALM-1')
+    expect(screen.getByText(/reconstruida del catálogo actual/i)).toBeInTheDocument()
+    expect(screen.getByText('+2')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Generar vista previa' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Eliminar' })).not.toBeInTheDocument()
+  })
+
+  it('repairs and reactivates an inactive mapping for future imports', async () => {
+    const user = userEvent.setup()
+    const mapping = { id: 'm1', supplierId: 's1', supplierItemCode: 'Mariposa 20kg', supplierItemName: 'Mariposa 20kg', description: 'Mariposa 20kg', targetType: 'BULK_GRAM' as const, productId: 'old', variantId: null, targetLabel: 'NUEZ PARTIDA', defaultConversion: '1000', active: false }
+    vi.mocked(listMappings).mockResolvedValueOnce([mapping]).mockResolvedValueOnce([{ ...mapping, productId: 'new', targetLabel: 'NUEZ MARIPOSA', active: true }])
+    vi.mocked(listCatalogCandidates).mockResolvedValue([{ value: 'new', label: 'NUEZ MARIPOSA (a granel)', targetType: 'BULK_GRAM' }])
+    vi.mocked(repairMapping).mockResolvedValue({ ...mapping, productId: 'new', targetLabel: 'NUEZ MARIPOSA', active: true })
+    render(<AdminProcurementPage />)
+
+    await user.click(await screen.findByText('Equivalencias de proveedor'))
+    expect(screen.getByText(/Mariposa 20kg → NUEZ PARTIDA/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Corregir equivalencia' }))
+    await user.type(screen.getByLabelText('Buscar nuevo destino para Mariposa 20kg'), 'mari')
+    await user.selectOptions(await screen.findByLabelText('Destino para Mariposa 20kg'), 'new')
+    await user.click(screen.getByLabelText('Equivalencia activa para Mariposa 20kg'))
+    await user.click(screen.getByRole('button', { name: 'Guardar corrección' }))
+
+    expect(repairMapping).toHaveBeenCalledWith('m1', { targetType: 'BULK_GRAM', productId: 'new', variantId: null, defaultConversion: '1000', active: true })
+    expect(await screen.findByText(/Mariposa 20kg → NUEZ MARIPOSA/)).toBeInTheDocument()
   })
 
   it('distinguishes an expired session from ordinary loading errors', async () => {

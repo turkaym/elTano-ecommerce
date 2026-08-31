@@ -209,6 +209,7 @@ public class PurchaseDraftService {
             throw conflict("PREVIEW_STALE", "El borrador cambio desde la vista previa.");
         }
         matcher.revalidateTargets(draft);
+        drafts.flush();
         List<ImportedPurchaseLine> lines = draft.getLines().stream().map(line -> new ImportedPurchaseLine(
                 line.getSourceProductName(), line.getMappingId(), line.getTargetType(), line.getProductId(), line.getVariantId(),
                 line.getQuantity(), line.getConversion())).toList();
@@ -259,7 +260,7 @@ public class PurchaseDraftService {
         } catch (ArithmeticException exception) { errors.add("La cantidad no es valida para la unidad seleccionada."); }
     }
 
-    private void clearTarget(PurchaseDraftLine line) { line.setMappingId(null); line.setTargetType(null); line.setProductId(null); line.setVariantId(null); line.setConversion(null); }
+    private void clearTarget(PurchaseDraftLine line) { line.setMappingId(null); line.setTargetType(null); line.setProductId(null); line.setVariantId(null); line.setTargetLabel(null); line.setConversion(null); }
 
     private void refreshDuplicateErrors(PurchaseDraft draft) {
         draft.getLines().forEach(line -> {
@@ -318,9 +319,13 @@ public class PurchaseDraftService {
     private DraftResponse response(PurchaseDraft draft, boolean reused) {
         return new DraftResponse(draft.getId(), draft.getVersion(), draft.getStatus(), draft.getSupplier().getId(), draft.getSupplier().getName(),
                 draft.getPurchaseDate(), draft.getSourceType(), draft.getOriginalFilename(), draft.getSourceSha256(), draft.getPreviewHash(),
-                draft.getConfirmedPurchaseId(), reused, draft.getLines().stream().sorted(Comparator.comparing(line -> line.getSourceRowNumber() == null ? Integer.MAX_VALUE : line.getSourceRowNumber())).map(this::lineResponse).toList());
+                draft.getConfirmedPurchaseId(), draft.getConfirmedReceiptId(), reused, draft.getLines().stream().sorted(Comparator.comparing(line -> line.getSourceRowNumber() == null ? Integer.MAX_VALUE : line.getSourceRowNumber())).map(this::lineResponse).toList());
     }
-    private LineResponse lineResponse(PurchaseDraftLine line) { return new LineResponse(line.getId(), line.getSourceRowNumber(), line.getSourceDateValue(), line.getSourceProductName(), line.getSourceQuantityValue(), line.getQuantity(), line.getUnit(), splitErrors(line.getValidationErrors()), line.getMatchStatus(), line.getTargetType(), line.getProductId(), line.getVariantId(), line.getConversion()); }
+    private LineResponse lineResponse(PurchaseDraftLine line) {
+        Integer canonicalDelta = line.getMatchStatus() == PurchaseDraftMatchStatus.MATCHED && line.getQuantity() != null
+                ? line.getQuantity().multiply(line.getConversion()).intValueExact() : null;
+        return new LineResponse(line.getId(), line.getSourceRowNumber(), line.getSourceDateValue(), line.getSourceProductName(), line.getSourceQuantityValue(), line.getQuantity(), line.getUnit(), splitErrors(line.getValidationErrors()), line.getMatchStatus(), line.getTargetType(), line.getProductId(), line.getVariantId(), matcher.targetLabel(line), line.getTargetLabel() != null, line.getConversion(), canonicalDelta);
+    }
     private String safeFilename(String value) { if (value == null || value.isBlank()) return "compra.xlsx"; String safe = value.replace('\\', '/'); safe = safe.substring(safe.lastIndexOf('/') + 1).replaceAll("[\\r\\n\\\"]", "_"); return safe.isBlank() ? "compra.xlsx" : safe; }
     private static String joinErrors(List<String> errors) { return errors == null || errors.isEmpty() ? null : String.join("\n", errors); }
     private static List<String> splitErrors(String errors) { return errors == null || errors.isBlank() ? List.of() : List.of(errors.split("\\n")); }
@@ -343,9 +348,9 @@ public class PurchaseDraftService {
             List<CanonicalDelta> canonicalDeltas) { }
     public record LineResponse(UUID id, Integer rowNumber, String sourceDate, String productName, String sourceQuantity,
             BigDecimal quantity, PurchaseDraftUnit unit, List<String> errors, PurchaseDraftMatchStatus matchStatus,
-            InventoryTargetType targetType, UUID productId, UUID variantId, BigDecimal conversion) { }
+            InventoryTargetType targetType, UUID productId, UUID variantId, String targetLabel, boolean targetLabelPersisted, BigDecimal conversion, Integer canonicalDelta) { }
     public record DraftResponse(UUID id, long version, PurchaseDraftStatus status, UUID supplierId, String supplierName,
             LocalDate purchaseDate, PurchaseDraftSourceType sourceType, String originalFilename, String sourceSha256,
-            String previewHash, UUID confirmedPurchaseId, boolean reused, List<LineResponse> lines) { }
+            String previewHash, UUID confirmedPurchaseId, UUID confirmedReceiptId, boolean reused, List<LineResponse> lines) { }
     public record SourceFile(Resource resource, String filename, String contentType, Long size) { }
 }

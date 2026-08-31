@@ -41,6 +41,7 @@ public class PurchaseDraftLine {
     @Enumerated(EnumType.STRING) @Column(length = 20) private InventoryTargetType targetType;
     private UUID productId;
     private UUID variantId;
+    @Column(length = 500) private String targetLabel;
     @Column(precision = 18, scale = 6) private BigDecimal conversion;
     @CreationTimestamp @Column(nullable = false, updatable = false) private Instant createdAt;
     @UpdateTimestamp @Column(nullable = false) private Instant updatedAt;
@@ -76,6 +77,8 @@ public class PurchaseDraftLine {
     public void setProductId(UUID value) { productId = value; }
     public UUID getVariantId() { return variantId; }
     public void setVariantId(UUID value) { variantId = value; }
+    public String getTargetLabel() { return targetLabel; }
+    public void setTargetLabel(String value) { targetLabel = value; }
     public BigDecimal getConversion() { return conversion; }
     public void setConversion(BigDecimal value) { conversion = value; }
 }

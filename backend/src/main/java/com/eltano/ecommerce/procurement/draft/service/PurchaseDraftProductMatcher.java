@@ -66,6 +66,17 @@ public class PurchaseDraftProductMatcher {
         applyTarget(line, mapping, target);
     }
 
+    public String targetLabel(PurchaseDraftLine line) {
+        if (line.getTargetLabel() != null) return line.getTargetLabel();
+        if (line.getTargetType() == InventoryTargetType.BULK_GRAM && line.getProductId() != null) {
+            return products.findById(line.getProductId()).map(product -> product.getName() + " (a granel)").orElse(null);
+        }
+        if (line.getTargetType() == InventoryTargetType.VARIANT_UNIT && line.getVariantId() != null) {
+            return variants.findById(line.getVariantId()).map(variant -> variant.getProduct().getName() + " - " + variant.getSku()).orElse(null);
+        }
+        return null;
+    }
+
     public void revalidateTargets(PurchaseDraft draft) {
         List<UUID> productIds = draft.getLines().stream().filter(line -> line.getTargetType() == InventoryTargetType.BULK_GRAM)
                 .map(PurchaseDraftLine::getProductId).distinct().sorted(Comparator.comparing(UUID::toString)).toList();
@@ -78,6 +89,7 @@ public class PurchaseDraftProductMatcher {
             if (current.type() != line.getTargetType() || current.conversion().compareTo(line.getConversion()) != 0) {
                 throw conflict("INCOMPATIBLE_TARGET", "Una vinculacion dejo de ser compatible.");
             }
+            if (line.getTargetLabel() == null) line.setTargetLabel(current.label());
         });
     }
 
@@ -86,12 +98,12 @@ public class PurchaseDraftProductMatcher {
         if (unit == PurchaseDraftUnit.KG) {
             Product product = products.findById(id).orElseThrow(() -> notFound("No se encontro el producto."));
             if (!product.isActive() || product.getDeletedAt() != null || product.getInventoryPolicy() != InventoryPolicy.BULK_WEIGHT) throw conflict("INCOMPATIBLE_TARGET", "El producto debe estar activo y usar inventario BULK_WEIGHT.");
-            return new Target(InventoryTargetType.BULK_GRAM, product.getId(), null, BigDecimal.valueOf(1000));
+            return new Target(InventoryTargetType.BULK_GRAM, product.getId(), null, BigDecimal.valueOf(1000), product.getName() + " (a granel)");
         }
         ProductVariant variant = variants.findById(id).orElseThrow(() -> notFound("No se encontro la variante."));
         Product product = variant.getProduct();
         if (!variant.isActive() || !product.isActive() || product.getDeletedAt() != null || product.getInventoryPolicy() != InventoryPolicy.PER_VARIANT) throw conflict("INCOMPATIBLE_TARGET", "La variante debe estar activa y pertenecer a un producto PER_VARIANT.");
-        return new Target(InventoryTargetType.VARIANT_UNIT, null, variant.getId(), BigDecimal.ONE);
+        return new Target(InventoryTargetType.VARIANT_UNIT, null, variant.getId(), BigDecimal.ONE, product.getName() + " - " + variant.getSku());
     }
 
     private Target mappingTarget(SupplierItemMapping mapping, PurchaseDraftUnit unit) {
@@ -103,10 +115,15 @@ public class PurchaseDraftProductMatcher {
     }
 
     private SupplierItemMapping remember(Supplier supplier, PurchaseDraftLine line, Target target) {
-        var existing = mappings.findBySupplierIdAndNormalizedNameAndActiveTrue(supplier.getId(), line.getNormalizedProductName());
+        var existing = mappings.findBySupplierIdAndNormalizedNameForUpdate(supplier.getId(), line.getNormalizedProductName());
         if (existing.isPresent()) {
             SupplierItemMapping mapping = existing.get();
-            if (!mappingTarget(mapping, line.getUnit()).equals(target)) throw conflict("MAPPING_CONFLICT", "El proveedor ya tiene otra vinculacion para este nombre.");
+            if (mapping.isActive()) {
+                if (!mappingTarget(mapping, line.getUnit()).equals(target)) throw conflict("MAPPING_CONFLICT", "El proveedor ya tiene otra vinculacion activa para este nombre. Use la correccion explicita para cambiarla.");
+                return mapping;
+            }
+            mapping.setTargetType(target.type()); mapping.setProductId(target.productId()); mapping.setVariantId(target.variantId());
+            mapping.setDefaultConversion(target.conversion()); mapping.setActive(true);
             return mapping;
         }
         SupplierItemMapping mapping = new SupplierItemMapping();
@@ -119,12 +136,12 @@ public class PurchaseDraftProductMatcher {
 
     private void applyTarget(PurchaseDraftLine line, SupplierItemMapping mapping, Target target) {
         line.setMappingId(mapping == null ? null : mapping.getId()); line.setTargetType(target.type()); line.setProductId(target.productId());
-        line.setVariantId(target.variantId()); line.setConversion(target.conversion()); line.setMatchStatus(PurchaseDraftMatchStatus.MATCHED);
+        line.setVariantId(target.variantId()); line.setTargetLabel(target.label()); line.setConversion(target.conversion()); line.setMatchStatus(PurchaseDraftMatchStatus.MATCHED);
     }
 
     private static PurchaseDraftException conflict(String code, String message) { return new PurchaseDraftException(HttpStatus.CONFLICT, code, message); }
     private static PurchaseDraftException notFound(String message) { return new PurchaseDraftException(HttpStatus.NOT_FOUND, "NOT_FOUND", message); }
-    private record Target(InventoryTargetType type, UUID productId, UUID variantId, BigDecimal conversion) { }
+    private record Target(InventoryTargetType type, UUID productId, UUID variantId, BigDecimal conversion, String label) { }
     private record CandidateValue(ProductVariant variant, String label) { }
     public record CatalogCandidate(UUID value, String label, InventoryTargetType targetType) { }
 }

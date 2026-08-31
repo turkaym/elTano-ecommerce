@@ -1,15 +1,18 @@
 import { type FormEvent, useState } from 'react'
-import type { PurchaseDraft, PurchaseDto, SupplierDto } from '../services/procurementService'
+import type { MappingDto, PurchaseDraft, PurchaseDto, SupplierDto } from '../services/procurementService'
+import { MappingRepairPanel } from './MappingRepairPanel'
 
 interface Props {
   suppliers: SupplierDto[]
   purchases: PurchaseDto[]
   drafts: PurchaseDraft[]
+  mappings: MappingDto[]
   onCreateSupplier: (name: string, taxIdentity: string) => Promise<void>
   onOpenDraft: (id: string) => void
+  onRepairMapping: (mapping: MappingDto, targetId: string, active: boolean) => Promise<void>
 }
 
-export function ProcurementSecondaryPanels({ suppliers, purchases, drafts, onCreateSupplier, onOpenDraft }: Props) {
+export function ProcurementSecondaryPanels({ suppliers, purchases, drafts, mappings, onCreateSupplier, onOpenDraft, onRepairMapping }: Props) {
   const [name, setName] = useState('')
   const [taxIdentity, setTaxIdentity] = useState('')
 
@@ -27,6 +30,8 @@ export function ProcurementSecondaryPanels({ suppliers, purchases, drafts, onCre
         {!drafts.length ? <p className="admin-card-help">Todavía no hay borradores guardados.</p> : <ul className="admin-list">{drafts.map((draft) => <li className="admin-item-card" key={draft.id}><div className="admin-item-main"><strong>{draft.supplierName}</strong><span>{draft.originalFilename ?? 'Carga manual'} · {draft.purchaseDate}</span><span className={`admin-badge ${draft.status === 'CONFIRMED' ? 'admin-badge-success' : 'admin-badge-muted'}`}>{draft.status === 'CONFIRMED' ? 'Confirmado' : 'Pendiente'}</span></div><button type="button" className="btn btn-secondary" onClick={() => onOpenDraft(draft.id)}>Abrir revisión</button></li>)}</ul>}
       </div>
     </details>
+
+    <MappingRepairPanel mappings={mappings} onRepair={onRepairMapping} />
 
     <details className="admin-card">
       <summary>Proveedores <span>{suppliers.length}</span></summary>

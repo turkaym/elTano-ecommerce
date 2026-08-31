@@ -5,6 +5,8 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,13 +22,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.eltano.ecommerce.procurement.domain.Supplier;
 import com.eltano.ecommerce.procurement.repository.SupplierRepository;
+import com.eltano.ecommerce.catalog.domain.Category;
+import com.eltano.ecommerce.catalog.domain.InventoryPolicy;
+import com.eltano.ecommerce.catalog.domain.Product;
+import com.eltano.ecommerce.catalog.domain.ProductType;
+import com.eltano.ecommerce.catalog.repository.CategoryRepository;
+import com.eltano.ecommerce.catalog.repository.ProductRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -37,7 +47,11 @@ class PurchaseDraftApiIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper mapper;
     @Autowired SupplierRepository suppliers;
+    @Autowired CategoryRepository categories;
+    @Autowired ProductRepository products;
+    @Autowired JdbcTemplate jdbc;
     UUID supplierId;
+    UUID targetId;
     byte[] workbook;
 
     @BeforeEach
@@ -45,6 +59,10 @@ class PurchaseDraftApiIntegrationTest {
         Supplier supplier = new Supplier();
         supplier.setName("Proveedor " + UUID.randomUUID()); supplier.setActive(true);
         supplierId = suppliers.saveAndFlush(supplier).getId();
+        Category category = new Category(); category.setName("Draft API " + UUID.randomUUID()); category.setSlug("draft-api-" + UUID.randomUUID()); category.setActive(true); categories.save(category);
+        Product product = new Product(); product.setName("NUEZ MARIPOSA"); product.setSlug("nuez-mariposa-" + UUID.randomUUID()); product.setDescription("NUEZ MARIPOSA");
+        product.setActive(true); product.setCategory(category); product.setProductType(ProductType.GRANEL); product.setInventoryPolicy(InventoryPolicy.BULK_WEIGHT); product.setStockBaseGrams(1000); product.setStockReservedBaseGrams(0);
+        targetId = products.saveAndFlush(product).getId();
         workbook = workbook();
     }
 
@@ -89,6 +107,46 @@ class PurchaseDraftApiIntegrationTest {
                         .header("Idempotency-Key", "invalid-key").with(httpBasic("admin-user", "admin-pass")).with(csrf()))
                 .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INVALID_XLSX"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("XLSX")));
+    }
+
+    @Test
+    void draftDtoKeepsExactTargetLabelAndConfirmedEvidenceIdsAfterReload() throws Exception {
+        String draftId = upload("evidence-upload", workbook, true);
+        JsonNode imported = mapper.readTree(mvc.perform(get(BASE + "/{id}", draftId).with(httpBasic("admin-user", "admin-pass")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        String lineId = imported.at("/lines/0/id").asText();
+        JsonNode matched = mapper.readTree(mvc.perform(put(BASE + "/{id}/lines/{lineId}/match", draftId, lineId)
+                        .with(httpBasic("admin-user", "admin-pass")).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + imported.get("version").asLong() + ",\"targetId\":\"" + targetId + "\",\"remember\":true}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].targetLabel").value("NUEZ MARIPOSA (a granel)"))
+                .andExpect(jsonPath("$.lines[0].canonicalDelta").value(1250)).andReturn().getResponse().getContentAsString());
+        mvc.perform(get("/api/admin/procurement/mappings").param("supplierId", supplierId.toString()).with(httpBasic("admin-user", "admin-pass")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].supplierItemCode").value("Cafe"))
+                .andExpect(jsonPath("$[0].supplierItemName").value("Cafe"));
+        JsonNode preview = mapper.readTree(mvc.perform(post(BASE + "/{id}/preview", draftId)
+                        .with(httpBasic("admin-user", "admin-pass")).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":" + matched.get("version").asLong() + "}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        jdbc.update("update purchase_draft_lines set target_label=null where id=?", UUID.fromString(lineId));
+        JsonNode confirmation = mapper.readTree(mvc.perform(post(BASE + "/{id}/confirm", draftId)
+                        .header("Idempotency-Key", "evidence-confirm").with(httpBasic("admin-user", "admin-pass")).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"version\":" + preview.get("version").asLong() + ",\"previewHash\":\"" + preview.get("previewHash").asText() + "\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+
+        Product renamed = products.findById(targetId).orElseThrow();
+        renamed.setName("NUEZ RENOMBRADA");
+        products.saveAndFlush(renamed);
+
+        mvc.perform(get(BASE + "/{id}", draftId).with(httpBasic("admin-user", "admin-pass")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.confirmedPurchaseId").value(confirmation.get("purchaseId").asText()))
+                .andExpect(jsonPath("$.confirmedReceiptId").value(confirmation.get("receiptId").asText()))
+                .andExpect(jsonPath("$.lines[0].targetLabel").value("NUEZ MARIPOSA (a granel)"))
+                .andExpect(jsonPath("$.lines[0].targetLabelPersisted").value(true));
+        jdbc.update("update purchase_draft_lines set target_label=null where id=?", UUID.fromString(lineId));
+        mvc.perform(get(BASE + "/{id}", draftId).with(httpBasic("admin-user", "admin-pass")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].targetLabel").value("NUEZ RENOMBRADA (a granel)"))
+                .andExpect(jsonPath("$.lines[0].targetLabelPersisted").value(false));
     }
 
     private String upload(String key, byte[] content, boolean created) throws Exception {

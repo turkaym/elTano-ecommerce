@@ -23,6 +23,7 @@ import com.eltano.ecommerce.procurement.service.ProcurementService;
 import com.eltano.ecommerce.procurement.service.ProcurementService.CorrectionCommand;
 import com.eltano.ecommerce.procurement.service.ProcurementService.MappingCommand;
 import com.eltano.ecommerce.procurement.service.ProcurementService.MappingResponse;
+import com.eltano.ecommerce.procurement.service.ProcurementService.MappingRepairCommand;
 import com.eltano.ecommerce.procurement.service.ProcurementService.PurchaseCommand;
 import com.eltano.ecommerce.procurement.service.ProcurementService.PurchaseResponse;
 import com.eltano.ecommerce.procurement.service.ProcurementService.ReasonCommand;
@@ -56,6 +57,8 @@ public class AdminProcurementController {
     }
     @PatchMapping("/mappings/{id}")
     public MappingResponse updateMapping(@PathVariable UUID id, @RequestBody MappingCommand command) { return service.updateMapping(id, command); }
+    @PutMapping("/mappings/{id}/repair")
+    public MappingResponse repairMapping(@PathVariable UUID id, @RequestBody MappingRepairCommand command) { return service.repairMapping(id, command); }
 
     @GetMapping("/purchases")
     public List<PurchaseResponse> purchases(@RequestParam(required = false) PurchaseStatus status,

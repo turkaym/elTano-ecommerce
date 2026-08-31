@@ -4,7 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL?.trim() ?? ''
 const basePath = '/api/admin/procurement'
 
 export interface SupplierDto { id: string; name: string; taxIdentity?: string | null; active: boolean }
-export interface MappingDto { id: string; supplierId: string; supplierItemCode: string; description: string; targetType: 'VARIANT_UNIT' | 'BULK_GRAM'; productId?: string | null; variantId?: string | null; defaultConversion: string | number; active: boolean }
+export interface MappingDto { id: string; supplierId: string; supplierItemCode: string; supplierItemName?: string | null; description: string; targetType: 'VARIANT_UNIT' | 'BULK_GRAM'; productId?: string | null; variantId?: string | null; targetLabel: string | null; defaultConversion: string | number; active: boolean }
 export interface PurchaseLineDto { id: string; mappingId: string; supplierItemCode: string; supplierDescription: string; targetType: 'VARIANT_UNIT' | 'BULK_GRAM'; productId?: string | null; variantId?: string | null; orderedQuantity: string | number; conversion: string | number }
 export interface PurchaseDto { id: string; supplierId?: string; supplierName: string; documentType: string; documentNumber: string; purchasedAt?: string; status: 'PENDING' | 'RECEIVED' | 'CANCELLED'; progress?: string; lines?: PurchaseLineDto[] }
 export interface ReceiptDraft { lines: Array<{ purchaseLineId: string; dispositions?: Array<{ type: string; quantity: string; note?: string }>; acceptedOrdered?: string }> }
@@ -13,8 +13,8 @@ export type PurchaseDraftStatus = 'DRAFT' | 'CONFIRMED' | 'DELETED'
 export type PurchaseDraftLineStatus = 'MATCHED' | 'UNRESOLVED' | 'INVALID'
 export type PurchaseDraftSourceType = 'XLSX' | 'MANUAL'
 export type PurchaseDraftTargetType = 'VARIANT_UNIT' | 'BULK_GRAM'
-export interface PurchaseDraftLine { id: string; rowNumber: number | null; sourceDate: string | null; productName: string; sourceQuantity: string; quantity: string | number | null; unit: 'KG' | 'UNIDAD' | null; errors: string[]; matchStatus: PurchaseDraftLineStatus; targetType: PurchaseDraftTargetType | null; productId: string | null; variantId: string | null; conversion: string | number | null }
-export interface PurchaseDraft { id: string; version: number; status: PurchaseDraftStatus; supplierId: string; supplierName: string; purchaseDate: string; sourceType: PurchaseDraftSourceType; originalFilename: string | null; sourceSha256: string | null; previewHash: string | null; confirmedPurchaseId: string | null; reused: boolean; lines: PurchaseDraftLine[] }
+export interface PurchaseDraftLine { id: string; rowNumber: number | null; sourceDate: string | null; productName: string; sourceQuantity: string; quantity: string | number | null; unit: 'KG' | 'UNIDAD' | null; errors: string[]; matchStatus: PurchaseDraftLineStatus; targetType: PurchaseDraftTargetType | null; productId: string | null; variantId: string | null; targetLabel: string | null; targetLabelPersisted: boolean; conversion: string | number | null; canonicalDelta: number | null }
+export interface PurchaseDraft { id: string; version: number; status: PurchaseDraftStatus; supplierId: string; supplierName: string; purchaseDate: string; sourceType: PurchaseDraftSourceType; originalFilename: string | null; sourceSha256: string | null; previewHash: string | null; confirmedPurchaseId: string | null; confirmedReceiptId: string | null; reused: boolean; lines: PurchaseDraftLine[] }
 export interface PurchaseDraftLineCommand { version: number; productName: string; quantity: string; unit: string }
 export interface CatalogCandidate { value: string; label: string; targetType: PurchaseDraftTargetType }
 export interface CanonicalInventoryDelta { lineId: string; targetType: PurchaseDraftTargetType; targetId: string; delta: number }
@@ -28,6 +28,7 @@ export function updateSupplier(id: string, payload: Partial<SupplierDto>) { retu
 export function listMappings(supplierId?: string) { return request<MappingDto[]>(`${basePath}/mappings${supplierId ? `?supplierId=${encodeURIComponent(supplierId)}` : ''}`) }
 export function createMapping(payload: Record<string, unknown>) { return request<MappingDto>(`${basePath}/mappings`, { method: 'POST', body: payload }) }
 export function updateMapping(id: string, payload: Partial<MappingDto>) { return request<MappingDto>(`${basePath}/mappings/${id}`, { method: 'PATCH', body: payload }) }
+export function repairMapping(id: string, payload: { targetType: PurchaseDraftTargetType; productId: string | null; variantId: string | null; defaultConversion: string | number; active: boolean }) { return request<MappingDto>(`${basePath}/mappings/${id}/repair`, { method: 'PUT', body: payload }) }
 
 export async function listPurchases(filters: { status?: string; supplierId?: string } = {}) {
   const query = new URLSearchParams()

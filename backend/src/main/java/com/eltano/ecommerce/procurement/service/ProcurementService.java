@@ -128,6 +128,15 @@ public class ProcurementService {
     }
 
     @Transactional
+    public MappingResponse repairMapping(UUID id, MappingRepairCommand command) {
+        SupplierItemMapping mapping = mapping(id);
+        validateMappingTarget(command.targetType(), command.productId(), command.variantId(), command.defaultConversion());
+        mapping.setTargetType(command.targetType()); mapping.setProductId(command.productId()); mapping.setVariantId(command.variantId());
+        mapping.setDefaultConversion(command.defaultConversion()); mapping.setActive(command.active());
+        return mappingResponse(mapping);
+    }
+
+    @Transactional
     public PurchaseResponse createPurchase(PurchaseCommand command, String actor) {
         Supplier supplier = supplier(command.supplierId());
         if (!supplier.isActive()) conflict("INVALID_STATE", "Inactive suppliers cannot receive new purchases");
@@ -442,16 +451,21 @@ public class ProcurementService {
     }
     private void validateMapping(MappingCommand command) {
         requireText(command.supplierItemCode(), "Supplier item code is required"); requireText(command.description(), "Description is required");
-        requirePositive(command.defaultConversion(), "Conversion must be positive");
-        boolean valid = command.targetType() == InventoryTargetType.VARIANT_UNIT && command.variantId() != null && command.productId() == null
-                || command.targetType() == InventoryTargetType.BULK_GRAM && command.productId() != null && command.variantId() == null;
+        validateMappingTarget(command.targetType(), command.productId(), command.variantId(), command.defaultConversion());
+    }
+    private void validateMappingTarget(InventoryTargetType targetType, UUID productId, UUID variantId, BigDecimal conversion) {
+        requirePositive(conversion, "Conversion must be positive");
+        boolean valid = targetType == InventoryTargetType.VARIANT_UNIT && variantId != null && productId == null
+                || targetType == InventoryTargetType.BULK_GRAM && productId != null && variantId == null;
         if (!valid) throw new IllegalArgumentException("Mapping target must select exactly one compatible target");
-        Product product = command.targetType() == InventoryTargetType.VARIANT_UNIT
-                ? variants.findById(command.variantId()).map(ProductVariant::getProduct).orElseThrow(() -> notFound("Variant"))
-                : products.findById(command.productId()).orElseThrow(() -> notFound("Product"));
-        InventoryPolicy required = command.targetType() == InventoryTargetType.VARIANT_UNIT
+        ProductVariant variant = targetType == InventoryTargetType.VARIANT_UNIT
+                ? variants.findById(variantId).orElseThrow(() -> notFound("Variant")) : null;
+        Product product = variant == null ? products.findById(productId).orElseThrow(() -> notFound("Product")) : variant.getProduct();
+        InventoryPolicy required = targetType == InventoryTargetType.VARIANT_UNIT
                 ? InventoryPolicy.PER_VARIANT : InventoryPolicy.BULK_WEIGHT;
-        if (product.getInventoryPolicy() != required) throw new IllegalArgumentException("Mapping target is incompatible with product inventory policy");
+        if (variant != null && !variant.isActive() || !product.isActive() || product.getDeletedAt() != null || product.getInventoryPolicy() != required) {
+            throw new IllegalArgumentException("Mapping target is not eligible for matching");
+        }
     }
     private void applyMapping(SupplierItemMapping mapping, MappingCommand command, String normalized) {
         mapping.setSupplierItemCode(command.supplierItemCode()); mapping.setNormalizedCode(normalized); mapping.setDescription(command.description().trim());
@@ -476,7 +490,13 @@ public class ProcurementService {
     private static ResourceNotFoundException notFound(String type) { return new ResourceNotFoundException(type + " not found"); }
 
     private SupplierResponse supplierResponse(Supplier value) { return new SupplierResponse(value.getId(), value.getName(), value.getTaxIdentity(), value.isActive()); }
-    private MappingResponse mappingResponse(SupplierItemMapping value) { return new MappingResponse(value.getId(), value.getSupplier().getId(), value.getSupplierItemCode(), value.getDescription(), value.getTargetType(), value.getProductId(), value.getVariantId(), value.getDefaultConversion(), value.isActive()); }
+    private MappingResponse mappingResponse(SupplierItemMapping value) {
+        String source = value.getSupplierItemCode() == null ? value.getSupplierItemName() : value.getSupplierItemCode();
+        String targetLabel = value.getTargetType() == InventoryTargetType.BULK_GRAM
+                ? products.findById(value.getProductId()).map(Product::getName).orElse(null)
+                : variants.findById(value.getVariantId()).map(variant -> variant.getProduct().getName() + " - " + variant.getSku()).orElse(null);
+        return new MappingResponse(value.getId(), value.getSupplier().getId(), source, value.getSupplierItemName(), value.getDescription(), value.getTargetType(), value.getProductId(), value.getVariantId(), targetLabel, value.getDefaultConversion(), value.isActive());
+    }
     private PurchaseResponse purchaseResponse(Purchase value) {
         Map<UUID, List<DispositionQuantity>> dispositionProgress = finalDispositionProgress(value.getId());
         List<PurchaseLineResponse> lineResponses = value.getLines().stream().map(line -> {
@@ -495,7 +515,8 @@ public class ProcurementService {
     public record SupplierCommand(String name, String taxIdentity, Boolean active) { }
     public record SupplierResponse(UUID id, String name, String taxIdentity, boolean active) { }
     public record MappingCommand(UUID supplierId, String supplierItemCode, String description, InventoryTargetType targetType, UUID productId, UUID variantId, BigDecimal defaultConversion, Boolean active) { }
-    public record MappingResponse(UUID id, UUID supplierId, String supplierItemCode, String description, InventoryTargetType targetType, UUID productId, UUID variantId, BigDecimal defaultConversion, boolean active) { }
+    public record MappingRepairCommand(InventoryTargetType targetType, UUID productId, UUID variantId, BigDecimal defaultConversion, boolean active) { }
+    public record MappingResponse(UUID id, UUID supplierId, String supplierItemCode, String supplierItemName, String description, InventoryTargetType targetType, UUID productId, UUID variantId, String targetLabel, BigDecimal defaultConversion, boolean active) { }
     public record PurchaseLineCommand(UUID mappingId, BigDecimal orderedQuantity, BigDecimal conversion) { }
     public record PurchaseCommand(UUID supplierId, String documentType, String documentNumber, LocalDate purchasedAt, List<PurchaseLineCommand> lines) { }
     public record PurchaseLineResponse(UUID id, UUID mappingId, String supplierItemCode, String supplierDescription, InventoryTargetType targetType, UUID productId, UUID variantId, BigDecimal orderedQuantity, BigDecimal conversion, BigDecimal outstandingQuantity) { }

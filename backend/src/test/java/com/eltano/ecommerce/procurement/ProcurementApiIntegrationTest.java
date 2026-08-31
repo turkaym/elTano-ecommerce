@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -259,6 +260,50 @@ class ProcurementApiIntegrationTest {
                 .andExpect(status().isBadRequest());
 
         assertEquals(mappingsBefore, jdbc.queryForObject("select count(*) from supplier_item_mappings", Long.class));
+    }
+
+    @Test
+    void explicitMappingRepairRetargetsAndReactivatesWithoutChangingSourceIdentity() throws Exception {
+        String supplierId = createSupplier("Repair Supplier");
+        String mappingId = createVariantMapping(supplierId, variantId, "1");
+        mvc.perform(patch("/api/admin/procurement/mappings/{id}", mappingId)
+                        .with(httpBasic("admin-user", "admin-pass")).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\":false}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.active").value(false));
+
+        mvc.perform(put("/api/admin/procurement/mappings/{id}/repair", mappingId)
+                        .with(httpBasic("admin-user", "admin-pass")).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetType\":\"VARIANT_UNIT\",\"variantId\":\"" + otherVariantId + "\",\"defaultConversion\":\"1\",\"active\":true}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.supplierItemCode").value(org.hamcrest.Matchers.startsWith("SKU-")))
+                .andExpect(jsonPath("$.variantId").value(otherVariantId.toString())).andExpect(jsonPath("$.targetLabel").isNotEmpty())
+                .andExpect(jsonPath("$.active").value(true));
+
+        mvc.perform(put("/api/admin/procurement/mappings/{id}/repair", mappingId)
+                        .with(httpBasic("admin-user", "admin-pass")).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetType\":\"BULK_GRAM\",\"productId\":\"" + productId + "\",\"defaultConversion\":\"1000\",\"active\":true}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/admin/procurement/mappings").param("supplierId", supplierId).with(httpBasic("admin-user", "admin-pass")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].variantId").value(otherVariantId.toString()));
+    }
+
+    @Test
+    void mappingRepairRejectsCatalogTargetsExcludedByMatcherEligibility() throws Exception {
+        String mappingId = createVariantMapping(createSupplier("Eligibility Supplier"), variantId, "1");
+        Product product = products.findById(productId).orElseThrow();
+        ProductVariant variant = variants.findById(variantId).orElseThrow();
+
+        variant.setActive(false); variants.saveAndFlush(variant);
+        repairMapping(mappingId, "VARIANT_UNIT", null, variantId).andExpect(status().isBadRequest());
+        variant.setActive(true); variants.saveAndFlush(variant);
+        product.setActive(false); products.saveAndFlush(product);
+        repairMapping(mappingId, "VARIANT_UNIT", null, variantId).andExpect(status().isBadRequest());
+        product.setActive(true); product.setDeletedAt(Instant.now()); products.saveAndFlush(product);
+        repairMapping(mappingId, "VARIANT_UNIT", null, variantId).andExpect(status().isBadRequest());
+
+        product.setInventoryPolicy(InventoryPolicy.BULK_WEIGHT); product.setDeletedAt(null); product.setActive(false); products.saveAndFlush(product);
+        repairMapping(mappingId, "BULK_GRAM", productId, null).andExpect(status().isBadRequest());
+        product.setActive(true); product.setDeletedAt(Instant.now()); products.saveAndFlush(product);
+        repairMapping(mappingId, "BULK_GRAM", productId, null).andExpect(status().isBadRequest());
     }
 
     @Test
@@ -543,6 +588,13 @@ class ProcurementApiIntegrationTest {
                                 .replace("SKU-1", "SKU-" + UUID.randomUUID())))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return mapper.readTree(json).get("id").asText();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions repairMapping(String mappingId, String type, UUID product, UUID variant) throws Exception {
+        return mvc.perform(put("/api/admin/procurement/mappings/{id}/repair", mappingId)
+                .with(httpBasic("admin-user", "admin-pass")).with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"targetType\":\"%s\",\"productId\":%s,\"variantId\":%s,\"defaultConversion\":\"1\",\"active\":true}".formatted(
+                        type, product == null ? "null" : "\"" + product + "\"", variant == null ? "null" : "\"" + variant + "\"")));
     }
 
     private String createPurchase(String supplierId, String mappingId, String type, String number, String quantity) throws Exception {

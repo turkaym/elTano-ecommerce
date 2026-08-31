@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createSupplier, listPurchaseDrafts, listPurchases, listSuppliers, type PurchaseDraft, type PurchaseDto, type SupplierDto } from '../services/procurementService'
+import { createSupplier, listMappings, listPurchaseDrafts, listPurchases, listSuppliers, repairMapping, type MappingDto, type PurchaseDraft, type PurchaseDto, type SupplierDto } from '../services/procurementService'
 import { AdminLoadingState } from './AdminPageStates'
 import { ProcurementSecondaryPanels } from './ProcurementSecondaryPanels'
 import { PurchaseDraftIntake } from './PurchaseDraftIntake'
@@ -11,6 +11,7 @@ export function AdminProcurementPage() {
   const [suppliers, setSuppliers] = useState<SupplierDto[]>([])
   const [purchases, setPurchases] = useState<PurchaseDto[]>([])
   const [drafts, setDrafts] = useState<PurchaseDraft[]>([])
+  const [mappings, setMappings] = useState<MappingDto[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [loadError, setLoadError] = useState('')
   const [secondaryError, setSecondaryError] = useState('')
@@ -26,12 +27,13 @@ export function AdminProcurementPage() {
 
   useEffect(() => {
     let active = true
-    void Promise.all([listSuppliers(), listPurchases(), listPurchaseDrafts()])
-      .then(([nextSuppliers, nextPurchases, nextDrafts]) => {
+    void Promise.all([listSuppliers(), listPurchases(), listPurchaseDrafts(), listMappings()])
+      .then(([nextSuppliers, nextPurchases, nextDrafts, nextMappings]) => {
         if (!active) return
         setSuppliers(nextSuppliers)
         setPurchases(nextPurchases)
         setDrafts(nextDrafts)
+        setMappings(nextMappings)
         setStatus('ready')
       })
       .catch((error) => {
@@ -52,6 +54,16 @@ export function AdminProcurementPage() {
     }
   }
 
+  async function repair(mapping: MappingDto, targetId: string, active: boolean) {
+    try {
+      setSecondaryError('')
+      await repairMapping(mapping.id, { targetType: mapping.targetType, productId: mapping.targetType === 'BULK_GRAM' ? targetId : null, variantId: mapping.targetType === 'VARIANT_UNIT' ? targetId : null, defaultConversion: mapping.defaultConversion, active })
+      setMappings(await listMappings())
+    } catch (error) {
+      setSecondaryError(procurementErrorMessage(error))
+    }
+  }
+
   return <section className="admin-page procurement-page">
     <header className="admin-page-header procurement-page-header">
       <div><p className="admin-eyebrow">Compras e inventario</p><h1>Ingreso de mercadería</h1><p>Importá, revisá y confirmá las compras antes de actualizar el stock.</p></div>
@@ -66,7 +78,7 @@ export function AdminProcurementPage() {
       {workflow.error ? <div className="admin-feedback admin-feedback-error" role="alert"><p>{workflow.error}</p><button type="button" className="btn btn-secondary" onClick={workflow.clearError}>Cerrar</button></div> : null}
       {secondaryError ? <div className="admin-feedback admin-feedback-error" role="alert"><p>{secondaryError}</p><button type="button" className="btn btn-secondary" onClick={() => setSecondaryError('')}>Cerrar</button></div> : null}
       {workflow.draft ? <PurchaseDraftReview draft={workflow.draft} preview={workflow.preview} confirmation={workflow.confirmation} pendingAction={workflow.pendingAction} confirmationFailed={workflow.confirmationFailed} onAddLine={(line) => void workflow.addLine(line)} onUpdateLine={(id, line) => void workflow.updateLine(id, line)} onDeleteLine={(id) => void workflow.deleteLine(id)} onMatchLine={(id, target, remember) => void workflow.matchLine(id, target, remember)} onPreview={() => void workflow.generatePreview()} onConfirm={() => void workflow.confirm()} onDownloadSource={() => void workflow.downloadSource()} /> : null}
-      <ProcurementSecondaryPanels suppliers={suppliers} purchases={purchases} drafts={drafts} onCreateSupplier={addSupplier} onOpenDraft={(id) => void workflow.openDraft(id)} />
+      <ProcurementSecondaryPanels suppliers={suppliers} purchases={purchases} drafts={drafts} mappings={mappings} onCreateSupplier={addSupplier} onOpenDraft={(id) => void workflow.openDraft(id)} onRepairMapping={repair} />
     </> : null}
   </section>
 }

@@ -121,6 +121,8 @@ export function usePurchaseDraftWorkflow(suppliers: SupplierDto[], onConfirmed: 
     confirmationKey.current ??= createOperationKey()
     const result = await run('confirm', () => confirmPurchaseDraft(draft.id, { version: preview.version, previewHash: preview.previewHash! }, confirmationKey.current!))
     if (!result) return setConfirmationFailed(true)
+    setDraft({ ...draft, status: 'CONFIRMED', confirmedPurchaseId: result.purchaseId, confirmedReceiptId: result.receiptId })
+    setPreview(null)
     setConfirmation(result)
     setConfirmationFailed(false)
     try {
