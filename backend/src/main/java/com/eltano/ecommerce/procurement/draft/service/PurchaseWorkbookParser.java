@@ -39,7 +39,7 @@ public class PurchaseWorkbookParser {
     public static final int MAX_ROWS = 1_000;
     private static final Set<String> MIME_TYPES = Set.of(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream");
-    private static final List<String> HEADERS = List.of("fecha", "producto", "cantidad", "unidad");
+    private static final List<String> HEADERS = List.of("fecha", "producto", "cantidad", "unidad", "precio_unitario");
     private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
     private static final DateTimeFormatter LOCAL_DATE = DateTimeFormatter.ofPattern("d/M/uuuu").withResolverStyle(ResolverStyle.STRICT);
 
@@ -104,6 +104,8 @@ public class PurchaseWorkbookParser {
         Cell quantityCell = row.getCell(columns.get("cantidad"));
         String quantitySource = text(quantityCell);
         String unitSource = text(row.getCell(columns.get("unidad"))).toLowerCase(Locale.ROOT);
+        Cell priceCell = row.getCell(columns.get("precio_unitario"));
+        String priceSource = sourceNumber(priceCell);
         List<String> errors = new ArrayList<>();
         LocalDate date = parseDate(dateCell, dateSource, errors);
         if (product.isBlank()) errors.add("El producto es obligatorio.");
@@ -113,8 +115,11 @@ public class PurchaseWorkbookParser {
             default -> { errors.add("La unidad debe ser kg o unidad."); yield null; }
         };
         BigDecimal quantity = parseQuantity(quantityCell, quantitySource, unit, errors);
+        BigDecimal unitPrice = parseUnitPrice(priceSource, errors);
+        BigDecimal lineTotal = calculateTotal(quantity, unitPrice, errors);
         return new ParsedLine(row.getRowNum() + 1, dateSource, date, product, normalizer.normalize(product),
-                quantitySource, quantity, unit, errors, errors.isEmpty() ? PurchaseDraftMatchStatus.UNRESOLVED : PurchaseDraftMatchStatus.INVALID);
+                quantitySource, quantity, unit, priceSource, unitPrice, lineTotal, errors,
+                errors.isEmpty() ? PurchaseDraftMatchStatus.UNRESOLVED : PurchaseDraftMatchStatus.INVALID);
     }
 
     private LocalDate parseDate(Cell cell, String source, List<String> errors) {
@@ -159,6 +164,22 @@ public class PurchaseWorkbookParser {
         }
     }
 
+    private BigDecimal parseUnitPrice(String source, List<String> errors) {
+        try { return PurchaseCosting.parseUnitPrice(source); }
+        catch (IllegalArgumentException exception) {
+            errors.add("El precio unitario debe ser positivo, tener hasta 2 decimales y no usar simbolos, separadores de miles ni notacion cientifica.");
+            return null;
+        }
+    }
+
+    private BigDecimal calculateTotal(BigDecimal quantity, BigDecimal unitPrice, List<String> errors) {
+        try { return PurchaseCosting.lineTotal(quantity, unitPrice); }
+        catch (IllegalArgumentException exception) {
+            errors.add("El costo total de la linea supera el maximo permitido.");
+            return null;
+        }
+    }
+
     private void markMixedDates(List<ParsedLine> lines) {
         Set<LocalDate> dates = new HashSet<>();
         lines.stream().map(ParsedLine::date).filter(java.util.Objects::nonNull).forEach(dates::add);
@@ -167,9 +188,10 @@ public class PurchaseWorkbookParser {
 
     private void markDuplicates(List<ParsedLine> lines) {
         Map<String, List<ParsedLine>> groups = new HashMap<>();
-        lines.stream().filter(line -> line.date() != null && line.quantity() != null && line.unit() != null)
+        lines.stream().filter(line -> line.date() != null && line.quantity() != null && line.unit() != null && line.unitPrice() != null)
                 .forEach(line -> groups.computeIfAbsent(line.normalizedProductName() + "|" + line.date() + "|"
-                        + line.quantity().stripTrailingZeros().toPlainString() + "|" + line.unit(), ignored -> new ArrayList<>()).add(line));
+                        + line.quantity().stripTrailingZeros().toPlainString() + "|" + line.unit() + "|"
+                        + line.unitPrice().toPlainString() + "|" + line.lineTotal().toPlainString(), ignored -> new ArrayList<>()).add(line));
         groups.values().stream().filter(group -> group.size() > 1).flatMap(List::stream)
                 .forEach(line -> line.addError("La fila esta duplicada exactamente dentro del archivo."));
     }
@@ -184,6 +206,9 @@ public class PurchaseWorkbookParser {
         }
         List<String> missing = HEADERS.stream().filter(required -> !result.containsKey(required)).toList();
         if (!missing.isEmpty()) throw invalid("Faltan encabezados obligatorios: " + String.join(", ", missing) + ".");
+        if (!List.copyOf(result.keySet()).equals(HEADERS)) {
+            throw invalid("Los encabezados deben ser exactamente: " + String.join(" | ", HEADERS) + ".");
+        }
         return result;
     }
 
@@ -196,6 +221,12 @@ public class PurchaseWorkbookParser {
     private boolean sheetEmpty(Sheet sheet) { for (Row row : sheet) if (!rowEmpty(row)) return false; return true; }
     private boolean rowEmpty(Row row) { for (Cell cell : row) if (!text(cell).isBlank()) return false; return true; }
     private String text(Cell cell) { return cell == null ? "" : formatter.formatCellValue(cell).trim(); }
+    private String sourceNumber(Cell cell) {
+        if (cell != null && cell.getCellType() == CellType.NUMERIC && cell instanceof org.apache.poi.xssf.usermodel.XSSFCell xssf) {
+            return xssf.getRawValue() == null ? "" : xssf.getRawValue().trim();
+        }
+        return text(cell);
+    }
     private boolean zipSignature(byte[] value) { return value.length >= 4 && value[0] == 'P' && value[1] == 'K'
             && ((value[2] == 3 && value[3] == 4) || (value[2] == 5 && value[3] == 6) || (value[2] == 7 && value[3] == 8)); }
 
@@ -221,14 +252,19 @@ public class PurchaseWorkbookParser {
         private final String sourceQuantity;
         private final BigDecimal quantity;
         private final PurchaseDraftUnit unit;
+        private final String sourceUnitPrice;
+        private final BigDecimal unitPrice;
+        private final BigDecimal lineTotal;
         private final List<String> errors;
         private PurchaseDraftMatchStatus status;
 
         ParsedLine(int rowNumber, String sourceDate, LocalDate date, String productName, String normalizedProductName,
-                String sourceQuantity, BigDecimal quantity, PurchaseDraftUnit unit, List<String> errors, PurchaseDraftMatchStatus status) {
+                String sourceQuantity, BigDecimal quantity, PurchaseDraftUnit unit, String sourceUnitPrice,
+                BigDecimal unitPrice, BigDecimal lineTotal, List<String> errors, PurchaseDraftMatchStatus status) {
             this.rowNumber = rowNumber; this.sourceDate = sourceDate; this.date = date; this.productName = productName;
             this.normalizedProductName = normalizedProductName; this.sourceQuantity = sourceQuantity; this.quantity = quantity;
-            this.unit = unit; this.errors = errors; this.status = status;
+            this.unit = unit; this.sourceUnitPrice = sourceUnitPrice; this.unitPrice = unitPrice;
+            this.lineTotal = lineTotal; this.errors = errors; this.status = status;
         }
         public int rowNumber() { return rowNumber; }
         public String sourceDate() { return sourceDate; }
@@ -238,6 +274,9 @@ public class PurchaseWorkbookParser {
         public String sourceQuantity() { return sourceQuantity; }
         public BigDecimal quantity() { return quantity; }
         public PurchaseDraftUnit unit() { return unit; }
+        public String sourceUnitPrice() { return sourceUnitPrice; }
+        public BigDecimal unitPrice() { return unitPrice; }
+        public BigDecimal lineTotal() { return lineTotal; }
         public List<String> errors() { return List.copyOf(errors); }
         public PurchaseDraftMatchStatus status() { return status; }
         void addError(String error) { if (!errors.contains(error)) errors.add(error); status = PurchaseDraftMatchStatus.INVALID; }

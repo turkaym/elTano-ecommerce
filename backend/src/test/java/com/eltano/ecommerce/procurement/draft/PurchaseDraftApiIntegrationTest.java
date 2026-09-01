@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.io.ByteArrayOutputStream;
+import java.io.ByteArrayInputStream;
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -70,8 +71,16 @@ class PurchaseDraftApiIntegrationTest {
     void templateAndSourceDownloadRequireAdminAuthentication() throws Exception {
         mvc.perform(get(BASE + "/template")).andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("Se requiere autenticacion"));
-        mvc.perform(get(BASE + "/template").with(httpBasic("admin-user", "admin-pass")))
-                .andExpect(status().isOk()).andExpect(header().string("Content-Type", XLSX));
+        byte[] template = mvc.perform(get(BASE + "/template").with(httpBasic("admin-user", "admin-pass")))
+                .andExpect(status().isOk()).andExpect(header().string("Content-Type", XLSX))
+                .andReturn().getResponse().getContentAsByteArray();
+        try (XSSFWorkbook generated = new XSSFWorkbook(new ByteArrayInputStream(template))) {
+            var headerRow = generated.getSheetAt(0).getRow(0);
+            assertArrayEquals(new String[] {"fecha", "producto", "cantidad", "unidad", "precio_unitario"},
+                    new String[] {headerRow.getCell(0).getStringCellValue(), headerRow.getCell(1).getStringCellValue(),
+                            headerRow.getCell(2).getStringCellValue(), headerRow.getCell(3).getStringCellValue(), headerRow.getCell(4).getStringCellValue()});
+            org.junit.jupiter.api.Assertions.assertEquals(org.apache.poi.ss.usermodel.CellType.NUMERIC, generated.getSheetAt(0).getRow(1).getCell(4).getCellType());
+        }
 
         String draftId = upload("download-key", workbook, true);
         mvc.perform(get(BASE + "/{id}/source-file", draftId)).andExpect(status().isUnauthorized());
@@ -107,6 +116,20 @@ class PurchaseDraftApiIntegrationTest {
                         .header("Idempotency-Key", "invalid-key").with(httpBasic("admin-user", "admin-pass")).with(csrf()))
                 .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INVALID_XLSX"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("XLSX")));
+    }
+
+    @Test
+    void manualDraftRequiresPlainUnitPriceAndReturnsComputedCostEvidence() throws Exception {
+        String valid = "{\"supplierId\":\"" + supplierId + "\",\"purchaseDate\":\"2026-08-29\",\"lines\":[{\"productName\":\"Cafe\",\"quantity\":\"2\",\"unit\":\"UNIDAD\",\"unitPrice\":\"125,50\"}]}";
+        mvc.perform(post(BASE).with(httpBasic("admin-user", "admin-pass")).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(valid))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.lines[0].sourceUnitPrice").value("125,50"))
+                .andExpect(jsonPath("$.lines[0].unitPrice").value(125.50)).andExpect(jsonPath("$.lines[0].lineTotal").value(251.00))
+                .andExpect(jsonPath("$.lines[0].pricingUnit").value("UNIDAD")).andExpect(jsonPath("$.lines[0].currency").value("ARS"));
+
+        String invalid = "{\"supplierId\":\"" + supplierId + "\",\"purchaseDate\":\"2026-08-29\",\"lines\":[{\"productName\":\"Cafe\",\"quantity\":\"2\",\"unit\":\"UNIDAD\",\"unitPrice\":\"1e3\"}]}";
+        mvc.perform(post(BASE).with(httpBasic("admin-user", "admin-pass")).with(csrf()).contentType(MediaType.APPLICATION_JSON).content(invalid))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.lines[0].matchStatus").value("INVALID"))
+                .andExpect(jsonPath("$.lines[0].unitPrice").doesNotExist()).andExpect(jsonPath("$.lines[0].errors[0]").value(org.hamcrest.Matchers.containsString("precio unitario")));
     }
 
     @Test
@@ -155,6 +178,9 @@ class PurchaseDraftApiIntegrationTest {
                         .header("Idempotency-Key", key).with(httpBasic("admin-user", "admin-pass")).with(csrf()))
                 .andExpect(created ? status().isCreated() : status().isOk())
                 .andExpect(jsonPath("$.lines[0].productName").value("Cafe"))
+                .andExpect(jsonPath("$.lines[0].sourceUnitPrice").value("2500,50"))
+                .andExpect(jsonPath("$.lines[0].unitPrice").value(2500.50))
+                .andExpect(jsonPath("$.lines[0].lineTotal").value(3125.63))
                 .andReturn().getResponse().getContentAsString();
         return mapper.readTree(body).get("id").asText();
     }
@@ -164,11 +190,11 @@ class PurchaseDraftApiIntegrationTest {
         try (XSSFWorkbook value = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             var sheet = value.createSheet("Compra");
             var header = sheet.createRow(0);
-            String[] headers = {"fecha", "producto", "cantidad", "unidad"};
+            String[] headers = {"fecha", "producto", "cantidad", "unidad", "precio_unitario"};
             for (int index = 0; index < headers.length; index++) header.createCell(index).setCellValue(headers[index]);
             var row = sheet.createRow(1);
             row.createCell(0).setCellValue("2026-08-29"); row.createCell(1).setCellValue(product);
-            row.createCell(2).setCellValue("1.250"); row.createCell(3).setCellValue("kg");
+            row.createCell(2).setCellValue("1.250"); row.createCell(3).setCellValue("kg"); row.createCell(4).setCellValue("2500,50");
             value.write(output); return output.toByteArray();
         }
     }

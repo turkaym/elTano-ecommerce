@@ -28,6 +28,10 @@ public class PurchaseLine {
     private UUID variantId;
     @Column(nullable = false, precision = 18, scale = 6) private BigDecimal orderedQuantity;
     @Column(nullable = false, precision = 18, scale = 6) private BigDecimal conversion;
+    @Column(precision = 19, scale = 2) private BigDecimal unitPrice;
+    @Column(precision = 19, scale = 2) private BigDecimal lineTotal;
+    @Column(length = 20) private String pricingUnit;
+    @Column(length = 3) private String currency;
     public UUID getId() { return id; }
     public Purchase getPurchase() { return purchase; }
     public void setPurchase(Purchase value) { purchase = value; }
@@ -47,4 +51,12 @@ public class PurchaseLine {
     public void setOrderedQuantity(BigDecimal value) { orderedQuantity = value; }
     public BigDecimal getConversion() { return conversion; }
     public void setConversion(BigDecimal value) { conversion = value; }
+    public BigDecimal getUnitPrice() { return unitPrice; }
+    public void setUnitPrice(BigDecimal value) { unitPrice = value; }
+    public BigDecimal getLineTotal() { return lineTotal; }
+    public void setLineTotal(BigDecimal value) { lineTotal = value; }
+    public String getPricingUnit() { return pricingUnit; }
+    public void setPricingUnit(String value) { pricingUnit = value; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String value) { currency = value; }
 }

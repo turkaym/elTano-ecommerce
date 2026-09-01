@@ -40,6 +40,7 @@ import com.eltano.ecommerce.procurement.service.ProcurementService.ImportedPurch
 @Service
 public class PurchaseDraftService {
     private static final String DUPLICATE_ROW_ERROR = "La fila esta duplicada exactamente dentro del archivo.";
+    private static final String UNIT_COST_REQUIRED_ERROR = "El precio unitario es obligatorio para confirmar.";
     private final PurchaseDraftRepository drafts;
     private final PurchaseDraftImportKeyRepository importKeys;
     private final SupplierRepository suppliers;
@@ -60,13 +61,14 @@ public class PurchaseDraftService {
         try (XSSFWorkbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
             var sheet = workbook.createSheet("Compra");
             Row header = sheet.createRow(0);
-            List.of("fecha", "producto", "cantidad", "unidad").forEach(value -> header.createCell(header.getLastCellNum() < 0 ? 0 : header.getLastCellNum()).setCellValue(value));
+            List.of("fecha", "producto", "cantidad", "unidad", "precio_unitario").forEach(value -> header.createCell(header.getLastCellNum() < 0 ? 0 : header.getLastCellNum()).setCellValue(value));
             Row example = sheet.createRow(1);
             example.createCell(0).setCellValue(LocalDate.now().toString());
             example.createCell(1).setCellValue("Nombre del producto");
             example.createCell(2).setCellValue(1);
             example.createCell(3).setCellValue("unidad");
-            for (int i = 0; i < 4; i++) sheet.autoSizeColumn(i);
+            example.createCell(4).setCellValue(1250.50);
+            for (int i = 0; i < 5; i++) sheet.autoSizeColumn(i);
             workbook.write(output);
             return output.toByteArray();
         } catch (IOException exception) { throw new IllegalStateException("No se pudo generar la plantilla.", exception); }
@@ -198,7 +200,7 @@ public class PurchaseDraftService {
                 throw conflict("IDEMPOTENCY_CONFLICT", "La confirmacion ya existe con otro contenido o clave.");
             }
             return new ConfirmResponse(draft.getId(), draft.getConfirmedPurchaseId(), draft.getConfirmedReceiptId(), true,
-                    calculatePreview(draft).canonicalDeltas());
+                    canonicalDeltas(draft));
         }
         requireVersion(draft, command.version());
         if (draft.getPreviewHash() == null || !draft.getPreviewHash().equals(command.previewHash())) {
@@ -212,7 +214,7 @@ public class PurchaseDraftService {
         drafts.flush();
         List<ImportedPurchaseLine> lines = draft.getLines().stream().map(line -> new ImportedPurchaseLine(
                 line.getSourceProductName(), line.getMappingId(), line.getTargetType(), line.getProductId(), line.getVariantId(),
-                line.getQuantity(), line.getConversion())).toList();
+                line.getQuantity(), line.getConversion(), line.getUnitPrice(), line.getLineTotal(), line.getPricingUnit().name(), line.getCurrency())).toList();
         String documentNumber = draft.getSourceSha256() == null ? "BORRADOR-" + draft.getId() : draft.getSourceSha256();
         var result = procurement.confirmImportedPurchase(draft.getSupplier().getId(), draft.getPurchaseDate(), documentNumber,
                 lines, "draft:" + draft.getId() + ":" + key, actor, correlationId);
@@ -234,6 +236,8 @@ public class PurchaseDraftService {
         line.setSourceRowNumber(source.rowNumber()); line.setSourceDateValue(source.sourceDate()); line.setSourceDate(source.date()); line.setSourceProductName(source.productName());
         line.setNormalizedProductName(source.normalizedProductName()); line.setSourceQuantityValue(source.sourceQuantity());
         line.setQuantity(source.quantity()); line.setUnit(source.unit()); line.setValidationErrors(joinErrors(source.errors())); line.setMatchStatus(source.status());
+        line.setSourceUnitPriceValue(source.sourceUnitPrice());
+        applyCost(line, source.unit(), source.unitPrice(), source.lineTotal());
         if (source.status() != PurchaseDraftMatchStatus.INVALID) matcher.autoMatch(supplierId, line);
         return line;
     }
@@ -244,10 +248,33 @@ public class PurchaseDraftService {
         List<String> errors = new ArrayList<>();
         if (name.isBlank()) errors.add("El producto es obligatorio.");
         validateQuantity(command.quantity(), command.unit(), errors);
+        BigDecimal unitPrice = validateUnitPrice(command.unitPrice(), errors);
+        BigDecimal lineTotal = calculateLineTotal(command.quantity(), unitPrice, errors);
         line.setSourceRowNumber(row); line.setSourceDateValue(null); line.setSourceDate(date); line.setSourceProductName(name); line.setNormalizedProductName(normalizer.normalize(name));
         line.setSourceQuantityValue(command.quantity() == null ? "" : command.quantity().toPlainString()); line.setQuantity(errors.isEmpty() ? command.quantity() : null);
         line.setUnit(command.unit()); line.setValidationErrors(joinErrors(errors)); line.setMatchStatus(errors.isEmpty() ? PurchaseDraftMatchStatus.UNRESOLVED : PurchaseDraftMatchStatus.INVALID);
+        line.setSourceUnitPriceValue(command.unitPrice() == null ? "" : command.unitPrice().trim());
+        applyCost(line, command.unit(), unitPrice, lineTotal);
         clearTarget(line);
+    }
+
+    private void applyCost(PurchaseDraftLine line, PurchaseDraftUnit unit, BigDecimal unitPrice, BigDecimal lineTotal) {
+        boolean complete = unit != null && unitPrice != null && lineTotal != null;
+        line.setUnitPrice(complete ? unitPrice : null); line.setLineTotal(complete ? lineTotal : null);
+        line.setPricingUnit(complete ? unit : null); line.setCurrency(complete ? "ARS" : null);
+    }
+
+    private BigDecimal validateUnitPrice(String source, List<String> errors) {
+        try { return PurchaseCosting.parseUnitPrice(source); }
+        catch (IllegalArgumentException exception) {
+            errors.add("El precio unitario es obligatorio, debe ser positivo y tener hasta 2 decimales.");
+            return null;
+        }
+    }
+
+    private BigDecimal calculateLineTotal(BigDecimal quantity, BigDecimal unitPrice, List<String> errors) {
+        try { return PurchaseCosting.lineTotal(quantity, unitPrice); }
+        catch (IllegalArgumentException exception) { errors.add("El costo total de la linea supera el maximo permitido."); return null; }
     }
 
     private void validateQuantity(BigDecimal quantity, PurchaseDraftUnit unit, List<String> errors) {
@@ -269,10 +296,11 @@ public class PurchaseDraftService {
             line.setValidationErrors(joinErrors(retained));
             if (line.getMatchStatus() == PurchaseDraftMatchStatus.INVALID && retained.isEmpty()) line.setMatchStatus(PurchaseDraftMatchStatus.UNRESOLVED);
         });
-        draft.getLines().stream().filter(line -> line.getQuantity() != null && line.getUnit() != null && !line.getNormalizedProductName().isBlank())
+        draft.getLines().stream().filter(line -> line.getQuantity() != null && line.getUnit() != null && line.getUnitPrice() != null && !line.getNormalizedProductName().isBlank())
                 .collect(java.util.stream.Collectors.groupingBy(line -> line.getNormalizedProductName() + "|"
                         + line.getSourceDate() + "|"
-                        + line.getQuantity().stripTrailingZeros().toPlainString() + "|" + line.getUnit()))
+                        + line.getQuantity().stripTrailingZeros().toPlainString() + "|" + line.getUnit() + "|"
+                        + line.getUnitPrice().toPlainString() + "|" + line.getLineTotal().toPlainString()))
                 .values().stream().filter(group -> group.size() > 1).flatMap(List::stream).forEach(line -> {
                     List<String> errors = new ArrayList<>(splitErrors(line.getValidationErrors()));
                     errors.add(DUPLICATE_ROW_ERROR); line.setValidationErrors(joinErrors(errors)); line.setMatchStatus(PurchaseDraftMatchStatus.INVALID); clearTarget(line);
@@ -287,20 +315,36 @@ public class PurchaseDraftService {
         for (PurchaseDraftLine line : draft.getLines()) {
             if (line.getValidationErrors() != null) splitErrors(line.getValidationErrors()).forEach(error -> errors.add(new RowError(line.getSourceRowNumber(), "LINE_INVALID", error)));
             if (line.getMatchStatus() != PurchaseDraftMatchStatus.MATCHED) errors.add(new RowError(line.getSourceRowNumber(), "UNRESOLVED_PRODUCT", "Debe vincular el producto antes de confirmar."));
-            if (line.getMatchStatus() == PurchaseDraftMatchStatus.MATCHED && line.getQuantity() != null) {
-                int delta = line.getQuantity().multiply(line.getConversion()).intValueExact();
-                UUID targetId = line.getTargetType() == InventoryTargetType.BULK_GRAM ? line.getProductId() : line.getVariantId();
-                deltas.add(new CanonicalDelta(line.getId(), line.getTargetType(), targetId, delta));
-            }
+            if (line.getMatchStatus() == PurchaseDraftMatchStatus.MATCHED && !hasCompleteCost(line))
+                errors.add(new RowError(line.getSourceRowNumber(), "UNIT_COST_REQUIRED", UNIT_COST_REQUIRED_ERROR));
         }
+        deltas.addAll(canonicalDeltas(draft));
         String hash = errors.isEmpty() ? previewHash(draft, deltas) : null;
         return new PreviewResponse(draft.getVersion(), errors.isEmpty(), hash, List.copyOf(deltas), List.copyOf(errors));
+    }
+
+    private List<CanonicalDelta> canonicalDeltas(PurchaseDraft draft) {
+        return draft.getLines().stream()
+                .filter(line -> line.getMatchStatus() == PurchaseDraftMatchStatus.MATCHED && line.getQuantity() != null)
+                .sorted(Comparator.comparing((PurchaseDraftLine line) -> line.getSourceRowNumber() == null ? Integer.MAX_VALUE : line.getSourceRowNumber())
+                        .thenComparing(line -> line.getId().toString()))
+                .map(line -> new CanonicalDelta(line.getId(), line.getTargetType(),
+                        line.getTargetType() == InventoryTargetType.BULK_GRAM ? line.getProductId() : line.getVariantId(),
+                        line.getQuantity().multiply(line.getConversion()).intValueExact(), line.getPricingUnit(),
+                        line.getUnitPrice(), line.getLineTotal(), line.getCurrency()))
+                .toList();
+    }
+
+    private boolean hasCompleteCost(PurchaseDraftLine line) {
+        return line.getPricingUnit() != null && line.getUnitPrice() != null && line.getLineTotal() != null && line.getCurrency() != null;
     }
 
     private String previewHash(PurchaseDraft draft, List<CanonicalDelta> deltas) {
         StringBuilder canonical = new StringBuilder(draft.getSupplier().getId().toString()).append('|').append(draft.getPurchaseDate());
         deltas.stream().sorted(Comparator.comparing(value -> value.lineId().toString())).forEach(value -> canonical.append('|')
-                .append(value.lineId()).append(':').append(value.targetType()).append(':').append(value.targetId()).append(':').append(value.delta()));
+                .append(value.lineId()).append(':').append(value.targetType()).append(':').append(value.targetId()).append(':').append(value.delta())
+                .append(':').append(value.pricingUnit()).append(':').append(value.unitPrice().toPlainString())
+                .append(':').append(value.lineTotal().toPlainString()).append(':').append(value.currency()));
         return sha256(canonical.toString().getBytes(StandardCharsets.UTF_8));
     }
 
@@ -324,7 +368,11 @@ public class PurchaseDraftService {
     private LineResponse lineResponse(PurchaseDraftLine line) {
         Integer canonicalDelta = line.getMatchStatus() == PurchaseDraftMatchStatus.MATCHED && line.getQuantity() != null
                 ? line.getQuantity().multiply(line.getConversion()).intValueExact() : null;
-        return new LineResponse(line.getId(), line.getSourceRowNumber(), line.getSourceDateValue(), line.getSourceProductName(), line.getSourceQuantityValue(), line.getQuantity(), line.getUnit(), splitErrors(line.getValidationErrors()), line.getMatchStatus(), line.getTargetType(), line.getProductId(), line.getVariantId(), matcher.targetLabel(line), line.getTargetLabel() != null, line.getConversion(), canonicalDelta);
+        List<String> errors = new ArrayList<>(splitErrors(line.getValidationErrors()));
+        if (line.getMatchStatus() == PurchaseDraftMatchStatus.MATCHED && !hasCompleteCost(line)) errors.add(UNIT_COST_REQUIRED_ERROR);
+        return new LineResponse(line.getId(), line.getSourceRowNumber(), line.getSourceDateValue(), line.getSourceProductName(), line.getSourceQuantityValue(), line.getQuantity(), line.getUnit(),
+                line.getSourceUnitPriceValue(), line.getUnitPrice(), line.getLineTotal(), line.getPricingUnit(), line.getCurrency(),
+                List.copyOf(errors), line.getMatchStatus(), line.getTargetType(), line.getProductId(), line.getVariantId(), matcher.targetLabel(line), line.getTargetLabel() != null, line.getConversion(), canonicalDelta);
     }
     private String safeFilename(String value) { if (value == null || value.isBlank()) return "compra.xlsx"; String safe = value.replace('\\', '/'); safe = safe.substring(safe.lastIndexOf('/') + 1).replaceAll("[\\r\\n\\\"]", "_"); return safe.isBlank() ? "compra.xlsx" : safe; }
     private static String joinErrors(List<String> errors) { return errors == null || errors.isEmpty() ? null : String.join("\n", errors); }
@@ -338,16 +386,18 @@ public class PurchaseDraftService {
     public record ManualDraftCommand(UUID supplierId, LocalDate purchaseDate, List<LineCommand> lines) { }
     public record MetadataCommand(long version, LocalDate purchaseDate) { }
     public record VersionCommand(long version) { }
-    public record LineCommand(long version, String productName, BigDecimal quantity, PurchaseDraftUnit unit) { }
+    public record LineCommand(long version, String productName, BigDecimal quantity, PurchaseDraftUnit unit, String unitPrice) { }
     public record MatchCommand(long version, UUID targetId, boolean remember) { }
     public record ConfirmCommand(long version, String previewHash) { }
-    public record CanonicalDelta(UUID lineId, InventoryTargetType targetType, UUID targetId, int delta) { }
+    public record CanonicalDelta(UUID lineId, InventoryTargetType targetType, UUID targetId, int delta,
+            PurchaseDraftUnit pricingUnit, BigDecimal unitPrice, BigDecimal lineTotal, String currency) { }
     public record RowError(Integer rowNumber, String code, String message) { }
     public record PreviewResponse(long version, boolean ready, String previewHash, List<CanonicalDelta> canonicalDeltas, List<RowError> errors) { }
     public record ConfirmResponse(UUID draftId, UUID purchaseId, UUID receiptId, boolean replayed,
             List<CanonicalDelta> canonicalDeltas) { }
     public record LineResponse(UUID id, Integer rowNumber, String sourceDate, String productName, String sourceQuantity,
-            BigDecimal quantity, PurchaseDraftUnit unit, List<String> errors, PurchaseDraftMatchStatus matchStatus,
+            BigDecimal quantity, PurchaseDraftUnit unit, String sourceUnitPrice, BigDecimal unitPrice, BigDecimal lineTotal,
+            PurchaseDraftUnit pricingUnit, String currency, List<String> errors, PurchaseDraftMatchStatus matchStatus,
             InventoryTargetType targetType, UUID productId, UUID variantId, String targetLabel, boolean targetLabelPersisted, BigDecimal conversion, Integer canonicalDelta) { }
     public record DraftResponse(UUID id, long version, PurchaseDraftStatus status, UUID supplierId, String supplierName,
             LocalDate purchaseDate, PurchaseDraftSourceType sourceType, String originalFilename, String sourceSha256,

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class PurchaseDraftMigrationContractTest {
     private static final Path MIGRATION = Path.of("src/main/resources/db/migration/V1_14__procurement_purchase_drafts.sql");
+    private static final Path COST_MIGRATION = Path.of("src/main/resources/db/migration/V1_16__purchase_unit_costs_and_inventory_latest_cost.sql");
 
     @Test
     void definesDraftVersionSourceEvidenceStatusesAndSupplierScopedUniqueness() throws Exception {
@@ -46,5 +47,21 @@ class PurchaseDraftMigrationContractTest {
         assertTrue(dockerfile.indexOf("chown -R appuser:appuser /app") < dockerfile.indexOf("USER appuser"));
         assertTrue(compose.contains("PURCHASE_FILE_STORAGE_DIR: " + path));
         assertTrue(compose.contains("purchase-files:" + path));
+    }
+
+    @Test
+    void addsNullableImmutableCostSnapshotsAndLatestCostEvidence() throws Exception {
+        String sql = Files.readString(COST_MIGRATION).toLowerCase();
+        assertTrue(sql.contains("alter table purchase_draft_lines"));
+        assertTrue(sql.contains("source_unit_price_value varchar(120)"));
+        assertTrue(sql.contains("unit_price numeric(19,2)"));
+        assertTrue(sql.contains("line_total numeric(19,2)"));
+        assertTrue(sql.contains("alter table purchase_lines"));
+        assertTrue(sql.contains("alter table products"));
+        assertTrue(sql.contains("alter table product_variants"));
+        assertTrue(sql.contains("latest_cost_purchase_line_id uuid references purchase_lines(id)"));
+        assertTrue(sql.contains("latest_cost_receipt_id uuid references purchase_receipts(id)"));
+        assertTrue(sql.contains("latest_cost_unit = 'kg'"));
+        assertTrue(sql.contains("latest_cost_unit = 'unidad'"));
     }
 }

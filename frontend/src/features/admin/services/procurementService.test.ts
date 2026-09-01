@@ -149,8 +149,8 @@ describe('procurementService', () => {
 
     await listPurchaseDrafts()
     await createManualPurchaseDraft({ supplierId: 's1', purchaseDate: '2026-08-29', lines: [] })
-    await addPurchaseDraftLine('d1', { version: 0, productName: 'Almendras', quantity: '2', unit: 'UNIDAD' })
-    await updatePurchaseDraftLine('d1', 'l1', { version: 1, productName: 'Almendras', quantity: '3', unit: 'UNIDAD' })
+    await addPurchaseDraftLine('d1', { version: 0, productName: 'Almendras', quantity: '2', unit: 'UNIDAD', unitPrice: '100.50' })
+    await updatePurchaseDraftLine('d1', 'l1', { version: 1, productName: 'Almendras', quantity: '3', unit: 'UNIDAD', unitPrice: '100.50' })
     await deletePurchaseDraftLine('d1', 'l1', 2)
     await getPurchaseDraft('d1')
     await listCatalogCandidates('alm', 'UNIDAD', 10)

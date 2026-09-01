@@ -35,6 +35,11 @@ public class PurchaseDraftLine {
     @Column(nullable = false, length = 120) private String sourceQuantityValue;
     @Column(precision = 18, scale = 6) private BigDecimal quantity;
     @Enumerated(EnumType.STRING) @Column(length = 20) private PurchaseDraftUnit unit;
+    @Column(length = 120) private String sourceUnitPriceValue;
+    @Column(precision = 19, scale = 2) private BigDecimal unitPrice;
+    @Column(precision = 19, scale = 2) private BigDecimal lineTotal;
+    @Enumerated(EnumType.STRING) @Column(length = 20) private PurchaseDraftUnit pricingUnit;
+    @Column(length = 3) private String currency;
     @Column(columnDefinition = "text") private String validationErrors;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private PurchaseDraftMatchStatus matchStatus;
     private UUID mappingId;
@@ -65,6 +70,16 @@ public class PurchaseDraftLine {
     public void setQuantity(BigDecimal value) { quantity = value; }
     public PurchaseDraftUnit getUnit() { return unit; }
     public void setUnit(PurchaseDraftUnit value) { unit = value; }
+    public String getSourceUnitPriceValue() { return sourceUnitPriceValue; }
+    public void setSourceUnitPriceValue(String value) { sourceUnitPriceValue = value; }
+    public BigDecimal getUnitPrice() { return unitPrice; }
+    public void setUnitPrice(BigDecimal value) { unitPrice = value; }
+    public BigDecimal getLineTotal() { return lineTotal; }
+    public void setLineTotal(BigDecimal value) { lineTotal = value; }
+    public PurchaseDraftUnit getPricingUnit() { return pricingUnit; }
+    public void setPricingUnit(PurchaseDraftUnit value) { pricingUnit = value; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String value) { currency = value; }
     public String getValidationErrors() { return validationErrors; }
     public void setValidationErrors(String value) { validationErrors = value; }
     public PurchaseDraftMatchStatus getMatchStatus() { return matchStatus; }

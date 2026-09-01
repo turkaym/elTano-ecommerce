@@ -56,6 +56,14 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
             from Product p
             join fetch p.category c
             left join fetch p.variants v
+            """)
+    List<Product> findAllInventoryExportTargets();
+
+    @Query("""
+            select distinct p
+            from Product p
+            join fetch p.category c
+            left join fetch p.variants v
             where p.id = :id
             """)
     Optional<Product> findByIdWithRelations(@Param("id") UUID id);

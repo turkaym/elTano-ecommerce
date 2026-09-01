@@ -1,5 +1,6 @@
 package com.eltano.ecommerce.catalog.domain;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,6 +59,14 @@ public class Product {
 
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int stockReservedBaseGrams;
+
+    @Column(precision = 19, scale = 2)
+    private BigDecimal latestUnitCost;
+    @Column(length = 20)
+    private String latestCostUnit;
+    private Instant latestCostAt;
+    private UUID latestCostPurchaseLineId;
+    private UUID latestCostReceiptId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
@@ -153,6 +162,17 @@ public class Product {
     public void setStockReservedBaseGrams(int stockReservedBaseGrams) {
         this.stockReservedBaseGrams = stockReservedBaseGrams;
     }
+
+    public BigDecimal getLatestUnitCost() { return latestUnitCost; }
+    public void setLatestUnitCost(BigDecimal value) { latestUnitCost = value; }
+    public String getLatestCostUnit() { return latestCostUnit; }
+    public void setLatestCostUnit(String value) { latestCostUnit = value; }
+    public Instant getLatestCostAt() { return latestCostAt; }
+    public void setLatestCostAt(Instant value) { latestCostAt = value; }
+    public UUID getLatestCostPurchaseLineId() { return latestCostPurchaseLineId; }
+    public void setLatestCostPurchaseLineId(UUID value) { latestCostPurchaseLineId = value; }
+    public UUID getLatestCostReceiptId() { return latestCostReceiptId; }
+    public void setLatestCostReceiptId(UUID value) { latestCostReceiptId = value; }
 
     public Category getCategory() {
         return category;

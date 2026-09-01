@@ -8,7 +8,7 @@ interface Props {
   onSupplierChange: (id: string) => void
   onDownloadTemplate: () => void
   onUpload: (file: File) => void
-  onCreateManual: (date: string, line: { productName: string; quantity: string; unit: string }) => void
+  onCreateManual: (date: string, line: { productName: string; quantity: string; unit: string; unitPrice: string }) => void
 }
 
 export function PurchaseDraftIntake(props: Props) {
@@ -19,6 +19,7 @@ export function PurchaseDraftIntake(props: Props) {
   const [productName, setProductName] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [unit, setUnit] = useState('UNIDAD')
+  const [unitPrice, setUnitPrice] = useState('')
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault()
@@ -29,7 +30,7 @@ export function PurchaseDraftIntake(props: Props) {
 
   function submitManual(event: FormEvent) {
     event.preventDefault()
-    props.onCreateManual(date, { productName: productName.trim(), quantity, unit })
+    props.onCreateManual(date, { productName: productName.trim(), quantity, unit, unitPrice })
   }
 
   return (
@@ -76,6 +77,7 @@ export function PurchaseDraftIntake(props: Props) {
             <label className="admin-field"><span>Producto</span><input value={productName} onChange={(event) => setProductName(event.target.value)} required /></label>
             <label className="admin-field"><span>Cantidad</span><input type="number" min="0.001" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} required /></label>
             <label className="admin-field"><span>Unidad</span><select value={unit} onChange={(event) => setUnit(event.target.value)}><option value="UNIDAD">Unidad</option><option value="KG">Kilogramo</option></select></label>
+            <label className="admin-field"><span>Precio unitario (ARS/{unit === 'KG' ? 'kg' : 'unidad'})</span><input type="number" min="0.01" step="0.01" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} required /></label>
           </div>
           <button className="btn btn-primary" disabled={!props.supplierId || props.pendingAction === 'manual'}>Crear borrador</button>
         </form>

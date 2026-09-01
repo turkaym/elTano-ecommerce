@@ -46,7 +46,7 @@ const unresolvedDraft = {
   id: 'd1', version: 2, status: 'DRAFT' as const, supplierId: 's1', supplierName: supplier.name,
   purchaseDate: '2026-08-29', sourceType: 'XLSX' as const, originalFilename: 'compra.xlsx', sourceSha256: 'hash',
   previewHash: null, confirmedPurchaseId: null, confirmedReceiptId: null, reused: false,
-  lines: [{ id: 'l1', rowNumber: 2, sourceDate: '2026-08-29', productName: 'Almendra', sourceQuantity: '2', quantity: '2', unit: 'UNIDAD' as const, errors: [], matchStatus: 'UNRESOLVED' as const, targetType: null, productId: null, variantId: null, targetLabel: null, targetLabelPersisted: false, conversion: null, canonicalDelta: null }],
+  lines: [{ id: 'l1', rowNumber: 2, sourceDate: '2026-08-29', productName: 'Almendra', sourceQuantity: '2', quantity: '2', unit: 'UNIDAD' as const, sourceUnitPrice: '100.50', unitPrice: '100.50', lineTotal: '201.00', pricingUnit: 'UNIDAD' as const, currency: 'ARS', errors: [], matchStatus: 'UNRESOLVED' as const, targetType: null, productId: null, variantId: null, targetLabel: null, targetLabelPersisted: false, conversion: null, canonicalDelta: null }],
 }
 const readyDraft = {
   ...unresolvedDraft, version: 3,
@@ -88,6 +88,7 @@ describe('AdminProcurementPage', () => {
     await user.click(screen.getByRole('button', { name: 'Importar y revisar' }))
     await screen.findByRole('heading', { name: supplier.name })
     expect(screen.getByLabelText('Resumen de filas')).toHaveTextContent('1sin resolver')
+    expect(screen.getByText(/ARS 100.50 por unidad/)).toHaveTextContent('Total ARS 201.00')
 
     await user.type(screen.getByLabelText('Buscar producto para Almendra'), 'alm')
     expect(await screen.findByRole('option', { name: 'Almendras - unidad' })).toBeInTheDocument()
@@ -107,9 +108,10 @@ describe('AdminProcurementPage', () => {
     await user.type(screen.getByLabelText('Producto'), 'Almendra')
     await user.clear(screen.getByLabelText('Cantidad'))
     await user.type(screen.getByLabelText('Cantidad'), '2')
+    await user.type(screen.getByLabelText('Precio unitario (ARS/unidad)'), '100.50')
     await user.click(screen.getByRole('button', { name: 'Crear borrador' }))
 
-    expect(createManualPurchaseDraft).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 's1', lines: [expect.objectContaining({ productName: 'Almendra', quantity: '2' })] }))
+    expect(createManualPurchaseDraft).toHaveBeenCalledWith(expect.objectContaining({ supplierId: 's1', lines: [expect.objectContaining({ productName: 'Almendra', quantity: '2', unitPrice: '100.5' })] }))
     expect(screen.queryByLabelText(/UUID/i)).not.toBeInTheDocument()
   })
 
@@ -138,10 +140,10 @@ describe('AdminProcurementPage', () => {
   it('keeps one confirmation idempotency key across a failed retry and shows receipt evidence', async () => {
     const user = userEvent.setup()
     vi.mocked(importPurchaseWorkbook).mockResolvedValue(readyDraft)
-    vi.mocked(previewPurchaseDraft).mockResolvedValue({ version: 3, ready: true, previewHash: 'hash', canonicalDeltas: [{ lineId: 'l1', targetType: 'VARIANT_UNIT', targetId: 'v1', delta: 2 }], errors: [] })
+    vi.mocked(previewPurchaseDraft).mockResolvedValue({ version: 3, ready: true, previewHash: 'hash', canonicalDeltas: [{ lineId: 'l1', targetType: 'VARIANT_UNIT', targetId: 'v1', delta: 2, pricingUnit: 'UNIDAD', unitPrice: '100.50', lineTotal: '201.00', currency: 'ARS' }], errors: [] })
     vi.mocked(confirmPurchaseDraft)
       .mockRejectedValueOnce(new ApiClientError(503, 'Servicio temporalmente no disponible'))
-      .mockResolvedValueOnce({ draftId: 'd1', purchaseId: 'p1', receiptId: 'r1', replayed: true, canonicalDeltas: [{ lineId: 'l1', targetType: 'VARIANT_UNIT', targetId: 'v1', delta: 2 }] })
+      .mockResolvedValueOnce({ draftId: 'd1', purchaseId: 'p1', receiptId: 'r1', replayed: true, canonicalDeltas: [{ lineId: 'l1', targetType: 'VARIANT_UNIT', targetId: 'v1', delta: 2, pricingUnit: 'UNIDAD', unitPrice: '100.50', lineTotal: '201.00', currency: 'ARS' }] })
     render(<AdminProcurementPage />)
     await screen.findByRole('option', { name: supplier.name })
     await user.upload(screen.getByLabelText('Archivo Excel'), new File(['x'], 'compra.xlsx'))
@@ -160,7 +162,7 @@ describe('AdminProcurementPage', () => {
 
   it('opens confirmed drafts as read-only evidence with purchase and receipt IDs', async () => {
     const user = userEvent.setup()
-    const confirmed = { ...readyDraft, status: 'CONFIRMED' as const, confirmedPurchaseId: 'p1', confirmedReceiptId: 'r1', lines: [{ ...readyDraft.lines[0], targetLabelPersisted: false }] }
+    const confirmed = { ...readyDraft, status: 'CONFIRMED' as const, confirmedPurchaseId: 'p1', confirmedReceiptId: 'r1', lines: [{ ...readyDraft.lines[0], unitPrice: null, lineTotal: null, pricingUnit: null, currency: null, targetLabelPersisted: false }] }
     vi.mocked(listPurchaseDrafts).mockResolvedValue([confirmed])
     vi.mocked(getPurchaseDraft).mockResolvedValue(confirmed)
     render(<AdminProcurementPage />)
@@ -172,6 +174,7 @@ describe('AdminProcurementPage', () => {
     expect(screen.getByText('r1')).toBeInTheDocument()
     expect(screen.getByText(/Almendra →/)).toHaveTextContent('Almendras - ALM-1')
     expect(screen.getByText(/reconstruida del catálogo actual/i)).toBeInTheDocument()
+    expect(screen.getByText('Costo no disponible')).toBeInTheDocument()
     expect(screen.getByText('+2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Generar vista previa' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()

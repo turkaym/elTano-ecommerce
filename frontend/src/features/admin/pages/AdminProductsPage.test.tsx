@@ -7,6 +7,7 @@ import { AdminProductsPage } from './AdminProductsPage'
 import {
   createAdminProduct,
   deleteAdminProduct,
+  downloadAdminInventoryExport,
   listAdminCategories,
   listAdminProducts,
   mapAdminWriteError,
@@ -14,6 +15,7 @@ import {
   uploadAdminProductImage,
   updateAdminProduct,
 } from '../services/adminOperationsService'
+import { saveBlob } from './procurementUi'
 
 function render(ui: ReactElement, route = '/admin/productos') {
   function Wrapper({ children }: { children: ReactNode }) {
@@ -61,10 +63,13 @@ vi.mock('../services/adminOperationsService', () => ({
   createAdminProduct: vi.fn(async () => ({ id: 'p-2', name: 'Pera' })),
   updateAdminProduct: vi.fn(async () => ({ id: 'p-1', name: 'Nuez Premium' })),
   deleteAdminProduct: vi.fn(async () => undefined),
+  downloadAdminInventoryExport: vi.fn(async () => ({ blob: new Blob(['inventory']), filename: 'inventario-completo-20260831-181500.xlsx' })),
   restoreAdminProduct: vi.fn(async () => undefined),
   uploadAdminProductImage: vi.fn(async () => ({ url: '/uploads/product-images/uploaded-nuez.png' })),
   mapAdminWriteError: vi.fn(() => ({ message: 'Error API' })),
 }))
+
+vi.mock('./procurementUi', () => ({ saveBlob: vi.fn() }))
 
 describe('AdminProductsPage', () => {
   beforeEach(() => {
@@ -113,6 +118,37 @@ describe('AdminProductsPage', () => {
     expect(screen.getByRole('article', { name: /Producto Nuez/i })).toHaveTextContent('Stock bajo')
     expect(screen.getByRole('article', { name: /Producto Nuez/i })).toHaveTextContent('4,5 kg disponibles · 1,5 kg reservados')
     expect(screen.getByRole('button', { name: /Desactivar producto Nuez/i })).toBeInTheDocument()
+  })
+
+  it('exports all inventory records once while pending and explains the export scope', async () => {
+    let resolveExport: ((value: { blob: Blob; filename: string }) => void) | undefined
+    vi.mocked(downloadAdminInventoryExport).mockImplementationOnce(() => new Promise((resolve) => { resolveExport = resolve }))
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+    const button = screen.getByRole('button', { name: 'Exportar inventario' })
+
+    fireEvent.click(button)
+    fireEvent.click(button)
+
+    expect(screen.getByRole('button', { name: 'Exportando inventario…' })).toBeDisabled()
+    expect(downloadAdminInventoryExport).toHaveBeenCalledTimes(1)
+    expect(screen.getByText(/Incluye registros de inventario activos, inactivos y eliminados/i)).toBeInTheDocument()
+    const blob = new Blob(['inventory'])
+    resolveExport?.({ blob, filename: 'inventario-completo-20260831-181500.xlsx' })
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(blob, 'inventario-completo-20260831-181500.xlsx'))
+    expect(screen.getByRole('button', { name: 'Exportar inventario' })).toBeEnabled()
+  })
+
+  it('keeps export available when product loading fails and reports export failure independently', async () => {
+    vi.mocked(listAdminProducts).mockRejectedValueOnce(new Error('load failed'))
+    vi.mocked(downloadAdminInventoryExport).mockRejectedValueOnce(new Error('export failed'))
+    render(<AdminProductsPage />)
+
+    expect(await screen.findByText('No se pudo cargar productos admin.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar inventario' }))
+
+    expect(await screen.findByText('No pudimos exportar el inventario. Intentá nuevamente.')).toHaveAttribute('role', 'alert')
+    expect(downloadAdminInventoryExport).toHaveBeenCalledTimes(1)
   })
 
   it('organizes products as scannable cards with media, metadata, variants and actions', async () => {

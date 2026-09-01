@@ -71,7 +71,7 @@ export function usePurchaseDraftWorkflow(suppliers: SupplierDto[], onConfirmed: 
     }
   }
 
-  async function createManual(purchaseDate: string, line: { productName: string; quantity: string; unit: string }) {
+  async function createManual(purchaseDate: string, line: { productName: string; quantity: string; unit: string; unitPrice: string }) {
     if (!supplierId) return setError('Seleccioná un proveedor antes de crear el borrador.')
     const result = await run('manual', () => createManualPurchaseDraft({ supplierId, purchaseDate, lines: [line] }))
     if (result) replaceDraft(result)

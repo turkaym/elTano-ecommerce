@@ -56,6 +56,14 @@ public class ProductVariant {
     @Column(nullable = false)
     private int stockReserved;
 
+    @Column(precision = 19, scale = 2)
+    private BigDecimal latestUnitCost;
+    @Column(length = 20)
+    private String latestCostUnit;
+    private Instant latestCostAt;
+    private UUID latestCostPurchaseLineId;
+    private UUID latestCostReceiptId;
+
     @Column(nullable = false)
     private boolean active;
 
@@ -137,6 +145,17 @@ public class ProductVariant {
     public void setStockReserved(int stockReserved) {
         this.stockReserved = stockReserved;
     }
+
+    public BigDecimal getLatestUnitCost() { return latestUnitCost; }
+    public void setLatestUnitCost(BigDecimal value) { latestUnitCost = value; }
+    public String getLatestCostUnit() { return latestCostUnit; }
+    public void setLatestCostUnit(String value) { latestCostUnit = value; }
+    public Instant getLatestCostAt() { return latestCostAt; }
+    public void setLatestCostAt(Instant value) { latestCostAt = value; }
+    public UUID getLatestCostPurchaseLineId() { return latestCostPurchaseLineId; }
+    public void setLatestCostPurchaseLineId(UUID value) { latestCostPurchaseLineId = value; }
+    public UUID getLatestCostReceiptId() { return latestCostReceiptId; }
+    public void setLatestCostReceiptId(UUID value) { latestCostReceiptId = value; }
 
     public boolean isActive() {
         return active;

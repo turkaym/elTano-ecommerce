@@ -47,7 +47,7 @@ class ProcurementMigrationPostgreSqlIntegrationTest {
             execute(connection, "insert into purchase_draft_lines(id,draft_id,source_product_name,normalized_product_name,source_quantity_value,quantity,unit,match_status,target_type,variant_id,conversion) values ('%s','%s','Confirmed legacy','confirmed legacy','1',1,'UNIDAD','MATCHED','VARIANT_UNIT','%s',1)".formatted(confirmedLineId, confirmedDraftId, fixture.variantId()));
             execute(connection, "update purchase_drafts set status='CONFIRMED',confirmed_purchase_id='%s',confirmed_receipt_id='%s',confirm_idempotency_key='key',confirm_request_hash='%s' where id='%s'".formatted(fixture.purchaseId(), receiptId, "b".repeat(64), confirmedDraftId));
         } catch (SQLException exception) { throw new IllegalStateException(exception); }
-        assertEquals(1, configuration.target("latest").load().migrate().migrationsExecuted);
+        assertEquals(2, configuration.target("latest").load().migrate().migrationsExecuted);
     }
 
     @Test
@@ -56,6 +56,7 @@ class ProcurementMigrationPostgreSqlIntegrationTest {
                 var result = statement.executeQuery("select target_label from purchase_draft_lines where id='" + backfilledLineId + "'")) {
             result.next(); assertEquals(backfilledLabel, result.getString(1));
             assertEquals(null, scalar(connection, "select target_label from purchase_draft_lines where id='" + confirmedLineId + "'"));
+            assertEquals(null, scalar(connection, "select unit_price from purchase_draft_lines where id='" + confirmedLineId + "'"));
             assertImmutable(connection, "update purchase_draft_lines set quantity=2 where id='" + confirmedLineId + "'");
             execute(connection, "insert into purchase_draft_lines(id,draft_id,source_product_name,normalized_product_name,source_quantity_value,quantity,unit,match_status,target_type,variant_id,conversion) select '%s',draft_id,'Rolling','rolling','1',1,'UNIDAD','MATCHED',target_type,variant_id,1 from purchase_draft_lines where id='%s'".formatted(UUID.randomUUID(), backfilledLineId));
         }
@@ -121,6 +122,7 @@ class ProcurementMigrationPostgreSqlIntegrationTest {
                     .formatted(UUID.randomUUID(), receiptLineId));
 
             assertInvariant(connection, "update purchase_lines set supplier_description='rewritten' where id='%s'".formatted(fixture.purchaseLineId()));
+            assertInvariant(connection, "update purchase_lines set unit_price=100,line_total=200,pricing_unit='UNIDAD',currency='ARS' where id='%s'".formatted(fixture.purchaseLineId()));
             assertInvariant(connection, "insert into purchase_receipt_dispositions(id,receipt_line_id,type,quantity) values ('%s','%s','ACCEPTED_ORDERED',2.000000)"
                     .formatted(UUID.randomUUID(), receiptLineId));
             assertInvariant(connection, "update purchases set status='RECEIVED' where id='%s'".formatted(fixture.purchaseId()));
@@ -129,6 +131,19 @@ class ProcurementMigrationPostgreSqlIntegrationTest {
                     .formatted(UUID.randomUUID(), receiptLineId));
             execute(connection, "update purchases set status='RECEIVED' where id='%s'".formatted(fixture.purchaseId()));
             assertInvariant(connection, "update purchases set status='CANCELLED' where id='%s'".formatted(fixture.purchaseId()));
+        }
+    }
+
+    @Test
+    void enforcesCompleteCostSnapshotsAndLatestCostEvidenceReferences() throws Exception {
+        try (Connection connection = POSTGRES.createConnection("")) {
+            Fixture fixture = fixture(connection);
+            assertEquals(null, scalar(connection, "select unit_price from purchase_lines where id='" + fixture.purchaseLineId() + "'"));
+            assertConstraint(connection, "update purchase_lines set unit_price=100 where id='%s'".formatted(fixture.purchaseLineId()));
+            assertConstraint(connection, "update product_variants set latest_unit_cost=100,latest_cost_unit='KG',latest_cost_at=now(),latest_cost_purchase_line_id='%s',latest_cost_receipt_id='%s' where id='%s'"
+                    .formatted(fixture.purchaseLineId(), UUID.randomUUID(), fixture.variantId()));
+            assertConstraint(connection, "update products set latest_unit_cost=100,latest_cost_unit='UNIDAD',latest_cost_at=now(),latest_cost_purchase_line_id='%s',latest_cost_receipt_id='%s' where id='%s'"
+                    .formatted(fixture.purchaseLineId(), UUID.randomUUID(), fixture.productId()));
         }
     }
 

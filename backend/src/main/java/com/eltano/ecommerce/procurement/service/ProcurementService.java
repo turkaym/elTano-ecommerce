@@ -1,6 +1,7 @@
 package com.eltano.ecommerce.procurement.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -48,6 +49,8 @@ import com.eltano.ecommerce.procurement.repository.StockMovementRepository;
 import com.eltano.ecommerce.procurement.repository.SupplierItemMappingRepository;
 import com.eltano.ecommerce.procurement.repository.SupplierRepository;
 
+import jakarta.persistence.EntityManager;
+
 @Service
 public class ProcurementService {
     private final SupplierRepository suppliers;
@@ -59,10 +62,12 @@ public class ProcurementService {
     private final ProductRepository products;
     private final ProductVariantRepository variants;
     private final MeterRegistry metrics;
+    private final EntityManager entityManager;
 
     public ProcurementService(SupplierRepository suppliers, SupplierItemMappingRepository mappings,
             PurchaseRepository purchases, PurchaseReceiptRepository receipts, StockMovementRepository movements,
-            InventoryMutationService inventory, ProductRepository products, ProductVariantRepository variants, MeterRegistry metrics) {
+            InventoryMutationService inventory, ProductRepository products, ProductVariantRepository variants,
+            MeterRegistry metrics, EntityManager entityManager) {
         this.suppliers = suppliers;
         this.mappings = mappings;
         this.purchases = purchases;
@@ -72,6 +77,7 @@ public class ProcurementService {
         this.products = products;
         this.variants = variants;
         this.metrics = metrics;
+        this.entityManager = entityManager;
     }
 
     @Transactional(readOnly = true)
@@ -236,11 +242,13 @@ public class ProcurementService {
         }
         if (purchase.getStatus() != PurchaseStatus.PENDING) conflict("INVALID_STATE", "Only pending purchases can receive stock");
         validateReceipt(purchase, command);
+        validateAcceptedCosts(purchase, command);
         List<CanonicalDelta> preview = previewDeltas(purchase, command);
         PurchaseReceipt receipt = evidence(purchase, ReceiptKind.RECEIPT, key, hash, null, actor, correlationId, command);
         receipts.saveAndFlush(receipt);
         List<InventoryMutation> applied = inventory.apply(preview.stream().map(this::inventoryDelta).toList());
         saveMovements(purchase, receipt, applied, preview, actor, correlationId, "RECEIPT");
+        updateLatestCosts(purchase, receipt, command);
         purchase.setStatus(deriveStatus(purchase));
         metrics.counter("procurement.receipt.confirmations").increment();
         return new ReceiptResponse(receipt.getId(), purchase.getStatus(), false, preview);
@@ -295,6 +303,7 @@ public class ProcurementService {
             cancellation = applied.stream().map(mutation -> new CanonicalDelta(mutation.targetType(), mutation.targetId(),
                     mutation.delta(), BigDecimal.valueOf(Math.abs((long) mutation.delta())), BigDecimal.ONE)).toList();
             saveCancellationMovements(purchase, receipt, applied, actor, correlationId);
+            refreshLatestCostsAfterCancellation(purchase);
         } catch (InventoryInvariantException exception) {
             metrics.counter("procurement.reversal.blocked").increment();
             conflict("REVERSAL_BLOCKED", exception.getMessage());
@@ -303,6 +312,51 @@ public class ProcurementService {
         metrics.counter("procurement.receipt.cancellations").increment();
         return new ReceiptResponse(receipt.getId(), purchase.getStatus(), false, cancellation);
     }
+
+    private void refreshLatestCostsAfterCancellation(Purchase purchase) {
+        var cancelledLineIds = purchase.getLines().stream().map(PurchaseLine::getId).collect(Collectors.toSet());
+        List<UUID> productIds = purchase.getLines().stream().filter(line -> line.getUnitPrice() != null && line.getTargetType() == InventoryTargetType.BULK_GRAM)
+                .map(PurchaseLine::getProductId).distinct().sorted(Comparator.comparing(UUID::toString)).toList();
+        List<UUID> variantIds = purchase.getLines().stream().filter(line -> line.getUnitPrice() != null && line.getTargetType() == InventoryTargetType.VARIANT_UNIT)
+                .map(PurchaseLine::getVariantId).distinct().sorted(Comparator.comparing(UUID::toString)).toList();
+        products.findAllByIdInForUpdate(productIds).forEach(product -> {
+            if (!cancelledLineIds.contains(product.getLatestCostPurchaseLineId())) return;
+            CostEvidence evidence = latestRemainingCost(purchase.getId(), InventoryTargetType.BULK_GRAM, product.getId());
+            product.setLatestUnitCost(evidence == null ? null : evidence.line().getUnitPrice());
+            product.setLatestCostUnit(evidence == null ? null : evidence.line().getPricingUnit());
+            product.setLatestCostAt(evidence == null ? null : evidence.receipt().getConfirmedAt());
+            product.setLatestCostPurchaseLineId(evidence == null ? null : evidence.line().getId());
+            product.setLatestCostReceiptId(evidence == null ? null : evidence.receipt().getId());
+        });
+        variants.findAllByIdInForUpdate(variantIds).forEach(variant -> {
+            if (!cancelledLineIds.contains(variant.getLatestCostPurchaseLineId())) return;
+            CostEvidence evidence = latestRemainingCost(purchase.getId(), InventoryTargetType.VARIANT_UNIT, variant.getId());
+            variant.setLatestUnitCost(evidence == null ? null : evidence.line().getUnitPrice());
+            variant.setLatestCostUnit(evidence == null ? null : evidence.line().getPricingUnit());
+            variant.setLatestCostAt(evidence == null ? null : evidence.receipt().getConfirmedAt());
+            variant.setLatestCostPurchaseLineId(evidence == null ? null : evidence.line().getId());
+            variant.setLatestCostReceiptId(evidence == null ? null : evidence.receipt().getId());
+        });
+    }
+
+    private CostEvidence latestRemainingCost(UUID cancelledPurchaseId, InventoryTargetType targetType, UUID targetId) {
+        String targetField = targetType == InventoryTargetType.BULK_GRAM ? "productId" : "variantId";
+        List<Object[]> rows = entityManager.createQuery("""
+                select line, receipt from PurchaseReceipt receipt
+                join receipt.lines receiptLine join receiptLine.purchaseLine line join receiptLine.dispositions disposition
+                where receipt.kind = :kind and receipt.purchase.status <> :cancelled
+                  and receipt.purchase.id <> :cancelledPurchaseId and disposition.type in :accepted
+                  and line.targetType = :targetType and line.%s = :targetId and line.unitPrice is not null
+                order by receipt.confirmedAt desc, receipt.id desc, line.id desc
+                """.formatted(targetField), Object[].class)
+                .setParameter("kind", ReceiptKind.RECEIPT).setParameter("cancelled", PurchaseStatus.CANCELLED)
+                .setParameter("cancelledPurchaseId", cancelledPurchaseId)
+                .setParameter("accepted", List.of(DispositionType.ACCEPTED_ORDERED, DispositionType.ACCEPTED_EXCESS))
+                .setParameter("targetType", targetType).setParameter("targetId", targetId).setMaxResults(1).getResultList();
+        return rows.isEmpty() ? null : new CostEvidence((PurchaseLine) rows.getFirst()[0], (PurchaseReceipt) rows.getFirst()[1]);
+    }
+
+    private record CostEvidence(PurchaseLine line, PurchaseReceipt receipt) { }
 
     private PurchaseReceipt evidence(Purchase purchase, ReceiptKind kind, String key, String hash, String note,
             String actor, String correlationId, ReceiptCommand command) {
@@ -348,6 +402,58 @@ public class ProcurementService {
                     PurchaseLine line = lines.get(lineCommand.purchaseLineId());
                     return new CanonicalDelta(line.getTargetType(), targetId(line), ProcurementRules.toCanonical(item.quantity(), line.getConversion()), item.quantity(), line.getConversion());
                 })).toList();
+    }
+
+    private void validateAcceptedCosts(Purchase purchase, ReceiptCommand command) {
+        Map<UUID, PurchaseLine> lines = purchase.getLines().stream().collect(Collectors.toMap(PurchaseLine::getId, Function.identity()));
+        Map<String, BigDecimal> costs = new java.util.HashMap<>();
+        command.lines().stream().filter(line -> line.dispositions().stream().anyMatch(this::accepted)).forEach(commandLine -> {
+            PurchaseLine line = lines.get(commandLine.purchaseLineId());
+            if (line.getUnitPrice() == null) return;
+            String target = line.getTargetType() + ":" + targetId(line);
+            BigDecimal prior = costs.putIfAbsent(target, line.getUnitPrice());
+            if (prior != null && prior.compareTo(line.getUnitPrice()) != 0) {
+                conflict("CONFLICTING_UNIT_COST", "Un mismo destino no puede confirmarse con precios unitarios diferentes.");
+            }
+        });
+    }
+
+    private void updateLatestCosts(Purchase purchase, PurchaseReceipt receipt, ReceiptCommand command) {
+        Map<UUID, PurchaseLine> lines = purchase.getLines().stream().collect(Collectors.toMap(PurchaseLine::getId, Function.identity()));
+        List<PurchaseLine> accepted = command.lines().stream()
+                .filter(line -> line.dispositions().stream().anyMatch(this::accepted))
+                .map(line -> lines.get(line.purchaseLineId())).filter(line -> line.getUnitPrice() != null).toList();
+        List<UUID> productIds = accepted.stream().filter(line -> line.getTargetType() == InventoryTargetType.BULK_GRAM)
+                .map(PurchaseLine::getProductId).distinct().sorted(Comparator.comparing(UUID::toString)).toList();
+        List<UUID> variantIds = accepted.stream().filter(line -> line.getTargetType() == InventoryTargetType.VARIANT_UNIT)
+                .map(PurchaseLine::getVariantId).distinct().sorted(Comparator.comparing(UUID::toString)).toList();
+        Map<UUID, Product> lockedProducts = products.findAllByIdInForUpdate(productIds).stream().collect(Collectors.toMap(Product::getId, Function.identity()));
+        Map<UUID, ProductVariant> lockedVariants = variants.findAllByIdInForUpdate(variantIds).stream().collect(Collectors.toMap(ProductVariant::getId, Function.identity()));
+        accepted.forEach(line -> {
+            if (line.getTargetType() == InventoryTargetType.BULK_GRAM) updateLatestCost(lockedProducts.get(line.getProductId()), line, receipt);
+            else updateLatestCost(lockedVariants.get(line.getVariantId()), line, receipt);
+        });
+    }
+
+    private boolean accepted(DispositionCommand disposition) {
+        return disposition.type() == DispositionType.ACCEPTED_ORDERED || disposition.type() == DispositionType.ACCEPTED_EXCESS;
+    }
+
+    private void updateLatestCost(Product product, PurchaseLine line, PurchaseReceipt receipt) {
+        if (!newer(receipt, product.getLatestCostAt(), product.getLatestCostReceiptId())) return;
+        product.setLatestUnitCost(line.getUnitPrice()); product.setLatestCostUnit(line.getPricingUnit());
+        product.setLatestCostAt(receipt.getConfirmedAt()); product.setLatestCostPurchaseLineId(line.getId()); product.setLatestCostReceiptId(receipt.getId());
+    }
+
+    private void updateLatestCost(ProductVariant variant, PurchaseLine line, PurchaseReceipt receipt) {
+        if (!newer(receipt, variant.getLatestCostAt(), variant.getLatestCostReceiptId())) return;
+        variant.setLatestUnitCost(line.getUnitPrice()); variant.setLatestCostUnit(line.getPricingUnit());
+        variant.setLatestCostAt(receipt.getConfirmedAt()); variant.setLatestCostPurchaseLineId(line.getId()); variant.setLatestCostReceiptId(receipt.getId());
+    }
+
+    private boolean newer(PurchaseReceipt receipt, java.time.Instant currentAt, UUID currentReceiptId) {
+        return currentAt == null || receipt.getConfirmedAt().isAfter(currentAt)
+                || receipt.getConfirmedAt().equals(currentAt) && receipt.getId().toString().compareTo(currentReceiptId.toString()) > 0;
     }
 
     private PurchaseStatus deriveStatus(Purchase purchase) {
@@ -434,6 +540,7 @@ public class ProcurementService {
         requireText(command.sourceProductName(), "El nombre de producto es obligatorio.");
         requirePositive(command.quantity(), "La cantidad debe ser positiva.");
         requirePositive(command.conversion(), "La conversion debe ser positiva.");
+        validateImportedCost(command);
         ProcurementRules.toCanonical(command.quantity(), command.conversion());
         boolean valid = command.targetType() == InventoryTargetType.VARIANT_UNIT && command.variantId() != null && command.productId() == null
                 || command.targetType() == InventoryTargetType.BULK_GRAM && command.productId() != null && command.variantId() == null;
@@ -447,7 +554,26 @@ public class ProcurementService {
         line.setVariantId(command.variantId());
         line.setOrderedQuantity(command.quantity());
         line.setConversion(command.conversion());
+        line.setUnitPrice(command.unitPrice());
+        line.setLineTotal(command.lineTotal());
+        line.setPricingUnit(command.pricingUnit());
+        line.setCurrency(command.currency());
         return line;
+    }
+    private void validateImportedCost(ImportedPurchaseLine command) {
+        requirePositive(command.unitPrice(), "El precio unitario debe ser positivo.");
+        requirePositive(command.lineTotal(), "El costo total debe ser positivo.");
+        if (Math.max(0, command.unitPrice().stripTrailingZeros().scale()) > 2 || command.unitPrice().setScale(2).precision() > 19) {
+            throw new IllegalArgumentException("El precio unitario no es valido.");
+        }
+        BigDecimal expected = command.quantity().multiply(command.unitPrice()).setScale(2, RoundingMode.HALF_UP);
+        if (expected.precision() > 19 || expected.compareTo(command.lineTotal()) != 0) {
+            throw new IllegalArgumentException("El costo total no coincide con cantidad por precio unitario.");
+        }
+        String expectedUnit = command.targetType() == InventoryTargetType.BULK_GRAM ? "KG" : "UNIDAD";
+        if (!expectedUnit.equals(command.pricingUnit()) || !"ARS".equals(command.currency())) {
+            throw new IllegalArgumentException("La unidad de precio o moneda importada es invalida.");
+        }
     }
     private void validateMapping(MappingCommand command) {
         requireText(command.supplierItemCode(), "Supplier item code is required"); requireText(command.description(), "Description is required");
@@ -502,7 +628,8 @@ public class ProcurementService {
         List<PurchaseLineResponse> lineResponses = value.getLines().stream().map(line -> {
             BigDecimal outstanding = ProcurementRules.progress(line.getOrderedQuantity(), dispositionProgress.getOrDefault(line.getId(), List.of())).outstanding();
             return new PurchaseLineResponse(line.getId(), line.getMappingId(), line.getSupplierItemCode(), line.getSupplierDescription(),
-                    line.getTargetType(), line.getProductId(), line.getVariantId(), line.getOrderedQuantity(), line.getConversion(), outstanding);
+                    line.getTargetType(), line.getProductId(), line.getVariantId(), line.getOrderedQuantity(), line.getConversion(),
+                    line.getUnitPrice(), line.getLineTotal(), line.getPricingUnit(), line.getCurrency(), outstanding);
         }).toList();
         BigDecimal ordered = value.getLines().stream().map(PurchaseLine::getOrderedQuantity).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal outstanding = lineResponses.stream().map(PurchaseLineResponse::outstandingQuantity).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -519,7 +646,9 @@ public class ProcurementService {
     public record MappingResponse(UUID id, UUID supplierId, String supplierItemCode, String supplierItemName, String description, InventoryTargetType targetType, UUID productId, UUID variantId, String targetLabel, BigDecimal defaultConversion, boolean active) { }
     public record PurchaseLineCommand(UUID mappingId, BigDecimal orderedQuantity, BigDecimal conversion) { }
     public record PurchaseCommand(UUID supplierId, String documentType, String documentNumber, LocalDate purchasedAt, List<PurchaseLineCommand> lines) { }
-    public record PurchaseLineResponse(UUID id, UUID mappingId, String supplierItemCode, String supplierDescription, InventoryTargetType targetType, UUID productId, UUID variantId, BigDecimal orderedQuantity, BigDecimal conversion, BigDecimal outstandingQuantity) { }
+    public record PurchaseLineResponse(UUID id, UUID mappingId, String supplierItemCode, String supplierDescription, InventoryTargetType targetType,
+            UUID productId, UUID variantId, BigDecimal orderedQuantity, BigDecimal conversion, BigDecimal unitPrice,
+            BigDecimal lineTotal, String pricingUnit, String currency, BigDecimal outstandingQuantity) { }
     public record PurchaseResponse(UUID id, UUID supplierId, String supplierName, String documentType, String documentNumber, LocalDate purchasedAt, PurchaseStatus status, String progress, List<PurchaseLineResponse> lines, java.time.Instant createdAt) { }
     public record DispositionCommand(DispositionType type, BigDecimal quantity, String note) { }
     public record ReceiptLineCommand(UUID purchaseLineId, List<DispositionCommand> dispositions) { }
@@ -530,6 +659,7 @@ public class ProcurementService {
     public record CorrectionDelta(InventoryTargetType targetType, UUID targetId, int delta) { }
     public record CorrectionCommand(String reason, List<CorrectionDelta> deltas) { }
     public record ImportedPurchaseLine(String sourceProductName, UUID mappingId, InventoryTargetType targetType,
-            UUID productId, UUID variantId, BigDecimal quantity, BigDecimal conversion) { }
+            UUID productId, UUID variantId, BigDecimal quantity, BigDecimal conversion, BigDecimal unitPrice,
+            BigDecimal lineTotal, String pricingUnit, String currency) { }
     public record ImportedPurchaseResult(UUID purchaseId, UUID receiptId, boolean replayed) { }
 }

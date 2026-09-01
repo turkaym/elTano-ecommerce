@@ -5,7 +5,7 @@ const basePath = '/api/admin/procurement'
 
 export interface SupplierDto { id: string; name: string; taxIdentity?: string | null; active: boolean }
 export interface MappingDto { id: string; supplierId: string; supplierItemCode: string; supplierItemName?: string | null; description: string; targetType: 'VARIANT_UNIT' | 'BULK_GRAM'; productId?: string | null; variantId?: string | null; targetLabel: string | null; defaultConversion: string | number; active: boolean }
-export interface PurchaseLineDto { id: string; mappingId: string; supplierItemCode: string; supplierDescription: string; targetType: 'VARIANT_UNIT' | 'BULK_GRAM'; productId?: string | null; variantId?: string | null; orderedQuantity: string | number; conversion: string | number }
+export interface PurchaseLineDto { id: string; mappingId: string; supplierItemCode: string; supplierDescription: string; targetType: 'VARIANT_UNIT' | 'BULK_GRAM'; productId?: string | null; variantId?: string | null; orderedQuantity: string | number; conversion: string | number; unitPrice?: string | number | null; lineTotal?: string | number | null; pricingUnit?: 'KG' | 'UNIDAD' | null; currency?: string | null }
 export interface PurchaseDto { id: string; supplierId?: string; supplierName: string; documentType: string; documentNumber: string; purchasedAt?: string; status: 'PENDING' | 'RECEIVED' | 'CANCELLED'; progress?: string; lines?: PurchaseLineDto[] }
 export interface ReceiptDraft { lines: Array<{ purchaseLineId: string; dispositions?: Array<{ type: string; quantity: string; note?: string }>; acceptedOrdered?: string }> }
 export interface ReceiptResult { receiptId?: string; status?: PurchaseDto['status']; replayed?: boolean; canonicalDeltas: Array<{ targetType: string; targetId: string; delta: number }> }
@@ -13,11 +13,11 @@ export type PurchaseDraftStatus = 'DRAFT' | 'CONFIRMED' | 'DELETED'
 export type PurchaseDraftLineStatus = 'MATCHED' | 'UNRESOLVED' | 'INVALID'
 export type PurchaseDraftSourceType = 'XLSX' | 'MANUAL'
 export type PurchaseDraftTargetType = 'VARIANT_UNIT' | 'BULK_GRAM'
-export interface PurchaseDraftLine { id: string; rowNumber: number | null; sourceDate: string | null; productName: string; sourceQuantity: string; quantity: string | number | null; unit: 'KG' | 'UNIDAD' | null; errors: string[]; matchStatus: PurchaseDraftLineStatus; targetType: PurchaseDraftTargetType | null; productId: string | null; variantId: string | null; targetLabel: string | null; targetLabelPersisted: boolean; conversion: string | number | null; canonicalDelta: number | null }
+export interface PurchaseDraftLine { id: string; rowNumber: number | null; sourceDate: string | null; productName: string; sourceQuantity: string; quantity: string | number | null; unit: 'KG' | 'UNIDAD' | null; sourceUnitPrice: string | null; unitPrice: string | number | null; lineTotal: string | number | null; pricingUnit: 'KG' | 'UNIDAD' | null; currency: string | null; errors: string[]; matchStatus: PurchaseDraftLineStatus; targetType: PurchaseDraftTargetType | null; productId: string | null; variantId: string | null; targetLabel: string | null; targetLabelPersisted: boolean; conversion: string | number | null; canonicalDelta: number | null }
 export interface PurchaseDraft { id: string; version: number; status: PurchaseDraftStatus; supplierId: string; supplierName: string; purchaseDate: string; sourceType: PurchaseDraftSourceType; originalFilename: string | null; sourceSha256: string | null; previewHash: string | null; confirmedPurchaseId: string | null; confirmedReceiptId: string | null; reused: boolean; lines: PurchaseDraftLine[] }
-export interface PurchaseDraftLineCommand { version: number; productName: string; quantity: string; unit: string }
+export interface PurchaseDraftLineCommand { version: number; productName: string; quantity: string; unit: string; unitPrice: string }
 export interface CatalogCandidate { value: string; label: string; targetType: PurchaseDraftTargetType }
-export interface CanonicalInventoryDelta { lineId: string; targetType: PurchaseDraftTargetType; targetId: string; delta: number }
+export interface CanonicalInventoryDelta { lineId: string; targetType: PurchaseDraftTargetType; targetId: string; delta: number; pricingUnit: 'KG' | 'UNIDAD'; unitPrice: string | number; lineTotal: string | number; currency: string }
 export interface PurchaseDraftRowError { rowNumber: number | null; code: string; message: string }
 export interface PurchaseDraftPreview { version: number; ready: boolean; previewHash: string | null; canonicalDeltas: CanonicalInventoryDelta[]; errors: PurchaseDraftRowError[] }
 export interface PurchaseDraftConfirmation { draftId: string; purchaseId: string; receiptId: string; replayed: boolean; canonicalDeltas: CanonicalInventoryDelta[] }
@@ -49,7 +49,7 @@ const draftPath = `${basePath}/purchase-drafts`
 export function downloadPurchaseDraftTemplate() { return requestBlob(`${draftPath}/template`).then(({ blob }) => blob) }
 export function listPurchaseDrafts() { return request<PurchaseDraft[]>(draftPath) }
 export function getPurchaseDraft(id: string) { return request<PurchaseDraft>(`${draftPath}/${id}`) }
-export function createManualPurchaseDraft(payload: { supplierId: string; purchaseDate: string; lines: Array<{ productName: string; quantity: string; unit: string }> }) { return request<PurchaseDraft>(draftPath, { method: 'POST', body: payload }) }
+export function createManualPurchaseDraft(payload: { supplierId: string; purchaseDate: string; lines: Array<{ productName: string; quantity: string; unit: string; unitPrice: string }> }) { return request<PurchaseDraft>(draftPath, { method: 'POST', body: payload }) }
 export function importPurchaseWorkbook(supplierId: string, file: File, idempotencyKey: string) {
   const body = new FormData()
   body.set('supplierId', supplierId)

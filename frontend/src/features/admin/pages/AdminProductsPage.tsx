@@ -4,6 +4,7 @@ import {
   type AdminCategoryDto,
   createAdminProduct,
   deleteAdminProduct,
+  downloadAdminInventoryExport,
   listAdminCategories,
   listAdminProducts,
   mapAdminWriteError,
@@ -15,6 +16,7 @@ import {
 import { getAdminStockState } from '../stock/adminStockState'
 import { AdminEmptyState, AdminErrorState, AdminLoadingState, AdminWriteStateBanner } from './AdminPageStates'
 import { useAdminWriteState } from './adminWriteState'
+import { saveBlob } from './procurementUi'
 
 type VariantUnit = 'g' | 'kg' | 'ml' | 'l' | 'unidad'
 type StockFilter = 'all' | 'low' | 'out'
@@ -101,6 +103,8 @@ export function AdminProductsPage() {
   const [editDraft, setEditDraft] = useState<ProductFormDraft | null>(null)
   const [stockBaseGrams, setStockBaseGrams] = useState('')
   const [pricePerKg, setPricePerKg] = useState('')
+  const [exportPending, setExportPending] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const editNameRef = useRef<HTMLInputElement>(null)
   const editDialogRef = useRef<HTMLElement>(null)
   const editTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -259,8 +263,30 @@ export function AdminProductsPage() {
     }
   }
 
-  if (status === 'loading') return <AdminLoadingState label="Cargando productos…" />
-  if (status === 'error') return <AdminErrorState message="No se pudo cargar productos admin." />
+  async function exportInventory() {
+    if (exportPending) return
+    setExportPending(true)
+    setExportError(null)
+    try {
+      const result = await downloadAdminInventoryExport()
+      saveBlob(result.blob, result.filename)
+    } catch {
+      setExportError('No pudimos exportar el inventario. Intentá nuevamente.')
+    } finally {
+      setExportPending(false)
+    }
+  }
+
+  const exportAction = <div className="admin-item-actions">
+    <button className="btn btn-secondary" type="button" disabled={exportPending} onClick={() => void exportInventory()}>
+      {exportPending ? 'Exportando inventario…' : 'Exportar inventario'}
+    </button>
+    <small>Incluye registros de inventario activos, inactivos y eliminados.</small>
+    {exportError ? <p className="admin-feedback admin-feedback-error" role="alert">{exportError}</p> : null}
+  </div>
+
+  if (status === 'loading') return <section className="admin-page">{exportAction}<AdminLoadingState label="Cargando productos…" /></section>
+  if (status === 'error') return <section className="admin-page">{exportAction}<AdminErrorState message="No se pudo cargar productos admin." /></section>
 
   function closeCreateForm() {
     if (write.isPending) return
@@ -276,9 +302,10 @@ export function AdminProductsPage() {
           <h2>Productos</h2>
           <p>Creá, editá y mantené variantes, imágenes y disponibilidad sin salir del panel.</p>
         </div>
-        <button className="btn btn-primary" type="button" onClick={() => setIsCreateFormOpen(true)}>
-          Crear nuevo producto
-        </button>
+        <div className="admin-item-actions">
+          {exportAction}
+          <button className="btn btn-primary" type="button" onClick={() => setIsCreateFormOpen(true)}>Crear nuevo producto</button>
+        </div>
       </div>
       {isCreateFormOpen ? <form className="admin-form" onSubmit={submit} noValidate>
         <section className="admin-card" aria-labelledby="product-basics-title">

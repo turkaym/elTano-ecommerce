@@ -182,6 +182,22 @@ export async function listAdminCategories() {
   return getJson<AdminCategoryDto[]>('/api/admin/categories')
 }
 
+export async function downloadAdminInventoryExport(): Promise<{ blob: Blob; filename: string }> {
+  const path = '/api/admin/inventory/export.xlsx'
+  const response = await fetch(joinUrl(API_URL, path), {
+    credentials: 'include',
+    headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+  })
+  if (!response.ok) throw await mapResponseToClientError(response)
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  return {
+    blob: await response.blob(),
+    filename: encoded ? decodeURIComponent(encoded) : plain ?? 'inventario-completo.xlsx',
+  }
+}
+
 export async function createAdminProduct(payload: AdminProductPayload) {
   return postJson<AdminProductPayload, Record<string, unknown>>('/api/admin/products', payload)
 }
