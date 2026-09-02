@@ -47,7 +47,7 @@ class ProcurementMigrationPostgreSqlIntegrationTest {
             execute(connection, "insert into purchase_draft_lines(id,draft_id,source_product_name,normalized_product_name,source_quantity_value,quantity,unit,match_status,target_type,variant_id,conversion) values ('%s','%s','Confirmed legacy','confirmed legacy','1',1,'UNIDAD','MATCHED','VARIANT_UNIT','%s',1)".formatted(confirmedLineId, confirmedDraftId, fixture.variantId()));
             execute(connection, "update purchase_drafts set status='CONFIRMED',confirmed_purchase_id='%s',confirmed_receipt_id='%s',confirm_idempotency_key='key',confirm_request_hash='%s' where id='%s'".formatted(fixture.purchaseId(), receiptId, "b".repeat(64), confirmedDraftId));
         } catch (SQLException exception) { throw new IllegalStateException(exception); }
-        assertEquals(2, configuration.target("latest").load().migrate().migrationsExecuted);
+        assertEquals(3, configuration.target("latest").load().migrate().migrationsExecuted);
     }
 
     @Test

@@ -143,4 +143,16 @@ describe('useCartStore', () => {
       imageAltText: 'Nuez mariposa actualizada',
     })
   })
+
+  it('refreshes mounted cart prices after an admin catalog price confirmation', () => {
+    const { result } = renderHook(() => useCartStore())
+    act(() => result.current.addItem({ ...baseItem, quantity: 2 }))
+
+    act(() => window.dispatchEvent(new CustomEvent('catalog-sale-prices-changed', {
+      detail: { [baseItem.variantId]: 8100.5 },
+    })))
+
+    expect(result.current.items[0]?.price).toBe(8100.5)
+    expect(result.current.totals.total).toBe(16201)
+  })
 })

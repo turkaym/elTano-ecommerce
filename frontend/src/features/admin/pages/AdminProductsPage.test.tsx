@@ -6,11 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AdminProductsPage } from './AdminProductsPage'
 import {
   createAdminProduct,
+  confirmCatalogSalePrices,
   deleteAdminProduct,
   downloadAdminInventoryExport,
+  downloadCatalogSalePriceTemplate,
   listAdminCategories,
   listAdminProducts,
   mapAdminWriteError,
+  previewCatalogSalePrices,
   restoreAdminProduct,
   uploadAdminProductImage,
   updateAdminProduct,
@@ -61,9 +64,15 @@ vi.mock('../services/adminOperationsService', () => ({
     { id: 'c-2', name: 'Frutas', slug: 'frutas', active: true },
   ]),
   createAdminProduct: vi.fn(async () => ({ id: 'p-2', name: 'Pera' })),
+  confirmCatalogSalePrices: vi.fn(async () => undefined),
   updateAdminProduct: vi.fn(async () => ({ id: 'p-1', name: 'Nuez Premium' })),
   deleteAdminProduct: vi.fn(async () => undefined),
   downloadAdminInventoryExport: vi.fn(async () => ({ blob: new Blob(['inventory']), filename: 'inventario-completo-20260831-181500.xlsx' })),
+  downloadCatalogSalePriceTemplate: vi.fn(async () => ({ blob: new Blob(['prices']), filename: 'precios-venta-catalogo.xlsx' })),
+  previewCatalogSalePrices: vi.fn(async () => ({
+    previewId: 'preview-1', previewHash: 'hash-1', valid: true,
+    rows: [{ rowNumber: 2, keyType: 'SKU', key: 'NUEZ-250G', productName: 'Nuez', presentation: '250g', oldPrice: 2500, newPrice: 2750, errors: [] }],
+  })),
   restoreAdminProduct: vi.fn(async () => undefined),
   uploadAdminProductImage: vi.fn(async () => ({ url: '/uploads/product-images/uploaded-nuez.png' })),
   mapAdminWriteError: vi.fn(() => ({ message: 'Error API' })),
@@ -137,6 +146,57 @@ describe('AdminProductsPage', () => {
     resolveExport?.({ blob, filename: 'inventario-completo-20260831-181500.xlsx' })
     await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(blob, 'inventario-completo-20260831-181500.xlsx'))
     expect(screen.getByRole('button', { name: 'Exportar inventario' })).toBeEnabled()
+  })
+
+  it('downloads, previews and explicitly confirms a price-only workbook before refreshing products', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar plantilla de precios' }))
+    await waitFor(() => expect(downloadCatalogSalePriceTemplate).toHaveBeenCalledOnce())
+    expect(saveBlob).toHaveBeenCalledWith(expect.any(Blob), 'precios-venta-catalogo.xlsx')
+
+    const file = new File(['xlsx'], 'precios.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    await userEvent.upload(screen.getByLabelText('Validar archivo de precios'), file)
+    expect(await screen.findByText('Vista previa válida. Revisá los cambios antes de confirmar.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirmar actualización de precios' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar actualización de precios' }))
+    await waitFor(() => expect(confirmCatalogSalePrices).toHaveBeenCalledWith(
+      expect.objectContaining({ previewId: 'preview-1', previewHash: 'hash-1' }),
+      expect.any(String),
+    ))
+    expect(await screen.findByText('Precios de venta actualizados correctamente.')).toBeInTheDocument()
+    expect(vi.mocked(listAdminProducts).mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('shows row errors and blocks confirmation for an invalid price preview', async () => {
+    vi.mocked(previewCatalogSalePrices).mockResolvedValueOnce({
+      previewId: null, previewHash: null, valid: false,
+      rows: [{ rowNumber: 2, keyType: 'SKU', key: 'MISSING', productName: '', presentation: '', oldPrice: 100, newPrice: 120, errors: ['No existe una variante con ese SKU.'] }],
+    })
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+
+    await userEvent.upload(screen.getByLabelText('Validar archivo de precios'), new File(['xlsx'], 'precios.xlsx'))
+
+    expect(await screen.findByText('No existe una variante con ese SKU.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirmar actualización de precios' })).toBeDisabled()
+    expect(confirmCatalogSalePrices).not.toHaveBeenCalled()
+  })
+
+  it('clears a confirmed preview and reports only a refresh warning when catalog reload fails', async () => {
+    render(<AdminProductsPage />)
+    await screen.findByText('Nuez')
+    vi.mocked(listAdminProducts).mockRejectedValueOnce(new Error('refresh failed'))
+
+    await userEvent.upload(screen.getByLabelText('Validar archivo de precios'), new File(['xlsx'], 'precios.xlsx'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirmar actualización de precios' }))
+
+    expect(await screen.findByText('Precios de venta actualizados correctamente.')).toBeInTheDocument()
+    expect(await screen.findByText(/Los precios se actualizaron, pero no pudimos refrescar el catálogo/i)).toHaveAttribute('role', 'alert')
+    expect(screen.queryByLabelText('Vista previa de precios de venta')).not.toBeInTheDocument()
+    expect(confirmCatalogSalePrices).toHaveBeenCalledOnce()
   })
 
   it('keeps export available when product loading fails and reports export failure independently', async () => {
@@ -608,7 +668,7 @@ describe('AdminProductsPage', () => {
     expect(screen.queryByText('Nuez')).not.toBeInTheDocument()
   })
 
-  it('edits granel products with shared stock, price per kg, and fixed calculated presentations', async () => {
+  it('initializes a consistent granel price per kg and preserves variant identity while recalculating prices', async () => {
     render(<AdminProductsPage />)
     await screen.findByText('Nuez')
 
@@ -616,6 +676,7 @@ describe('AdminProductsPage', () => {
     const dialog = screen.getByRole('dialog', { name: /Editar producto Nuez/i })
 
     expect(within(dialog).getByLabelText(/Stock total granel en gramos/i)).toHaveValue(6000)
+    expect(within(dialog).getByLabelText(/Precio por kg granel/i)).toHaveValue(10000)
     expect(within(dialog).getByText(/El stock granel se administra una sola vez/i)).toBeInTheDocument()
     expect(within(dialog).queryByLabelText(/Stock variante 1/i)).not.toBeInTheDocument()
     expect(within(dialog).queryByLabelText(/Precio variante 1/i)).not.toBeInTheDocument()
@@ -637,15 +698,34 @@ describe('AdminProductsPage', () => {
           productType: 'GRANEL',
           inventoryPolicy: 'BULK_WEIGHT',
           stockBaseGrams: 7200,
-          variants: [
-            expect.objectContaining({ unitLabel: '100g', weightGrams: 100, price: 480, stockAvailable: 0 }),
-            expect.objectContaining({ unitLabel: '250g', weightGrams: 250, price: 1200, stockAvailable: 0 }),
-            expect.objectContaining({ unitLabel: '500g', weightGrams: 500, price: 2400, stockAvailable: 0 }),
-            expect.objectContaining({ unitLabel: '1kg', weightGrams: 1000, price: 4800, stockAvailable: 0 }),
-          ],
+          variants: [expect.objectContaining({ id: 'v-1', sku: 'NUEZ-250G', unitLabel: '250g', weightGrams: 250, price: 1200, stockAvailable: 8 })],
         }),
       ),
     )
+  })
+
+  it('honors persisted ENVASADO semantics for weighted presentations instead of inferring GRANEL from grams', async () => {
+    vi.mocked(listAdminProducts).mockResolvedValueOnce([{
+      id: 'p-weighted-pack', name: 'Semillas envasadas', slug: 'semillas-envasadas', description: 'Bolsa cerrada',
+      categoryId: 'c-1', categoryName: 'Secos', productType: 'ENVASADO', inventoryPolicy: 'PER_VARIANT', active: true,
+      variants: [{ id: 'v-pack-500', sku: 'SEM-PACK-500G', unitType: 'WEIGHT', weightGrams: 500, unitLabel: '500g', price: 3200, stockAvailable: 7, stockReserved: 0, active: true }],
+    }])
+    render(<AdminProductsPage />)
+    await screen.findByText('Semillas envasadas')
+
+    fireEvent.click(screen.getByRole('button', { name: /Editar/i }))
+    const dialog = screen.getByRole('dialog', { name: /Editar producto Semillas envasadas/i })
+
+    expect(within(dialog).queryByLabelText(/Precio por kg granel/i)).not.toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/Precio variante 1/i)).toHaveValue(3200)
+    expect(within(dialog).getByLabelText(/Stock variante 1/i)).toHaveValue(7)
+    fireEvent.change(within(dialog).getByLabelText(/Precio variante 1/i), { target: { value: '3450.50' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: /Guardar cambios/i }))
+
+    await waitFor(() => expect(updateAdminProduct).toHaveBeenCalledWith('p-weighted-pack', expect.objectContaining({
+      productType: 'ENVASADO', inventoryPolicy: 'PER_VARIANT',
+      variants: [expect.objectContaining({ id: 'v-pack-500', sku: 'SEM-PACK-500G', price: 3450.5 })],
+    })))
   })
 
   it('adds and removes variant rows before submit', async () => {

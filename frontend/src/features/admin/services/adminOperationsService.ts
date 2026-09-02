@@ -182,6 +182,24 @@ export async function listAdminCategories() {
   return getJson<AdminCategoryDto[]>('/api/admin/categories')
 }
 
+export interface CatalogSalePricePreviewRow {
+  rowNumber: number
+  keyType: string
+  key: string
+  productName: string
+  presentation: string
+  oldPrice: number | string | null
+  newPrice: number | string | null
+  errors: string[]
+}
+
+export interface CatalogSalePricePreview {
+  previewId: string | null
+  previewHash: string | null
+  valid: boolean
+  rows: CatalogSalePricePreviewRow[]
+}
+
 export async function downloadAdminInventoryExport(): Promise<{ blob: Blob; filename: string }> {
   const path = '/api/admin/inventory/export.xlsx'
   const response = await fetch(joinUrl(API_URL, path), {
@@ -196,6 +214,50 @@ export async function downloadAdminInventoryExport(): Promise<{ blob: Blob; file
     blob: await response.blob(),
     filename: encoded ? decodeURIComponent(encoded) : plain ?? 'inventario-completo.xlsx',
   }
+}
+
+export async function downloadCatalogSalePriceTemplate(): Promise<{ blob: Blob; filename: string }> {
+  const path = '/api/admin/catalog/sale-prices/template'
+  const response = await fetch(joinUrl(API_URL, path), {
+    credentials: 'include',
+    headers: { Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+  })
+  if (!response.ok) throw await mapResponseToClientError(response)
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  return { blob: await response.blob(), filename: encoded ? decodeURIComponent(encoded) : plain ?? 'precios-venta-catalogo.xlsx' }
+}
+
+export async function previewCatalogSalePrices(file: File): Promise<CatalogSalePricePreview> {
+  const path = '/api/admin/catalog/sale-prices/previews'
+  const body = new FormData()
+  body.append('file', file)
+  const response = await fetch(joinUrl(API_URL, path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { Accept: 'application/json', ...buildAdminWriteHeaders(path, 'POST', {}) },
+    body,
+  })
+  if (!response.ok) throw await mapResponseToClientError(response)
+  return (await response.json()) as CatalogSalePricePreview
+}
+
+export async function confirmCatalogSalePrices(preview: CatalogSalePricePreview, idempotencyKey: string): Promise<void> {
+  if (!preview.previewId || !preview.previewHash) throw new Error('Invalid catalog price preview')
+  const path = `/api/admin/catalog/sale-prices/previews/${preview.previewId}/confirm`
+  const response = await fetch(joinUrl(API_URL, path), {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'Idempotency-Key': idempotencyKey,
+      ...buildAdminWriteHeaders(path, 'POST', {}),
+    },
+    body: JSON.stringify({ previewHash: preview.previewHash }),
+  })
+  if (!response.ok) throw await mapResponseToClientError(response)
 }
 
 export async function createAdminProduct(payload: AdminProductPayload) {

@@ -4,7 +4,9 @@ import {
   awaitAdminImportTerminalStatus,
   createAdminImportJob,
   createAdminProduct,
+  confirmCatalogSalePrices,
   deleteAdminProduct,
+  downloadCatalogSalePriceTemplate,
   getAdminCatalogJobReport,
   getAdminCatalogJobRows,
   getAdminOrderDetail,
@@ -14,6 +16,7 @@ import {
   listAdminOrders,
   listAdminProducts,
   mapAdminWriteError,
+  previewCatalogSalePrices,
   restoreAdminProduct,
   updateAdminCategory,
   updateAdminOrderPaymentStatus,
@@ -110,6 +113,34 @@ describe('admin operations service e2e-like flows', () => {
     expect((init?.headers as Record<string, string>)['Accept']).toBe('application/json')
     expect((init?.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('csrf-alegra-token')
     expect((init?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+  })
+
+  it('downloads, uploads and confirms catalog sale prices with CSRF and stable idempotency evidence', async () => {
+    document.cookie = 'XSRF-TOKEN=csrf-price-token; path=/'
+    const preview = {
+      previewId: 'preview-1', previewHash: 'hash-1', valid: true,
+      rows: [{ rowNumber: 2, keyType: 'SKU', key: 'ABC', productName: 'Almendra', presentation: '250g', oldPrice: 10, newPrice: 12, errors: [] }],
+    }
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(new Blob(['template']), {
+        status: 200, headers: { 'Content-Disposition': "attachment; filename*=UTF-8''precios.xlsx" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ previewId: 'preview-1', reused: false }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    expect((await downloadCatalogSalePriceTemplate()).filename).toBe('precios.xlsx')
+    const file = new File(['xlsx'], 'precios.xlsx')
+    const receivedPreview = await previewCatalogSalePrices(file)
+    await confirmCatalogSalePrices(receivedPreview, 'confirm-price-1')
+
+    const uploadInit = vi.mocked(globalThis.fetch).mock.calls[1][1]
+    expect(uploadInit?.body).toBeInstanceOf(FormData)
+    expect((uploadInit?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
+    expect((uploadInit?.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('csrf-price-token')
+    const confirmInit = vi.mocked(globalThis.fetch).mock.calls[2][1]
+    expect((confirmInit?.headers as Record<string, string>)['Idempotency-Key']).toBe('confirm-price-1')
+    expect((confirmInit?.headers as Record<string, string>)['X-XSRF-TOKEN']).toBe('csrf-price-token')
+    expect(confirmInit?.body).toBe(JSON.stringify({ previewHash: 'hash-1' }))
   })
 
   it('maps Alegra catalog import validation errors with backend diagnostics metadata', async () => {

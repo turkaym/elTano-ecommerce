@@ -2,12 +2,16 @@ import { type FormEvent, type KeyboardEvent, useEffect, useRef, useState } from 
 import { useSearchParams } from 'react-router-dom'
 import {
   type AdminCategoryDto,
+  type CatalogSalePricePreview,
+  confirmCatalogSalePrices,
   createAdminProduct,
   deleteAdminProduct,
   downloadAdminInventoryExport,
+  downloadCatalogSalePriceTemplate,
   listAdminCategories,
   listAdminProducts,
   mapAdminWriteError,
+  previewCatalogSalePrices,
   restoreAdminProduct,
   updateAdminProduct,
   type AdminProductDto,
@@ -48,6 +52,8 @@ interface ProductFormDraft {
   selectedCategoryId: string
   stockBaseGrams: string
   pricePerKg: string
+  productType: ProductType
+  inventoryPolicy: InventoryPolicy
 }
 
 const DEFAULT_VARIANT: ProductVariantFormRow = {
@@ -105,6 +111,10 @@ export function AdminProductsPage() {
   const [pricePerKg, setPricePerKg] = useState('')
   const [exportPending, setExportPending] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [pricePreview, setPricePreview] = useState<CatalogSalePricePreview | null>(null)
+  const [priceWorkflowPending, setPriceWorkflowPending] = useState(false)
+  const [priceWorkflowError, setPriceWorkflowError] = useState<string | null>(null)
+  const [priceConfirmKey, setPriceConfirmKey] = useState('')
   const editNameRef = useRef<HTMLInputElement>(null)
   const editDialogRef = useRef<HTMLElement>(null)
   const editTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -277,6 +287,62 @@ export function AdminProductsPage() {
     }
   }
 
+  async function downloadPriceTemplate() {
+    if (priceWorkflowPending) return
+    setPriceWorkflowPending(true)
+    setPriceWorkflowError(null)
+    try {
+      const result = await downloadCatalogSalePriceTemplate()
+      saveBlob(result.blob, result.filename)
+    } catch (error) {
+      setPriceWorkflowError(mapAdminWriteError(error).message ?? 'No se pudo descargar la plantilla de precios.')
+    } finally {
+      setPriceWorkflowPending(false)
+    }
+  }
+
+  async function uploadPriceWorkbook(file: File | undefined) {
+    if (!file || priceWorkflowPending) return
+    setPriceWorkflowPending(true)
+    setPriceWorkflowError(null)
+    setPricePreview(null)
+    try {
+      const preview = await previewCatalogSalePrices(file)
+      setPricePreview(preview)
+      setPriceConfirmKey(globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${file.size}`)
+    } catch (error) {
+      setPriceWorkflowError(mapAdminWriteError(error).message ?? 'No se pudo validar el archivo de precios.')
+    } finally {
+      setPriceWorkflowPending(false)
+    }
+  }
+
+  async function confirmPriceWorkbook() {
+    if (!pricePreview?.valid || !priceConfirmKey || priceWorkflowPending) return
+    setPriceWorkflowPending(true)
+    setPriceWorkflowError(null)
+    try {
+      await confirmCatalogSalePrices(pricePreview, priceConfirmKey)
+      setPricePreview(null)
+      setPriceConfirmKey('')
+      write.succeed('Precios de venta actualizados correctamente.')
+      try {
+        const products = await listAdminProducts()
+        setItems(products)
+        const prices = Object.fromEntries(products.flatMap((product) => (product.variants ?? [])
+          .filter((variant) => variant.id && variant.price != null)
+          .map((variant) => [variant.id as string, Number(variant.price)])))
+        window.dispatchEvent(new CustomEvent('catalog-sale-prices-changed', { detail: prices }))
+      } catch {
+        setPriceWorkflowError('Los precios se actualizaron, pero no pudimos refrescar el catálogo. Recargá la página para verlos.')
+      }
+    } catch (error) {
+      setPriceWorkflowError(mapAdminWriteError(error).message ?? 'No se pudieron confirmar los precios.')
+    } finally {
+      setPriceWorkflowPending(false)
+    }
+  }
+
   const exportAction = <div className="admin-item-actions">
     <button className="btn btn-secondary" type="button" disabled={exportPending} onClick={() => void exportInventory()}>
       {exportPending ? 'Exportando inventario…' : 'Exportar inventario'}
@@ -307,6 +373,46 @@ export function AdminProductsPage() {
           <button className="btn btn-primary" type="button" onClick={() => setIsCreateFormOpen(true)}>Crear nuevo producto</button>
         </div>
       </div>
+      <section className="admin-card" aria-labelledby="sale-price-workflow-title">
+        <div className="admin-card-header">
+          <div>
+            <h3 id="sale-price-workflow-title">Actualizar precios de venta con Excel</h3>
+            <p>La plantilla solo permite cambiar precios de productos y variantes existentes. Ningún otro dato del catálogo se modifica.</p>
+          </div>
+        </div>
+        <div className="admin-item-actions">
+          <button className="btn btn-secondary" type="button" disabled={priceWorkflowPending} onClick={() => void downloadPriceTemplate()}>
+            Descargar plantilla de precios
+          </button>
+          <label className="btn btn-secondary">
+            Validar archivo de precios
+            <input className="sr-only" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              disabled={priceWorkflowPending} onChange={(event) => void uploadPriceWorkbook(event.target.files?.[0])} />
+          </label>
+        </div>
+        {priceWorkflowPending ? <p role="status">Procesando precios…</p> : null}
+        {priceWorkflowError ? <p className="admin-feedback admin-feedback-error" role="alert">{priceWorkflowError}</p> : null}
+        {pricePreview ? (
+          <div aria-label="Vista previa de precios de venta">
+            <p>{pricePreview.valid ? 'Vista previa válida. Revisá los cambios antes de confirmar.' : 'El archivo contiene errores y no puede confirmarse.'}</p>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead><tr><th>Fila</th><th>Producto</th><th>Presentación</th><th>Precio actual</th><th>Precio nuevo</th><th>Resultado</th></tr></thead>
+                <tbody>{pricePreview.rows.map((row) => (
+                  <tr key={`${row.rowNumber}-${row.key}`}>
+                    <td>{row.rowNumber}</td><td>{row.productName || row.key}</td><td>{row.presentation}</td>
+                    <td>{row.oldPrice == null ? '—' : formatCurrency(Number(row.oldPrice))}</td>
+                    <td>{row.newPrice == null ? '—' : formatCurrency(Number(row.newPrice))}</td>
+                    <td>{row.errors.length ? row.errors.join(' ') : 'Listo para actualizar'}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <button className="btn btn-primary" type="button" disabled={!pricePreview.valid || priceWorkflowPending}
+              onClick={() => void confirmPriceWorkbook()}>Confirmar actualización de precios</button>
+          </div>
+        ) : null}
+      </section>
       {isCreateFormOpen ? <form className="admin-form" onSubmit={submit} noValidate>
         <section className="admin-card" aria-labelledby="product-basics-title">
           <div className="admin-card-header">
@@ -797,7 +903,7 @@ export function AdminProductsPage() {
               <fieldset className="admin-card admin-fieldset">
                 <legend>Variantes</legend>
                 <p className="admin-card-help">Separá precios, cantidades y stock por presentación.</p>
-                {resolveProductType(editDraft.variants) === 'GRANEL' ? (
+                {editDraft.inventoryPolicy === 'BULK_WEIGHT' ? (
                   <div className="admin-card-help" aria-label="Stock granel compartido">
                     <p>El stock granel se administra una sola vez y las presentaciones comparten ese stock base.</p>
                     <div className="admin-form-grid">
@@ -850,7 +956,7 @@ export function AdminProductsPage() {
                           <option value="unidad">unidad</option>
                         </select>
                       </label>
-                      {resolveProductType(editDraft.variants) === 'GRANEL' ? (
+                      {editDraft.inventoryPolicy === 'BULK_WEIGHT' ? (
                         <div className="admin-field" aria-label={`Precio calculado presentación variante ${index + 1}`}>
                           <span>Precio calculado variante {index + 1}</span>
                           <strong>{formatCurrency(calculateVariantPriceFromKg(Number(editDraft.pricePerKg), variant))}</strong>
@@ -971,8 +1077,9 @@ export function AdminProductsPage() {
     const normalizedName = draft.name.trim()
     const normalizedSlug = draft.slug.trim() || slugify(normalizedName)
     const normalizedDescription = draft.description.trim()
-    const resolvedProductType = resolveProductType(draft.variants)
-    const shouldGenerateGranelVariants = resolvedProductType === 'GRANEL' && Number(draft.pricePerKg) > 0
+    const resolvedProductType = draft.productType
+    const inventoryPolicy = draft.inventoryPolicy
+    const shouldGenerateGranelVariants = inventoryPolicy === 'BULK_WEIGHT' && Number(draft.pricePerKg) > 0
     const validationErrors = validateProductForm({
       description: normalizedDescription,
       imageUrl: draft.imageUrl.trim(),
@@ -981,9 +1088,11 @@ export function AdminProductsPage() {
     })
     if (validationErrors.length) return { ok: false as const, error: { message: 'Revisá los datos del producto.', fieldErrors: validationErrors } }
 
-    const inventoryPolicy = resolveInventoryPolicy(resolvedProductType)
     const payloadVariants = shouldGenerateGranelVariants
-      ? buildFixedGranelVariantPayloads(normalizedSlug, Number(draft.pricePerKg))
+      ? draft.variants.map((variant, index) => ({
+          ...buildVariantPayload(variant, normalizedSlug, index),
+          price: calculateVariantPriceFromKg(Number(draft.pricePerKg), variant),
+        }))
       : draft.variants.map((variant, index) => buildVariantPayload(variant, normalizedSlug, index))
     const normalizedImageUrl = draft.imageUrl.trim()
     return {
@@ -1127,7 +1236,9 @@ export function AdminProductsPage() {
       imagePreviewBroken: false,
       variants: item.variants?.length ? item.variants.map(variantToFormRow) : [{ ...DEFAULT_VARIANT }],
       stockBaseGrams: item.stockBaseGrams == null ? '' : String(item.stockBaseGrams),
-      pricePerKg: '',
+      pricePerKg: item.inventoryPolicy === 'BULK_WEIGHT' ? resolveExistingPricePerKg(item) : '',
+      productType: item.productType ?? 'ENVASADO',
+      inventoryPolicy: item.inventoryPolicy ?? 'PER_VARIANT',
     })
   }
 }
@@ -1272,7 +1383,16 @@ function buildFixedGranelVariantPayloads(slug: string, pricePerKg: number) {
 
 function calculateGranelPrice(pricePerKg: number, weightGrams: number): number {
   if (!Number.isFinite(pricePerKg) || pricePerKg <= 0) return 0
-  return Math.round((pricePerKg * weightGrams) / 1000)
+  return Math.round(((pricePerKg * weightGrams) / 1000) * 100) / 100
+}
+
+function resolveExistingPricePerKg(item: AdminProductDto): string {
+  const weighted = (item.variants ?? []).filter((variant) => variant.active !== false && variant.weightGrams && variant.weightGrams > 0)
+  if (!weighted.length || weighted.length !== (item.variants ?? []).filter((variant) => variant.active !== false).length) return ''
+  const basis = [...weighted].sort((left, right) => (right.weightGrams ?? 0) - (left.weightGrams ?? 0))[0]
+  const candidate = Math.round((Number(basis.price) * 1000 / (basis.weightGrams ?? 1)) * 100) / 100
+  const consistent = weighted.every((variant) => calculateGranelPrice(candidate, variant.weightGrams ?? 0) === Number(variant.price))
+  return consistent ? String(candidate) : ''
 }
 
 function calculateVariantPriceFromKg(pricePerKg: number, variant: ProductVariantFormRow): number {

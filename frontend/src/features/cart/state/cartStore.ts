@@ -13,6 +13,7 @@ type CartAction =
   | { type: 'removeItem'; payload: { variantId: string } }
   | { type: 'clear' }
   | { type: 'dismissWarning' }
+  | { type: 'refreshPrices'; payload: Record<string, number> }
 
 function initializeState(): CartState {
   const { items, hadCorruptData } = loadCart()
@@ -97,6 +98,16 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     }
   }
 
+
+  if (action.type === 'refreshPrices') {
+    return {
+      ...state,
+      items: state.items.map((item) => action.payload[item.variantId] == null
+        ? item
+        : { ...item, price: action.payload[item.variantId] }),
+    }
+  }
+
   return state
 }
 
@@ -121,6 +132,15 @@ export function useCartStore() {
 
     saveCart(state.items)
   }, [state.items])
+
+  useEffect(() => {
+    const refresh = (event: Event) => dispatch({
+      type: 'refreshPrices',
+      payload: (event as CustomEvent<Record<string, number>>).detail ?? {},
+    })
+    window.addEventListener('catalog-sale-prices-changed', refresh)
+    return () => window.removeEventListener('catalog-sale-prices-changed', refresh)
+  }, [])
 
   const totals = useMemo(() => calculateTotals(state.items), [state.items])
 
