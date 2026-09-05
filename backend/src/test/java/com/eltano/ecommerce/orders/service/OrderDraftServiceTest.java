@@ -67,7 +67,7 @@ class OrderDraftServiceTest {
     @Test
     void createDraftReservesStockAndBuildsTotals() {
         stubPersistenceLayer();
-        ProductVariant variant = variantWith("Almendra", 6000, 10, 0);
+        ProductVariant variant = variantWith("Almendra", 5500, 10, 0);
         when(productVariantRepository.findAllByIdInForUpdate(anyList())).thenReturn(List.of(variant));
 
         OrderDraftService.Result result = orderDraftService.createDraft(new OrderDraftService.Command(
@@ -80,21 +80,45 @@ class OrderDraftServiceTest {
                 List.of(new OrderDraftService.CommandItem(variant.getId(), 2))));
 
         assertTrue(result.reference().startsWith("ET-" + Year.now().getValue() + "-"));
-        assertEquals(new BigDecimal("12000.00"), result.subtotal());
-        assertEquals(new BigDecimal("12000.00"), result.total());
+        assertEquals(new BigDecimal("11000.00"), result.subtotal());
+        assertEquals(new BigDecimal("11000.00"), result.total());
         assertTrue(result.whatsappMessage().contains(result.reference()));
         assertTrue(result.whatsappMessage().contains("Cliente: Juan Perez"));
         assertTrue(result.whatsappMessage().contains("Telefono: +5491112345678"));
         assertTrue(result.whatsappMessage().contains("Entrega: Retiro en el local"));
         assertTrue(result.whatsappMessage().contains("Horario aproximado de retiro: 18:30"));
         assertTrue(result.whatsappMessage().contains("Nota: Tocar timbre"));
-        assertTrue(result.whatsappMessage().contains("- 2 Almendra x 500g"));
+        assertTrue(result.whatsappMessage().contains("- 2 Almendra x 500g $5500.00 c/u"));
         verify(inventoryPolicyService).reserve(variant, 2);
 
         ArgumentCaptor<OrderDraft> captor = ArgumentCaptor.forClass(OrderDraft.class);
         verify(orderDraftRepository).save(captor.capture());
         assertEquals("DRAFT", captor.getValue().getStatus().name());
         assertEquals(1, captor.getValue().getLines().size());
+        assertEquals(variant.getPrice(), captor.getValue().getLines().getFirst().getUnitPrice());
+    }
+
+    @Test
+    void createDraftIncludesCanonicalUnitPriceWithoutEachMarkerForQuantityOne() {
+        stubPersistenceLayer();
+        ProductVariant variant = variantWith("Aji Molido", 1200, 10, 0);
+        variant.setUnitLabel("bolsa 100 g");
+        when(productVariantRepository.findAllByIdInForUpdate(anyList())).thenReturn(List.of(variant));
+
+        OrderDraftService.Result result = orderDraftService.createDraft(new OrderDraftService.Command(
+                "Juan Perez",
+                "+5491112345678",
+                null,
+                FulfillmentMethod.PICKUP,
+                null,
+                "18:30",
+                List.of(new OrderDraftService.CommandItem(variant.getId(), 1))));
+
+        assertTrue(result.whatsappMessage().contains("- 1 Aji Molido x 100g $1200.00\n"));
+
+        ArgumentCaptor<OrderDraft> captor = ArgumentCaptor.forClass(OrderDraft.class);
+        verify(orderDraftRepository).save(captor.capture());
+        assertEquals(variant.getPrice(), captor.getValue().getLines().getFirst().getUnitPrice());
     }
 
     @Test

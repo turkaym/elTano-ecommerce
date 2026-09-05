@@ -153,7 +153,12 @@ public class OrderDraftService {
                     .append(line.getProductName())
                     .append(" x ")
                     .append(formatWhatsappUnitLabel(line.getUnitLabel()))
-                    .append("\n");
+                    .append(" $")
+                    .append(line.getUnitPrice().setScale(2, RoundingMode.HALF_UP));
+            if (line.getQuantity() > 1) {
+                lines.append(" c/u");
+            }
+            lines.append("\n");
         }
         lines.append("Total ").append(draft.getCurrency()).append(" ").append(draft.getTotal());
         if (draft.getFulfillmentMethod() == FulfillmentMethod.DELIVERY) {
